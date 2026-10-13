@@ -32,7 +32,7 @@ jobs:
           set -o pipefail
           xcodebuild build-for-testing -project Bridge.xcodeproj -scheme Bridge \
             -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.log" | grep -E "error:|warning: var|BUILD|\*\* " || true
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.log" | grep -E " error: |\*\* [A-Z ]+ \*\*" | cut -c1-600 || true
           grep -q "BUILD SUCCEEDED\|TEST BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
       - name: Unit tests
         run: |
@@ -47,7 +47,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           mkdir out && cd out
-          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E "error:|BUILD|\*\* " ../build.log 2>/dev/null | sort -u | head -300; echo; echo "== tests =="; grep -E "error:|Test Case|Executed|\*\* " ../test.log 2>/dev/null | head -200; } > ios.txt
+          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "error:|Test Case|Executed|\*\* " ../test.log 2>/dev/null | head -200; } > ios.txt
           tail -400 ../build.log > build-tail.txt 2>/dev/null || true
           git init -q -b ci-logs
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

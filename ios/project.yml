@@ -9,6 +9,8 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     DEVELOPMENT_TEAM: ""
+    # No app icon artwork yet; add an AppIcon set to Assets.xcassets and remove this line.
+    ASSETCATALOG_COMPILER_APPICON_NAME: ""
     API_BASE_URL: https://api.thebridge.app
     # From the iOS OAuth client in Google Cloud. Empty = Google sign-in reports unavailable.
     GOOGLE_IOS_CLIENT_ID: ""
