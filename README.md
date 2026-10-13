@@ -166,5 +166,3 @@ Full set in `tokens/tokens.json`. Key values:
 ## Files
 - `design/The Bridge v4.dc.html`: full prototype (open in a browser; screens panel on the left).
 - `design/support.js`, `design/image-slot.js`: prototype runtime only, not for production.
-#   B r i d g e  
- 

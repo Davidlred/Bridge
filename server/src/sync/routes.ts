@@ -1,0 +1,199 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { sql, type Tx } from '../db.js';
+import { auth } from '../auth/tokens.js';
+import { HttpError } from '../util.js';
+
+export const FREE_GOAL_LIMIT = 3;
+const PULL_PAGE = 1000;
+
+const ISODate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const Mutation = z.object({
+  id: z.string().uuid(),
+  entity: z.enum(['goal', 'task', 'completion', 'settings']),
+  entityId: z.string().uuid(),
+  op: z.enum(['upsert', 'delete', 'complete', 'uncomplete']),
+  patch: z.record(z.unknown()).default({}),
+  clientTs: z.number().int().nonnegative(),
+});
+type Mutation = z.infer<typeof Mutation>;
+const PushBody = z.object({ mutations: z.array(Mutation).max(200) });
+
+// Patches carry changed fields only, so every field is optional. Creation needs the fields marked "required on create".
+const GoalPatch = z.object({
+  label: z.string().trim().min(1).max(24),          // required on create
+  statement: z.string().trim().min(1).max(500),     // required on create
+  startDate: ISODate,                               // required on create
+  deadline: ISODate,                                // required on create; the user's pick, never altered here
+  category: z.string().max(40).nullable(),
+  status: z.enum(['active', 'archived', 'completed']),
+  colorIndex: z.number().int().min(0).max(2),
+}).partial().strict();
+
+const TaskPatch = z.object({
+  goalId: z.string().uuid(),                        // required on create
+  title: z.string().trim().min(1).max(120),         // required on create
+  priority: z.enum(['High', 'Medium', 'Low']),
+  timeOfDay: z.string().max(24).nullable(),
+  minutes: z.number().int().min(1).max(1440).nullable(),
+  rationale: z.string().max(200).nullable(),
+  notes: z.string().max(2000).nullable(),
+  origin: z.enum(['ai', 'user']),                   // 'shared' rows are only ever created by the server
+  position: z.number().int().min(0).max(10_000),
+}).partial().strict();
+
+const CompletionPatch = z.object({ localDate: ISODate });
+const SettingsPatch = z.record(z.union([z.string().max(200), z.number(), z.boolean(), z.null()])).refine(o => Object.keys(o).length <= 40);
+
+class Reject extends Error {}
+const reject = (code: string): never => { throw new Reject(code); };
+const check = <T extends z.ZodTypeAny>(schema: T, v: unknown): z.infer<T> => { const r = schema.safeParse(v); return r.success ? r.data : reject('invalid'); };
+const log = (tx: Tx, userId: string, entity: string, entityId: string, op: 'upsert' | 'delete', key: string | null = null) =>
+  tx`insert into changes (user_id, entity, entity_id, key, op) values (${userId}, ${entity}, ${entityId}, ${key}, ${op})`;
+
+async function applyGoal(tx: Tx, userId: string, m: Mutation) {
+  const [row] = await tx`select user_id, status, start_date::text, deadline::text from goals where id = ${m.entityId} for update`;
+  if (row && row.user_id !== userId) reject('forbidden');
+  if (m.op === 'delete') {
+    if (row) { await tx`delete from goals where id = ${m.entityId}`; await log(tx, userId, 'goal', m.entityId, 'delete'); }
+    return;
+  }
+  if (m.op !== 'upsert') reject('invalid');
+  const p = check(GoalPatch, m.patch);
+  const becomesActive = (p.status ?? row?.status ?? 'active') === 'active' && row?.status !== 'active';
+  if (becomesActive) {
+    const [c] = await tx`select count(*)::int as n, exists(select 1 from entitlements where user_id = ${userId} and entitlement = 'plus' and (expires_at is null or expires_at > now())) as plus
+                         from goals where user_id = ${userId} and status = 'active'`;
+    if (!c!.plus && c!.n >= FREE_GOAL_LIMIT) reject('goal_limit');
+  }
+  if (!row) {
+    if (!p.label || !p.statement || !p.startDate || !p.deadline || p.deadline <= p.startDate) reject('invalid');
+    await tx`insert into goals (id, user_id, label, statement, category, start_date, deadline, status, color_index)
+             values (${m.entityId}, ${userId}, ${p.label!}, ${p.statement!}, ${p.category ?? null}, ${p.startDate!}, ${p.deadline!}, ${p.status ?? 'active'}, ${p.colorIndex ?? 0})`;
+  } else {
+    if ((p.deadline ?? row.deadline) <= (p.startDate ?? row.start_date)) reject('invalid');
+    await tx`update goals set
+        label = coalesce(${p.label ?? null}, label), statement = coalesce(${p.statement ?? null}, statement),
+        category = case when ${'category' in p} then ${p.category ?? null} else category end,
+        start_date = coalesce(${p.startDate ?? null}::date, start_date), deadline = coalesce(${p.deadline ?? null}::date, deadline),
+        status = coalesce(${p.status ?? null}::goal_status, status), color_index = coalesce(${p.colorIndex ?? null}, color_index), updated_at = now()
+      where id = ${m.entityId}`;
+  }
+  await log(tx, userId, 'goal', m.entityId, 'upsert');
+}
+
+async function applyTask(tx: Tx, userId: string, m: Mutation) {
+  const [row] = await tx`select user_id, origin, deleted_at from tasks where id = ${m.entityId} for update`;
+  if (row && row.user_id !== userId) reject('forbidden');
+  // Shared-plan tasks belong to the alliance lead; members can complete them but never change them.
+  if (row?.origin === 'shared') reject('shared_task_readonly');
+  if (m.op === 'delete') {
+    if (row && !row.deleted_at) { await tx`update tasks set deleted_at = now(), updated_at = now() where id = ${m.entityId}`; await log(tx, userId, 'task', m.entityId, 'upsert'); }
+    return;
+  }
+  if (m.op !== 'upsert') reject('invalid');
+  if (row?.deleted_at) return;                       // deletes win over edits
+  const p = check(TaskPatch, m.patch);
+  if (!row) {
+    if (!p.goalId || !p.title) reject('invalid');
+    const [g] = await tx`select 1 from goals where id = ${p.goalId!} and user_id = ${userId}`;
+    if (!g) reject('goal_missing');
+    await tx`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, notes, origin, position)
+             values (${m.entityId}, ${p.goalId!}, ${userId}, ${p.title!}, ${p.priority ?? 'Medium'}, ${p.timeOfDay ?? null}, ${p.minutes ?? null}, ${p.rationale ?? null}, ${p.notes ?? null}, ${p.origin ?? 'user'}, ${p.position ?? 0})`;
+  } else {
+    // Last writer wins per field: only the fields present in the patch are touched, in server-receipt order.
+    await tx`update tasks set
+        title = coalesce(${p.title ?? null}, title), priority = coalesce(${p.priority ?? null}::priority, priority),
+        time_of_day = case when ${'timeOfDay' in p} then ${p.timeOfDay ?? null} else time_of_day end,
+        minutes = case when ${'minutes' in p} then ${p.minutes ?? null}::int else minutes end,
+        rationale = case when ${'rationale' in p} then ${p.rationale ?? null} else rationale end,
+        notes = case when ${'notes' in p} then ${p.notes ?? null} else notes end,
+        position = coalesce(${p.position ?? null}, position), updated_at = now()
+      where id = ${m.entityId}`;
+  }
+  await log(tx, userId, 'task', m.entityId, 'upsert');
+}
+
+async function applyCompletion(tx: Tx, userId: string, m: Mutation) {
+  const { localDate } = check(CompletionPatch, m.patch);
+  const [t] = await tx`select 1 from tasks where id = ${m.entityId} and user_id = ${userId}`;
+  if (!t) reject('task_missing');
+  const at = new Date(m.clientTs);
+  if (m.op === 'complete') {
+    // Set semantics: two devices completing the same task on the same day yield one completion.
+    const done = await tx`insert into task_completions (task_id, user_id, local_date, completed_at) values (${m.entityId}, ${userId}, ${localDate}, ${at})
+                          on conflict (task_id, local_date) do nothing returning 1`;
+    if (done.length) await log(tx, userId, 'completion', m.entityId, 'upsert', localDate);
+  } else if (m.op === 'uncomplete') {
+    // Only an uncomplete newer than the completion removes it.
+    const gone = await tx`delete from task_completions where task_id = ${m.entityId} and local_date = ${localDate} and completed_at <= ${at} returning 1`;
+    if (gone.length) await log(tx, userId, 'completion', m.entityId, 'delete', localDate);
+  } else reject('invalid');
+}
+
+async function applySettings(tx: Tx, userId: string, m: Mutation) {
+  if (m.op !== 'upsert' || m.entityId !== userId) reject('invalid');
+  await tx`update users set settings = settings || ${tx.json(check(SettingsPatch, m.patch))} where id = ${userId}`;
+  await log(tx, userId, 'settings', userId, 'upsert');
+}
+
+const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings };
+const ms = (d: Date | null) => (d ? d.getTime() : null);
+
+export async function syncRoutes(app: FastifyInstance) {
+  app.post('/v1/sync/push', { onRequest: auth }, async req => {
+    const body = PushBody.safeParse(req.body);
+    if (!body.success) throw new HttpError(400, 'invalid_request');
+    const accepted: string[] = [], rejected: Record<string, string> = {};
+    for (const m of body.data.mutations) {
+      const result = await sql.begin(async tx => {
+        // One writer per user at a time, so server_seq order equals commit order and pulls never skip a change.
+        await tx`select pg_advisory_xact_lock(hashtextextended(${req.userId}, 0))`;
+        const [fresh] = await tx`insert into processed_mutations (id, user_id) values (${m.id}, ${req.userId}) on conflict (id) do nothing returning 1`;
+        if (!fresh) {
+          const [seen] = await tx`select result from processed_mutations where id = ${m.id} and user_id = ${req.userId}`;
+          return seen ? (seen.result as string | null) : 'forbidden';
+        }
+        try {
+          await tx.savepoint(sp => appliers[m.entity](sp, req.userId, m));
+          return null;
+        } catch (e) {
+          if (!(e instanceof Reject)) throw e;
+          await tx`update processed_mutations set result = ${e.message} where id = ${m.id}`;
+          return e.message;
+        }
+      });
+      if (result) rejected[m.id] = result; else accepted.push(m.id);
+    }
+    return { accepted, rejected };
+  });
+
+  app.get<{ Querystring: { since?: string } }>('/v1/sync', { onRequest: auth }, async req => {
+    const since = z.coerce.number().int().nonnegative().catch(0).parse(req.query.since);
+    const rows = await sql`select server_seq, entity, entity_id, key, op from changes where user_id = ${req.userId} and server_seq > ${since} order by server_seq limit ${PULL_PAGE}`;
+    // Keep only the latest change per row; current state is read from the tables.
+    const latest = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) latest.set(`${r.entity}:${r.entity_id}:${r.key ?? ''}`, r);
+    const of = (entity: string) => [...latest.values()].filter(r => r.entity === entity);
+    const goalIds = of('goal').map(r => r.entity_id as string), taskIds = of('task').map(r => r.entity_id as string), comps = of('completion');
+
+    const goals = goalIds.length ? await sql`select id, label, statement, category, start_date::text, deadline::text, status, source_alliance_id, color_index, updated_at from goals where id in ${sql(goalIds)} and user_id = ${req.userId}` : [];
+    const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
+    const live = comps.length ? await sql`select task_id, local_date::text, completed_at from task_completions where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${comps.map(c => c.entity_id as string)}::uuid[], ${comps.map(c => c.key as string)}::date[]))` : [];
+    const [me] = of('settings').length ? await sql`select settings from users where id = ${req.userId}` : [];
+
+    const alive = new Set(goals.map(g => g.id as string)), done = new Set(live.map(c => `${c.task_id}:${c.local_date}`));
+    return {
+      cursor: rows.length ? Number(rows[rows.length - 1]!.server_seq) : since,
+      hasMore: rows.length === PULL_PAGE,
+      goals: goals.map(g => ({ id: g.id, label: g.label, statement: g.statement, category: g.category, startDate: g.start_date, deadline: g.deadline, status: g.status, sourceAllianceId: g.source_alliance_id, colorIndex: g.color_index, updatedAt: ms(g.updated_at) })),
+      tasks: tasks.map(t => ({ id: t.id, goalId: t.goal_id, title: t.title, priority: t.priority, timeOfDay: t.time_of_day, minutes: t.minutes, rationale: t.rationale, notes: t.notes, origin: t.origin, sharedTaskId: t.shared_task_id, position: t.position, deletedAt: ms(t.deleted_at), updatedAt: ms(t.updated_at) })),
+      completions: live.map(c => ({ taskId: c.task_id, localDate: c.local_date, completedAt: ms(c.completed_at) })),
+      removed: {
+        goals: goalIds.filter(id => !alive.has(id)),
+        completions: comps.filter(c => !done.has(`${c.entity_id}:${c.key}`)).map(c => ({ taskId: c.entity_id, localDate: c.key })),
+      },
+      settings: me?.settings ?? null,
+    };
+  });
+}

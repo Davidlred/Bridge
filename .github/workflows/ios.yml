@@ -1,0 +1,55 @@
+name: iOS
+
+on:
+  push:
+    branches-ignore: [ci-logs]
+    paths: ['ios/**', 'tokens/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # only to publish the build log to the ci-logs branch
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen
+          xcodebuild -version
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project Bridge.xcodeproj -scheme Bridge \
+            -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.log" | grep -E "error:|warning: var|BUILD|\*\* " || true
+          grep -q "BUILD SUCCEEDED\|TEST BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
+            -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case|Executed|\*\* " || true
+          grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/test.log"
+      # The build log is published to the ci-logs branch so compiler errors can be read without a GitHub login.
+      - name: Publish log
+        if: always()
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir out && cd out
+          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E "error:|BUILD|\*\* " ../build.log 2>/dev/null | sort -u | head -300; echo; echo "== tests =="; grep -E "error:|Test Case|Executed|\*\* " ../test.log 2>/dev/null | head -200; } > ios.txt
+          tail -400 ../build.log > build-tail.txt 2>/dev/null || true
+          git init -q -b ci-logs
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add . && git commit -qm "iOS build log for $GITHUB_SHA"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY.git" ci-logs

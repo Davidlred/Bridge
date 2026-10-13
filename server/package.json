@@ -1,0 +1,33 @@
+{
+  "name": "bridge-server",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "keygen": "node -e \"console.log(require('node:crypto').generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).replace(/\\n/g,'\\\\n'))\"",
+    "migrate": "tsx --env-file=.env src/migrate.ts",
+    "migrate:prod": "node dist/migrate.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/websocket": "^10.0.1",
+    "argon2": "^0.40.3",
+    "fastify": "^4.28.1",
+    "ioredis": "^5.4.1",
+    "jose": "^5.9.6",
+    "pino": "^9.5.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}

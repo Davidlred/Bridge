@@ -1,0 +1,4 @@
+android/gradlew text eol=lf
+*.png binary
+*.ttf binary
+*.jar binary

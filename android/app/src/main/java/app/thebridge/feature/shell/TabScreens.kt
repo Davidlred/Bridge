@@ -1,0 +1,200 @@
+package app.thebridge.feature.shell
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import app.thebridge.R
+import app.thebridge.feature.coach.CoachMascot
+import app.thebridge.feature.coach.MascotMood
+import app.thebridge.ui.components.BridgeSheet
+import app.thebridge.ui.components.PrimaryButton
+import app.thebridge.ui.components.SecondaryButton
+import app.thebridge.ui.components.SheetTitle
+import app.thebridge.ui.components.UiText
+import app.thebridge.ui.theme.BType
+import app.thebridge.ui.theme.LocalBridgeColors
+import app.thebridge.ui.theme.LocalReduceMotion
+import app.thebridge.ui.theme.Radius
+import app.thebridge.ui.theme.Space
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle as DateTextStyle
+import java.util.Locale
+
+// Tab roots for milestone 1: real chrome and empty states. Goal cards, chat and entries arrive with milestones 2 and 3.
+
+@Composable
+private fun TabPage(content: @Composable ColumnScope.() -> Unit) = Column(
+    Modifier.fillMaxSize().background(LocalBridgeColors.current.bg).verticalScroll(rememberScrollState()).padding(horizontal = Space.screen, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(Space.section), content = content,
+)
+
+@Composable
+private fun EmptyCard(title: String, body: String) {
+    val c = LocalBridgeColors.current
+    Column(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(Radius.card)).border(1.dp, c.line, RoundedCornerShape(Radius.card)).padding(Space.card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = BType.display(20), color = c.ink)
+        Text(body, style = BType.body(14, lineHeight = 1.5f), color = c.mut)
+    }
+}
+
+@Composable
+fun TodayScreen(name: String, now: LocalTime = LocalTime.now(), date: LocalDate = LocalDate.now()) {
+    val c = LocalBridgeColors.current
+    val greeting = when (now.hour) { in 3..11 -> R.string.greeting_morning; in 12..16 -> R.string.greeting_afternoon; else -> R.string.greeting_evening }
+    TabPage {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())).uppercase(Locale.getDefault()), style = BType.label(10.5f), color = c.mut)
+            Text(stringResource(greeting, name), style = BType.display(25), color = c.ink, modifier = Modifier.semantics { heading() })
+        }
+        EmptyCard(stringResource(R.string.today_empty_title), stringResource(R.string.today_empty_body))
+    }
+}
+
+@Composable
+fun CoachScreen(coachName: String) {
+    val c = LocalBridgeColors.current
+    val label = stringResource(R.string.coach_mascot, coachName)
+    TabPage {
+        Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.semantics { contentDescription = label }) { CoachMascot(MascotMood.Idle, reduceMotion = LocalReduceMotion.current) }
+            Text(coachName, style = BType.display(21), color = c.ink, modifier = Modifier.semantics { heading() })
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(6.dp).background(c.mut2, CircleShape))
+                Text(stringResource(R.string.coach_status_idle), style = BType.body(13), color = c.mut)
+            }
+        }
+        Text(stringResource(R.string.coach_empty_body), style = BType.body(14, lineHeight = 1.5f), color = c.mut, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+fun JournalScreen() {
+    val c = LocalBridgeColors.current
+    TabPage {
+        Text(stringResource(R.string.journal_title), style = BType.display(25), color = c.ink, modifier = Modifier.semantics { heading() })
+        EmptyCard(stringResource(R.string.journal_empty_title), stringResource(R.string.journal_empty_body))
+    }
+}
+
+@Composable
+fun ProfileScreen(name: String, email: String?, memberSince: LocalDate?, onLogOut: () -> Unit, onDelete: () -> Unit) {
+    val c = LocalBridgeColors.current
+    TabPage {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(64.dp).clip(CircleShape).background(c.goalCards[0]), contentAlignment = Alignment.Center) {
+                Text(name.take(1).uppercase(), style = BType.display(25), color = c.goalInk)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(name, style = BType.display(22), color = c.ink, modifier = Modifier.semantics { heading() })
+                if (memberSince != null) Text(stringResource(R.string.profile_member_since, "${memberSince.month.getDisplayName(DateTextStyle.SHORT, Locale.getDefault())} ${memberSince.year}".uppercase()), style = BType.label(10f), color = c.mut)
+                if (email != null) Text(email, style = BType.body(13), color = c.mut)
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.settings_account).uppercase(), style = BType.label(10f), color = c.mut, modifier = Modifier.semantics { heading() })
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(c.s1).border(1.dp, c.line, RoundedCornerShape(Radius.card))) {
+                SettingsLink(stringResource(R.string.settings_log_out), danger = false, onClick = onLogOut)
+                HorizontalDivider(color = c.line)
+                SettingsLink(stringResource(R.string.settings_delete_account), danger = true, onClick = onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsLink(label: String, danger: Boolean, onClick: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = Space.card, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = BType.body(15, FontWeight.Medium), color = if (danger) c.bad else c.ink, modifier = Modifier.weight(1f))
+        Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null, tint = c.mut2, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+fun DeleteAccountSheet(busy: Boolean, error: UiText?, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = LocalBridgeColors.current
+    BridgeSheet(onDismiss, dismissible = !busy) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SheetTitle(stringResource(R.string.delete_title))
+            Text(stringResource(R.string.delete_body), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
+            Text(stringResource(R.string.delete_subscription_note), style = BType.body(13), color = c.mut)
+            if (error != null) Text(error.resolve(), style = BType.body(13), color = c.bad, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
+            PrimaryButton(stringResource(R.string.delete_confirm), onConfirm, loading = busy, container = c.bad, content = c.ink)
+            SecondaryButton(stringResource(R.string.delete_cancel), onDismiss, enabled = !busy)
+        }
+    }
+}
+
+/** Logging out wipes local data, so warn first when something hasn't reached the server. */
+@Composable
+fun LogOutSheet(unsynced: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = LocalBridgeColors.current
+    BridgeSheet(onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SheetTitle(stringResource(R.string.settings_log_out))
+            Text(pluralStringResource(R.plurals.logout_unsynced_warning, unsynced, unsynced), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
+            PrimaryButton(stringResource(R.string.stay_logged_in), onDismiss)
+            SecondaryButton(stringResource(R.string.logout_anyway), onConfirm)
+        }
+    }
+}
+
+/** 36dp strip under the status bar while there is no connection. */
+@Composable
+fun OfflineBanner(queued: Int, modifier: Modifier = Modifier) {
+    val c = LocalBridgeColors.current
+    Row(
+        modifier.fillMaxWidth().background(c.warnTint).heightIn(min = 36.dp).padding(horizontal = Space.screen, vertical = 8.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(painterResource(R.drawable.ic_cloud_off), contentDescription = null, tint = c.warn, modifier = Modifier.size(16.dp))
+        Text(stringResource(R.string.offline_banner), style = BType.body(12, FontWeight.Medium), color = c.warn, modifier = Modifier.weight(1f))
+        Text(if (queued > 0) pluralStringResource(R.plurals.offline_queued, queued, queued) else stringResource(R.string.offline_cached), style = BType.label(11f, 0.06f), color = c.warn)
+    }
+}
+
+/** Blocking screen after the server answers 426. Local data is untouched. */
+@Composable
+fun UpgradeScreen(onOpenStore: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(Modifier.fillMaxSize().background(c.bg).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)) {
+        Text(stringResource(R.string.upgrade_title), style = BType.display(30), color = c.ink, modifier = Modifier.semantics { heading() })
+        Text(stringResource(R.string.upgrade_body), style = BType.body(15, lineHeight = 1.5f), color = c.mut)
+        PrimaryButton(stringResource(R.string.upgrade_cta), onOpenStore)
+    }
+}

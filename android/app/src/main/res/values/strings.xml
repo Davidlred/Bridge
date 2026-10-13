@@ -1,0 +1,126 @@
+<resources>
+    <string name="app_name">The Bridge</string>
+
+    <!-- Tabs -->
+    <string name="tab_today">Today</string>
+    <string name="tab_coach">Coach</string>
+    <string name="tab_journal">Journal</string>
+    <string name="tab_profile">Profile</string>
+
+    <!-- Common -->
+    <string name="back">Back</string>
+    <string name="error_generic">Something went wrong. Try again.</string>
+    <string name="error_offline">You\'re offline. Try again when you reconnect.</string>
+    <string name="offline_banner">Offline. Showing saved data.</string>
+    <string name="offline_cached">CACHED</string>
+    <plurals name="offline_queued">
+        <item quantity="one">%d QUEUED</item>
+        <item quantity="other">%d QUEUED</item>
+    </plurals>
+    <string name="back_online">Back online.</string>
+    <plurals name="back_online_synced">
+        <item quantity="one">Back online. Synced %d change.</item>
+        <item quantity="other">Back online. Synced %d changes.</item>
+    </plurals>
+
+    <!-- Splash / Welcome -->
+    <string name="splash_logo">The Bridge</string>
+    <string name="welcome_title">See who you\'re becoming.</string>
+    <string name="welcome_body">Name one goal and pick a date. We\'ll build the daily plan and picture both of your futures.</string>
+    <string name="welcome_get_started">Get started</string>
+    <string name="welcome_have_account">Already have an account?</string>
+    <string name="welcome_stamp">TWO FUTURES · ONE BRIDGE · </string>
+
+    <!-- Sign up / Log in -->
+    <string name="signup_title">Create your account</string>
+    <string name="signup_subtitle">Takes about two minutes, including your plan.</string>
+    <string name="continue_apple">Continue with Apple</string>
+    <string name="continue_google">Continue with Google</string>
+    <string name="or_with_email">OR WITH EMAIL</string>
+    <string name="field_first_name">FIRST NAME</string>
+    <string name="field_first_name_hint">Sharon</string>
+    <string name="field_email">EMAIL</string>
+    <string name="field_email_hint">you@example.com</string>
+    <string name="field_password">PASSWORD</string>
+    <string name="field_password_hint_new">At least 8 characters</string>
+    <string name="field_password_hint">Your password</string>
+    <string name="create_account">Create account</string>
+    <string name="log_in">Log in</string>
+    <string name="login_title">Welcome back</string>
+    <string name="login_subtitle">Your bridge is where you left it.</string>
+    <string name="forgot_password">Forgot password?</string>
+    <string name="new_here">New here?</string>
+    <string name="create_an_account">Create an account</string>
+
+    <string name="err_name">Enter your first name.</string>
+    <string name="err_email">Enter a valid email address.</string>
+    <string name="err_password_short">Use at least 8 characters.</string>
+    <string name="err_credentials">Incorrect email or password.</string>
+    <string name="err_forgot_needs_email">Enter your email first, then tap Forgot.</string>
+    <string name="err_email_taken">An account with this email already exists. Log in instead.</string>
+    <string name="err_email_linked">This email is linked to %1$s sign-in. Continue with %1$s?</string>
+    <string name="err_email_linked_password">This email already has an account. Log in with your password.</string>
+    <plurals name="err_too_many_attempts">
+        <item quantity="one">Too many attempts. Try again in %d minute, or reset your password.</item>
+        <item quantity="other">Too many attempts. Try again in %d minutes, or reset your password.</item>
+    </plurals>
+    <string name="err_signup_offline">You\'re offline. We\'ll need a connection to create your account.</string>
+    <string name="err_login_offline">You\'re offline. We\'ll need a connection to log you in.</string>
+    <string name="err_provider_unavailable">%1$s sign-in isn\'t available right now. Use email instead.</string>
+    <string name="provider_apple">Apple</string>
+    <string name="provider_google">Google</string>
+    <string name="toast_reset_sent">Reset link sent to %1$s</string>
+    <string name="toast_signed_in_with">Signed in with %1$s</string>
+    <string name="toast_welcome_back">Welcome back, %1$s.</string>
+    <string name="toast_logged_out">You\'ve been logged out.</string>
+
+    <!-- Session expired -->
+    <string name="session_expired_title">Your session has expired.</string>
+    <string name="session_expired_body">Log in again to keep syncing. Everything you\'ve done on this phone is saved.</string>
+    <plurals name="session_expired_unsynced">
+        <item quantity="one">%d change is waiting to sync.</item>
+        <item quantity="other">%d changes are waiting to sync.</item>
+    </plurals>
+
+    <!-- Forced upgrade -->
+    <string name="upgrade_title">Update The Bridge</string>
+    <string name="upgrade_body">This version is no longer supported. Your data on this phone is safe.</string>
+    <string name="upgrade_cta">Open Play Store</string>
+
+    <!-- Today -->
+    <string name="greeting_morning">Good morning, %1$s</string>
+    <string name="greeting_afternoon">Good afternoon, %1$s</string>
+    <string name="greeting_evening">Good evening, %1$s</string>
+    <string name="today_empty_title">Your plan starts here</string>
+    <string name="today_empty_body">Add a goal and pick a date. Your daily plan shows up on this screen.</string>
+
+    <!-- Coach -->
+    <string name="coach_default_name">Arc</string>
+    <string name="coach_status_idle">Here when you need me</string>
+    <string name="coach_empty_body">Once you have a goal, ask anything about your plan.</string>
+    <string name="coach_mascot">%1$s, your coach</string>
+
+    <!-- Journal -->
+    <string name="journal_title">Journal</string>
+    <string name="journal_empty_title">Nothing written yet</string>
+    <string name="journal_empty_body">Finish a day and lock it in. Your entries collect here.</string>
+
+    <!-- Profile & settings -->
+    <string name="profile_member_since">MEMBER SINCE %1$s</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_log_out">Log out</string>
+    <string name="settings_delete_account">Delete account</string>
+    <plurals name="logout_unsynced_warning">
+        <item quantity="one">%d change hasn\'t synced yet and will be lost if you log out now.</item>
+        <item quantity="other">%d changes haven\'t synced yet and will be lost if you log out now.</item>
+    </plurals>
+    <string name="logout_anyway">Log out anyway</string>
+    <string name="stay_logged_in">Stay logged in</string>
+    <string name="delete_title">Delete your account?</string>
+    <string name="delete_body">Your plan, both AI images, your photo and every journal entry will be permanently removed.</string>
+    <string name="delete_subscription_note">Deleting your account doesn\'t cancel a subscription. Manage it in Google Play.</string>
+    <string name="delete_confirm">Delete permanently</string>
+    <string name="delete_cancel">Keep my account</string>
+    <string name="delete_offline">You\'re offline. Connect to delete your account.</string>
+    <string name="toast_account_deleted">Your account has been deleted.</string>
+</resources>
