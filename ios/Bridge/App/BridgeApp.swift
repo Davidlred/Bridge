@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 import Network
-import GoogleSignIn
+@preconcurrency import GoogleSignIn
 
 @main
 struct BridgeApp: App {

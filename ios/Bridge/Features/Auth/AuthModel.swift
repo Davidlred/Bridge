@@ -1,6 +1,6 @@
 import AuthenticationServices
 import CryptoKit
-import GoogleSignIn
+@preconcurrency import GoogleSignIn
 import SwiftUI
 
 /// Pure input rules, shared by sign up, log in and the tests. Copy matches the prototype.
