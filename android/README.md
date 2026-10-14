@@ -29,8 +29,10 @@ app/src/main/java/app/thebridge/
   feature/today/                  goal cards, bridge arc, streak / days left / drift, tasks, Reality Check, sheets, celebration
   feature/coach/                  streaming coach chat, mascot states, Study Mode, CoachMascot.kt
   feature/journal/                mood + reflection with autosave, history, conflict resolution
+  feature/community/              Community inside a goal (lock + preview, feed, reactions, report/block), alliances (create, join, shared plan), alliance chat
   domain/Progress.kt              progress, streak, drift, deadline rules (unit-tested; same cases as iOS)
   data/GoalRepository.kt, AiRepository.kt, JournalRepository.kt, CoachRepository.kt
+  data/SocialRepository.kt        Community + alliances (cached in Room for offline reading), queued alliance chat, RealtimeClient (WebSocket)
   data/reminders/Reminders.kt     local reminders (daily, task times, streak at risk), re-armed after boot and time-zone changes
   data/remote/ApiClient.kt        all HTTP, token refresh (single flight), error codes
   data/session/                   SessionManager (phases, sign-in/out, delete), Keystore token vault

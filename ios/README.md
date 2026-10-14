@@ -24,7 +24,8 @@ Bridge/
 ```
 Also: `Core/Networking/APIClient.swift` (HTTP, token refresh, Keychain), `Core/Sync/ChangeApplier.swift`, `Features/Auth/` (Welcome, Sign up, Log in, re-auth sheet, AuthModel), `Features/Shell/ShellViews.swift` (tab roots, profile, delete account, offline banner).
 Milestones 2–3: `Core/Domain/Progress.swift`, `Core/Goals/` (GoalStore, reminders), `Features/Onboarding`, `Features/Today`, `Features/Coach` (chat + Study Mode), `Features/Journal`.
-Still to write: Community, alliances, Game Night, DMs, paywall (milestones 4–6).
+Milestone 4: `Core/Social/SocialStore.swift` (Community + alliances cached in SwiftData, queued alliance chat, RealtimeClient WebSocket), `Features/Community` (Community, alliance card, create/join sheets, alliance chat).
+Still to write: Game Night, rankings, Hall of Fame, DMs, paywall (milestones 5–6).
 
 ## Conventions
 - One `@Observable` model per feature, injected via `.environment`. Views stay dumb.

@@ -9,6 +9,7 @@ import { bus } from '../realtime.js';
 import { push } from '../push.js';
 import { runText } from '../ai/replicate.js';
 import { blockedWith, firstName } from './progress.js';
+import { gameFrame, socketClosed, type SocketCtx } from './game.js';
 
 const PAGE = 50;
 /** Obvious slurs never post; everything else posts at once and is checked by the moderation model right after. */
@@ -85,6 +86,7 @@ export async function chatRoutes(app: FastifyInstance) {
   app.get('/v1/rt', { websocket: true }, (socket) => {
     let userId: string | null = null;
     let offs: (() => void)[] = [];
+    const watched: (() => void)[] = [];
     const send = (e: unknown) => { if (socket.readyState === 1) socket.send(JSON.stringify(e)); };
     const subscribe = async () => {
       offs.forEach(f => f()); offs = [];
@@ -95,10 +97,11 @@ export async function chatRoutes(app: FastifyInstance) {
         if (m?.userId && (m.userId === userId || blocked.has(m.userId))) return;     // own messages come back from the POST; blocked users stay invisible
         send({ ...e, allianceId: r.alliance_id });
       }));
-      offs.push(bus.subscribe(`user:${userId}`, send));
+      offs.push(bus.subscribe(`user:${userId}`, send));                            // direct events, e.g. your game role
       send({ type: 'ready', alliances: rows.map(r => r.alliance_id) });
     };
     const timer = setTimeout(() => { if (!userId) socket.close(4401, 'auth_timeout'); }, 5_000);
+    const game: SocketCtx = { send, watch: channel => watched.push(bus.subscribe(channel, send)), games: new Set() };
     socket.on('message', async (raw: Buffer) => {
       let msg: { type?: string; token?: string };
       try { msg = JSON.parse(raw.toString()); } catch { return; }
@@ -112,8 +115,9 @@ export async function chatRoutes(app: FastifyInstance) {
           await subscribe();
         } catch { socket.close(4401, 'unauthorized'); }
       } else if (msg.type === 'subscribe' && userId) await subscribe();
+      else if (msg.type?.startsWith('game:') && userId) await gameFrame(userId, msg, game);
       else if (msg.type === 'ping') send({ type: 'pong' });
     });
-    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); });
+    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) socketClosed(userId, game); });
   });
 }

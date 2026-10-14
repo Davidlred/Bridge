@@ -8,6 +8,7 @@ import { Feasibility } from '../ai/planSchema.js';
 import { decryptText, encryptText, journalKey } from '../crypto.js';
 import { uuidv7 } from '../util.js';
 import { applySharedPlans, leadTasksChanged } from '../social/alliances.js';
+import { checkUnlocks } from '../social/game.js';
 
 export const FREE_GOAL_LIMIT = 3;
 const PULL_PAGE = 1000;
@@ -266,6 +267,8 @@ export async function syncRoutes(app: FastifyInstance) {
       });
       if (result) rejected[m.id] = result; else accepted.push(m.id);
     }
+    // A finished day may open game night for an alliance; checked after the response, never blocking sync.
+    if (body.data.mutations.some(m => m.entity === 'completion' && accepted.includes(m.id))) void checkUnlocks(req.userId).catch(e => req.log.warn({ err: String(e) }, 'game_unlock_check'));
     return { accepted, rejected };
   });
 
