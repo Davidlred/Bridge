@@ -66,6 +66,7 @@ actor SyncEngine {
                 UserDefaults.standard.set(changes.cursor, forKey: "syncCursor")
                 more = changes.hasMore
             }
+            await MainActor.run { NotificationCenter.default.post(name: .syncApplied, object: nil) }
             await NotificationScheduler.shared.reschedule()
         } catch APIError.unauthorized {
             await MainActor.run { NotificationCenter.default.post(name: .sessionExpired, object: nil) }
@@ -75,4 +76,7 @@ actor SyncEngine {
     }
 }
 
-extension Notification.Name { static let sessionExpired = Notification.Name("sessionExpired") }
+extension Notification.Name {
+    static let sessionExpired = Notification.Name("sessionExpired")
+    static let syncApplied = Notification.Name("syncApplied")
+}

@@ -16,6 +16,7 @@ enum ChangeApplier {
             }()
             row.label = g.label; row.statement = g.statement; row.startDate = g.startDate; row.deadline = g.deadline
             row.status = g.status; row.sourceAllianceId = g.sourceAllianceId; row.colorIndex = g.colorIndex ?? 0; row.updatedAt = date(g.updatedAt) ?? .now
+            row.routine = g.routine; row.realityNote = g.realityNote; row.feasibilityJSON = try g.feasibility.map { try JSONEncoder().encode($0) }
         }
         for t in page.tasks {
             // A task can arrive after its goal was deleted on another device; skip it.
@@ -46,8 +47,3 @@ enum ChangeApplier {
     }
 }
 
-/// Local reminders (daily, per-task, journal nudge) are rebuilt after every sync. Scheduling arrives with milestone 2.
-actor NotificationScheduler {
-    static let shared = NotificationScheduler()
-    func reschedule() async {}
-}

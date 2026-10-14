@@ -8,6 +8,7 @@ struct BridgeApp: App {
     @State private var router = AppRouter()
     @State private var network = NetworkStatus()
     @State private var toaster = Toaster()
+    @State private var goals = GoalStore()
     @AppStorage("themeOverride") private var themeOverride: String = "system"
     @Environment(\.scenePhase) private var scenePhase
 
@@ -18,13 +19,14 @@ struct BridgeApp: App {
                 .environment(router)
                 .environment(network)
                 .environment(toaster)
+                .environment(goals)
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }
         }
         .modelContainer(Persistence.container)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await SyncEngine.shared.drain(reason: .foreground) } }
+            if phase == .active { Task { await SyncEngine.shared.drain(reason: .foreground); await NotificationScheduler.shared.reschedule() } }
         }
         .backgroundTask(.appRefresh("app.thebridge.sync")) {
             await SyncEngine.shared.drain(reason: .background)
@@ -34,20 +36,21 @@ struct BridgeApp: App {
 
 @MainActor @Observable
 final class SessionStore {
-    /// Goal onboarding steps arrive with milestone 2; until then a signed-in user goes straight to `.ready`.
-    enum Phase: Equatable { case launching, signedOut, ready, expired }
+    /// `.onboarding`: signed in, first goal not set up yet (persisted, so a restart resumes it).
+    enum Phase: Equatable { case launching, signedOut, onboarding, ready, expired }
     var phase: Phase = .launching
     var user: UserDTO?
 
     private static let userKey = "sessionUser"
+    private static let onboardingKey = "sessionOnboarding"
 
     /// Reads local state only; never blocks on the network. Expired refresh → `.expired` (local data kept).
     func bootstrap() async {
         guard phase == .launching else { return }
         await SyncEngine.shared.configure(container: Persistence.container)
         user = UserDefaults.standard.data(forKey: Self.userKey).flatMap { try? JSONDecoder().decode(UserDTO.self, from: $0) }
-        phase = user == nil ? .signedOut : TokenStore.read() == nil ? .expired : .ready
-        if phase == .ready { await SyncEngine.shared.drain(reason: .foreground) }
+        phase = user == nil ? .signedOut : TokenStore.read() == nil ? .expired : UserDefaults.standard.bool(forKey: Self.onboardingKey) ? .onboarding : .ready
+        if phase == .ready || phase == .onboarding { await SyncEngine.shared.drain(reason: .foreground) }
     }
 
     func signedIn(_ r: AuthResponse) {
@@ -56,11 +59,25 @@ final class SessionStore {
         TokenStore.write(Tokens(access: r.accessToken, refresh: r.refreshToken))
         UserDefaults.standard.set(try? JSONEncoder().encode(r.user), forKey: Self.userKey)
         user = r.user
-        phase = .ready
+        if r.isNew { UserDefaults.standard.set(true, forKey: Self.onboardingKey) }
+        phase = UserDefaults.standard.bool(forKey: Self.onboardingKey) ? .onboarding : .ready
         Task { await SyncEngine.shared.drain(reason: .foreground) }
     }
 
-    func expired() { if phase == .ready { phase = .expired } }
+    func expired() { if phase == .ready || phase == .onboarding { phase = .expired } }
+
+    /// First goal created: show the tabs from now on.
+    func onboardingDone() {
+        UserDefaults.standard.removeObject(forKey: Self.onboardingKey)
+        if phase == .onboarding { phase = .ready }
+    }
+
+    /// Re-reads the profile (photo link, name) after it changes on the server.
+    func refreshUser() async {
+        guard let fresh = try? await APIClient.shared.me() else { return }
+        user = fresh
+        UserDefaults.standard.set(try? JSONEncoder().encode(fresh), forKey: Self.userKey)
+    }
 
     func logOut() async {
         try? await APIClient.shared.logOut()        // best effort; the refresh token is dropped locally either way
@@ -77,6 +94,9 @@ final class SessionStore {
         TokenStore.write(nil)
         try? Persistence.wipe()
         UserDefaults.standard.removeObject(forKey: Self.userKey)
+        UserDefaults.standard.removeObject(forKey: Self.onboardingKey)
+        UserDefaults.standard.removeObject(forKey: "onboardingDraft")
+        Task { await NotificationScheduler.shared.reschedule() }
         user = nil
         phase = .signedOut
     }
@@ -127,6 +147,7 @@ struct RootView: View {
                     switch session.phase {
                     case .launching: SplashView()
                     case .signedOut: AuthFlow()
+                    case .onboarding: OnboardingFlow(adding: false, onExit: nil, onFinished: {})
                     case .ready, .expired: MainTabs()
                     }
                 }

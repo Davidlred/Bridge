@@ -18,8 +18,23 @@ struct UserDTO: Codable, Equatable, Sendable {
     var displayName: String
     var coachName: String?
     var createdAt: Double?
+    var photoUrl: String?
 }
-struct AuthResponse: Decodable, Sendable { let user: UserDTO; let accessToken: String; let refreshToken: String }
+/// `isNew`: the account was just created, so the user goes to goal onboarding.
+struct AuthResponse: Decodable, Sendable {
+    let user: UserDTO; let accessToken: String; let refreshToken: String; let isNew: Bool
+    private enum K: String, CodingKey { case user, accessToken, refreshToken, isNew }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        user = try c.decode(UserDTO.self, forKey: .user); accessToken = try c.decode(String.self, forKey: .accessToken)
+        refreshToken = try c.decode(String.self, forKey: .refreshToken); isNew = try c.decodeIfPresent(Bool.self, forKey: .isNew) ?? false
+    }
+}
+
+struct Feasibility: Codable, Equatable, Sendable { let verdict: String; let reason: String; let suggestedDeadline: String? }
+struct PlanTaskDTO: Decodable, Sendable { let title: String; let priority: String; let timeOfDay: String; let minutes: Int; let rationale: String }
+struct PlanDTO: Decodable, Sendable { let needsClarification: String?; let label: String; let goal: String; let feasibility: Feasibility; let tasks: [PlanTaskDTO] }
+struct GoalImageDTO: Decodable, Sendable { let kind: String; let status: String; let url: String?; let withFace: Bool? }
 
 /// One outbox row on its way to the server. `patch` is the JSON object of changed fields.
 struct Mutation: Sendable {
@@ -36,7 +51,7 @@ struct PushResult: Decodable, Sendable { let accepted: Set<UUID>; let rejected: 
     }
 }
 struct Changes: Decodable, Sendable {
-    struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double? }
+    struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility? }
     struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double? }
     struct Completion: Decodable, Sendable { let taskId: UUID; let localDate: String; let completedAt: Double? }
     struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion] }
@@ -67,6 +82,39 @@ actor APIClient {
         if let name, name.count >= 2 { body["displayName"] = name }
         return try await send("POST", "/v1/auth/\(provider)", body)
     }
+    func me() async throws -> UserDTO {
+        struct R: Decodable { let user: UserDTO }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/me", nil, authed: true)).user
+    }
+
+    // MARK: AI (every model call happens on the server)
+    func plan(goal: String, deadline: String, today: String, routine: String, existingGoals: Int) async throws -> PlanDTO {
+        struct R: Decodable { let plan: PlanDTO }
+        let body: [String: Any] = ["goalText": goal, "deadline": deadline, "today": today, "timezone": timezone, "routine": routine,
+                                   "locale": Locale.current.identifier(.bcp47), "existingGoals": existingGoals]
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/plan", body, authed: true)).plan
+    }
+    func reality(goal: String, deadline: String, today: String, routine: String, tasks: [String]) async throws -> Feasibility {
+        struct R: Decodable { let feasibility: Feasibility }
+        let body: [String: Any] = ["goalText": goal, "deadline": deadline, "today": today, "routine": routine, "tasks": Array(tasks.prefix(20).map { String($0.prefix(120)) })]
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/reality", body, authed: true)).feasibility
+    }
+    func startImages(goalId: UUID, goal: String, routine: String, kinds: [String]) async throws -> [GoalImageDTO] {
+        struct R: Decodable { let images: [GoalImageDTO] }
+        let body: [String: Any] = ["goalId": goalId.uuidString.lowercased(), "goalText": goal, "routine": routine, "kinds": kinds]
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/images", body, authed: true)).images
+    }
+    func images(goalId: UUID) async throws -> [GoalImageDTO] {
+        struct R: Decodable { let images: [GoalImageDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/ai/images/\(goalId.uuidString.lowercased())", nil, authed: true)).images
+    }
+    /// The caller has shown the consent text; the header records that the user agreed.
+    func uploadPhoto(jpeg: Data) async throws -> String {
+        struct R: Decodable { let photoUrl: String }
+        return try JSONDecoder().decode(R.self, from: try await raw("PUT", "/v1/me/photo", nil, authed: true, upload: jpeg)).photoUrl
+    }
+    func deletePhoto() async throws { _ = try await raw("DELETE", "/v1/me/photo", nil, authed: true) }
+
     func forgotPassword(email: String) async throws { _ = try await raw("POST", "/v1/auth/password/forgot", ["email": email], authed: false) }
     func logOut() async throws { _ = try await raw("POST", "/v1/auth/logout", [:], authed: true) }
     func deleteAccount() async throws { _ = try await raw("DELETE", "/v1/account", nil, authed: true) }
@@ -88,15 +136,16 @@ actor APIClient {
         try JSONDecoder().decode(T.self, from: try await raw(method, path, body, authed: false))
     }
 
-    private func raw(_ method: String, _ path: String, _ body: [String: Any]?, authed: Bool) async throws -> Data {
-        let payload = try body.map { try JSONSerialization.data(withJSONObject: $0) }
+    private func raw(_ method: String, _ path: String, _ body: [String: Any]?, authed: Bool, upload: Data? = nil) async throws -> Data {
+        let payload = try upload ?? body.map { try JSONSerialization.data(withJSONObject: $0) }
+        let jpeg = upload != nil
         guard authed else { return try check(try await execute(method, path, payload, bearer: nil)) }
         guard let used = TokenStore.read() else { throw APIError.unauthorized }
-        let first = try await execute(method, path, payload, bearer: used.access)
+        let first = try await execute(method, path, payload, bearer: used.access, jpeg: jpeg)
         guard first.1 == 401 else { return try check(first) }
         // Access token expired: refresh once (single flight), then retry.
         let fresh = try await refresh(replacing: used)
-        let second = try await execute(method, path, payload, bearer: fresh.access)
+        let second = try await execute(method, path, payload, bearer: fresh.access, jpeg: jpeg)
         if second.1 == 401 { throw APIError.unauthorized }
         return try check(second)
     }
@@ -126,11 +175,12 @@ actor APIClient {
         throw APIError.server(status: r.1, code: obj?["error"] as? String ?? "http_\(r.1)", provider: obj?["provider"] as? String, retryAfterSec: obj?["retryAfterSec"] as? Int)
     }
 
-    private func execute(_ method: String, _ path: String, _ body: Data?, bearer: String?) async throws -> (Data, Int) {
+    private func execute(_ method: String, _ path: String, _ body: Data?, bearer: String?, jpeg: Bool = false) async throws -> (Data, Int) {
         var req = URLRequest(url: URL(string: path, relativeTo: base)!)
         req.httpMethod = method
         req.httpBody = body
-        if body != nil { req.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        if jpeg { req.setValue("image/jpeg", forHTTPHeaderField: "Content-Type"); req.setValue("1", forHTTPHeaderField: "X-Photo-Consent") }
+        else if body != nil { req.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         req.setValue("ios", forHTTPHeaderField: "X-Platform")
         req.setValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0", forHTTPHeaderField: "X-App-Version")
         if let bearer { req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }

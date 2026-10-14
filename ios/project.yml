@@ -38,6 +38,7 @@ targets:
       properties:
         UILaunchScreen:
           UIColorName: LaunchBlack
+        NSCameraUsageDescription: Take a photo for your goal images. It is only used to picture your future and is never shared.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIAppFonts:

@@ -19,6 +19,8 @@ enum Route: Hashable, Codable {
     case hallOfFame
     case notifications
     case settings
+    /// Add a second or third goal: the onboarding steps, full screen.
+    case addGoal
 }
 
 enum Tab: Hashable { case today, coach, journal, profile }
@@ -75,10 +77,19 @@ private extension View {
         navigationDestination(for: Route.self) { route in
             // Feature screens replace the placeholder as their milestones land (goal detail: 2, study mode: 3, community/game night: 4–5).
             switch route {
+            case .addGoal: AddGoalScreen().toolbar(.hidden, for: .tabBar)
             case .studyMode, .gameNight: PlaceholderScreen(title: String(describing: route)).toolbar(.hidden, for: .tabBar)
             default: PlaceholderScreen(title: String(describing: route))
             }
         }
+    }
+}
+
+private struct AddGoalScreen: View {
+    @Environment(AppRouter.self) private var router
+    var body: some View {
+        OnboardingFlow(adding: true, onExit: { router.today.removeLast() }, onFinished: { router.today.removeLast() })
+            .navigationBarBackButtonHidden()
     }
 }
 

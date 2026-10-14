@@ -13,6 +13,9 @@ import SwiftData
     var sourceAllianceId: UUID?    // set when created from a shared-plan alliance
     var colorIndex: Int
     var updatedAt: Date
+    var routine: String?           // onboarding step 2, shown in Reality Check
+    var realityNote: String?       // "Why I started"
+    var feasibilityJSON: Data?     // {verdict, reason, suggestedDeadline}
     @Relationship(deleteRule: .cascade, inverse: \TaskEntity.goal) var tasks: [TaskEntity] = []
 
     init(id: UUID, label: String, statement: String, startDate: String, deadline: String, colorIndex: Int) {
@@ -70,6 +73,20 @@ import SwiftData
     }
 }
 
+/// "Future Self" / "If nothing changes". The URL is a signed link; the bytes are cached on disk by a stable key.
+@Model final class GoalImageEntity {
+    /// "<goalId>|<kind>"
+    @Attribute(.unique) var key: String
+    var goalId: UUID
+    var kind: String               // future | reality
+    var status: String             // running | done | failed
+    var url: String?
+    var withFace: Bool
+    init(goalId: UUID, kind: String, status: String, url: String?, withFace: Bool) {
+        self.key = "\(goalId.uuidString)|\(kind)"; self.goalId = goalId; self.kind = kind; self.status = status; self.url = url; self.withFace = withFace
+    }
+}
+
 /// Every local mutation writes one of these in the same transaction.
 @Model final class OutboxEntity {
     @Attribute(.unique) var id: UUID   // idempotency key on the server
@@ -85,7 +102,7 @@ import SwiftData
 }
 
 enum Persistence {
-    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self]
+    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self]
     static let container: ModelContainer = {
         do { return try ModelContainer(for: Schema(models)) } catch { fatalError("Could not open the local database: \(error)") }
     }()
@@ -94,7 +111,7 @@ enum Persistence {
     static func wipe() throws {
         let ctx = ModelContext(container)
         try ctx.delete(model: OutboxEntity.self); try ctx.delete(model: CompletionEntity.self); try ctx.delete(model: JournalEntity.self)
-        try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self)
+        try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self); try ctx.delete(model: GoalImageEntity.self)
         try ctx.save()
         UserDefaults.standard.removeObject(forKey: "syncCursor")
     }

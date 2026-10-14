@@ -38,7 +38,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
-            -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests -only-testing:BridgeTests/GoalsCoreTests \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" || true
           grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/test.log"
       # The build log is published to the ci-logs branch so compiler errors can be read without a GitHub login.

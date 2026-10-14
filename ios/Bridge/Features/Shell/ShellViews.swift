@@ -28,28 +28,6 @@ private struct EmptyCard: View {
     }
 }
 
-struct TodayView: View {
-    @Environment(SessionStore.self) private var session
-    var now: Date = .now
-
-    var body: some View {
-        let name = session.user?.displayName ?? ""
-        let hour = Calendar.current.component(.hour, from: now)
-        TabPage {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(now.formatted(.dateTime.weekday(.wide).day().month(.wide))).bridgeLabel(10.5)
-                Group {
-                    if (3..<12).contains(hour) { Text("Good morning, \(name)") }
-                    else if (12..<17).contains(hour) { Text("Good afternoon, \(name)") }
-                    else { Text("Good evening, \(name)") }
-                }
-                .font(BFont.display(25)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            }
-            EmptyCard(title: "Your plan starts here", message: "Add a goal and pick a date. Your daily plan shows up on this screen.")
-        }
-    }
-}
-
 struct CoachView: View {
     @Environment(SessionStore.self) private var session
     var body: some View {
@@ -83,6 +61,7 @@ struct ProfileView: View {
     @Environment(Toaster.self) private var toaster
     @State private var sheet: Sheet?
     @State private var unsynced = 0
+    @State private var reminders = ReminderSettings.load()
     enum Sheet: String, Identifiable { case delete, logOut; var id: String { rawValue } }
 
     var body: some View {
@@ -98,6 +77,14 @@ struct ProfileView: View {
                     }
                     if let email = session.user?.email { Text(email).font(BFont.body(13)).foregroundStyle(Theme.mut) }
                 }
+            }
+            SettingsSection(title: "Notifications") {
+                SettingsValue(label: "Daily reminder", value: Self.clock(reminders.daily)) { reminders.daily = Self.next(reminders.daily, [7, 8, 9]); saveReminders() }
+                Divider().overlay(Theme.line)
+                SettingsValue(label: "Streak at risk", value: Self.clock(reminders.streakRisk)) { reminders.streakRisk = Self.next(reminders.streakRisk, [19, 20, 21]); saveReminders() }
+            }
+            if session.user?.photoUrl != nil {
+                SettingsSection(title: "Photo") { SettingsLink(label: "Remove photo and its images", danger: true, action: removePhoto) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Account").bridgeLabel(10).accessibilityAddTraits(.isHeader)
@@ -124,9 +111,58 @@ struct ProfileView: View {
         }
     }
 
+    // Reminder times cycle through a few sensible choices, as in the prototype; "Off" is the last stop.
+    private static func next(_ c: DateComponents?, _ hours: [Int]) -> DateComponents? {
+        let all: [DateComponents?] = hours.map { DateComponents(hour: $0, minute: 0) } + [nil]
+        let i = all.firstIndex { $0?.hour == c?.hour && ($0 == nil) == (c == nil) } ?? -1
+        return all[(i + 1) % all.count]
+    }
+    private static func clock(_ c: DateComponents?) -> String {
+        guard let c, let d = Calendar.current.date(from: DateComponents(hour: c.hour, minute: c.minute)) else { return String(localized: "Off") }
+        return d.formatted(date: .omitted, time: .shortened)
+    }
+    private func saveReminders() { reminders.save(); Task { await NotificationScheduler.shared.reschedule() } }
+
+    /// Deletes the photo and every image generated from it (server side), then refreshes the profile.
+    private func removePhoto() {
+        Task {
+            do { try await APIClient.shared.deletePhoto(); await session.refreshUser(); toaster.show(String(localized: "Photo and its images deleted."), .ok) }
+            catch APIError.offline { toaster.show(String(localized: "You're offline. Try again when you reconnect."), .warn) }
+            catch { toaster.show(String(localized: "Something went wrong. Try again."), .warn) }
+        }
+    }
+
     private func logOut() {
         sheet = nil
         Task { await session.logOut(); toaster.show(String(localized: "You've been logged out.")) }
+    }
+}
+
+private struct SettingsSection<Rows: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder var rows: Rows
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).bridgeLabel(10).accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) { rows }
+                .background(Theme.s1, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(Theme.line, lineWidth: 1))
+        }
+    }
+}
+
+private struct SettingsValue: View {
+    let label: LocalizedStringKey, value: String
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(label).font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                Spacer()
+                Text(value).font(BFont.body(14)).foregroundStyle(Theme.mut)
+            }
+            .padding(.horizontal, Theme.Space.card).frame(minHeight: 52).contentShape(Rectangle())
+        }
     }
 }
 
