@@ -19,7 +19,7 @@ type Kind = 'future' | 'reality';
 const KINDS: Kind[] = ['future', 'reality'];
 
 /** Counts one use of a daily AI allowance; throws 429 ai_quota when it is used up. */
-async function takeQuota(userId: string, kind: string, limit: number, n = 1) {
+export async function takeQuota(userId: string, kind: string, limit: number, n = 1) {
   const [row] = await sql`
     insert into ai_usage (user_id, day, kind, count) values (${userId}, current_date, ${kind}, ${n})
     on conflict (user_id, day, kind) do update set count = ai_usage.count + ${n}

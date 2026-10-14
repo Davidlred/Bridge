@@ -135,10 +135,20 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/v1/me', { onRequest: auth }, async req => ({ user: await loadUser(sql, req.userId) }));
 
+  // Display name and coach name. An empty or offensive coach name falls back to "Arc".
+  app.patch('/v1/me', { onRequest: auth }, async req => {
+    const b = parse(z.object({ displayName: Name.optional(), coachName: z.string().max(40).optional() }).strict(), req.body);
+    if (b.displayName) await sql`update users set display_name = ${b.displayName} where id = ${req.userId}`;
+    if (b.coachName !== undefined) await sql`update users set coach_name = ${coachName(b.coachName)} where id = ${req.userId}`;
+    return { user: await loadUser(sql, req.userId) };
+  });
+
   // Soft-delete now (signed out everywhere, sign-in methods released, content hidden); hard-delete after 30 days by purgeDeletedAccounts().
   app.delete('/v1/account', { onRequest: auth }, async (req, reply) => {
-    // The photo and every image made from it go now, not after 30 days.
+    // The photo, every image made from it and the journal go now, not after 30 days.
     await deletePhotoAndFaceImages(req.userId);
+    await sql`delete from journal_entries where user_id = ${req.userId}`;
+    await sql`update users set journal_dek = null where id = ${req.userId}`;
     await sql`delete from goal_images where user_id = ${req.userId}`;
     await storage.deletePrefix(userPrefix(req.userId)).catch(e => req.log.error({ err: e.message }, 'storage_delete_failed'));
     await sql.begin(async tx => {
@@ -194,6 +204,13 @@ export async function authRoutes(app: FastifyInstance) {
     });
     return reply.code(ok ? 200 : 400).type('text/html').send(ok ? page('Email confirmed', '<p>You can go back to The Bridge.</p>') : page('Link expired', '<p>This link has expired or was already used.</p>'));
   });
+}
+
+// A short list is enough for a coach nickname; anything flagged simply becomes "Arc".
+const BLOCKED = /\b(fuck|shit|bitch|cunt|nigg|fag|retard|whore|slut|nazi|hitler|rape|porn|sex|dick|cock|pussy)/i;
+export function coachName(raw: string): string {
+  const name = raw.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 20);
+  return name.length < 1 || BLOCKED.test(name) ? 'Arc' : name;
 }
 
 /** Worker job: hard-delete accounts 30 days after the user deleted them. */

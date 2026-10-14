@@ -25,6 +25,9 @@ const Env = z.object({
   S3_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().default('auto'),
   STORAGE_DIR: z.string().default('.data/media'),
+  // Wraps each user's journal key (32 bytes, base64). Defaults to a value derived from the JWT key; set it explicitly in production
+  // and never change it without re-wrapping the keys, or existing journals become unreadable.
+  JOURNAL_KEK: z.string().optional(),
   // Signs short-lived media links. Defaults to a value derived from the JWT key.
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 });

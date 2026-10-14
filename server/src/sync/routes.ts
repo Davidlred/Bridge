@@ -5,6 +5,8 @@ import { auth } from '../auth/tokens.js';
 import { HttpError } from '../util.js';
 import { deleteGoalImages } from '../goals/routes.js';
 import { Feasibility } from '../ai/planSchema.js';
+import { decryptText, encryptText, journalKey } from '../crypto.js';
+import { uuidv7 } from '../util.js';
 
 export const FREE_GOAL_LIMIT = 3;
 const PULL_PAGE = 1000;
@@ -12,7 +14,7 @@ const PULL_PAGE = 1000;
 const ISODate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const Mutation = z.object({
   id: z.string().uuid(),
-  entity: z.enum(['goal', 'task', 'completion', 'settings']),
+  entity: z.enum(['goal', 'task', 'completion', 'settings', 'journal']),
   entityId: z.string().uuid(),
   op: z.enum(['upsert', 'delete', 'complete', 'uncomplete']),
   patch: z.record(z.unknown()).default({}),
@@ -48,6 +50,16 @@ const TaskPatch = z.object({
 }).partial().strict();
 
 const CompletionPatch = z.object({ localDate: ISODate });
+const JournalPatch = z.object({
+  goalId: z.string().uuid().nullable(),
+  localDate: ISODate,
+  mood: z.number().int().min(1).max(5).nullable(),
+  body: z.string().max(10_000),
+  /** The version the device last saw. A different server version means another device edited it meanwhile. */
+  baseVersion: z.number().int().min(0),
+  /** The user picked a version after a conflict: drop the other copies. */
+  resolve: z.boolean().optional(),
+}).strict();
 const SettingsPatch = z.record(z.union([z.string().max(200), z.number(), z.boolean(), z.null()])).refine(o => Object.keys(o).length <= 40);
 
 class Reject extends Error {}
@@ -147,7 +159,62 @@ async function applySettings(tx: Tx, userId: string, m: Mutation) {
   await log(tx, userId, 'settings', userId, 'upsert');
 }
 
-const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings };
+/**
+ * Journal: optimistic versions. On a conflict both versions are kept: the incoming one becomes current, the other is
+ * stored as a conflict copy (conflict_of = current id) until the user picks. Bodies are encrypted with the user's key.
+ */
+async function applyJournal(tx: Tx, userId: string, m: Mutation) {
+  const [byId] = await tx`select user_id, goal_id, local_date::text, version, conflict_of, mood, body_ciphertext from journal_entries where id = ${m.entityId} for update`;
+  if (byId && byId.user_id !== userId) reject('forbidden');
+  if (m.op === 'delete') {
+    if (byId) {
+      const gone = await tx`delete from journal_entries where (id = ${m.entityId} or conflict_of = ${m.entityId}) and user_id = ${userId} returning id`;
+      for (const g of gone) await log(tx, userId, 'journal', g.id, 'delete');
+    }
+    return;
+  }
+  if (m.op !== 'upsert') reject('invalid');
+  const p = check(JournalPatch, m.patch);
+  if (p.goalId) { const [g] = await tx`select 1 from goals where id = ${p.goalId} and user_id = ${userId}`; if (!g) reject('goal_missing'); }
+  if (byId?.conflict_of) return;                     // a conflict copy is read-only; picking one goes through the current row
+  const key = await journalKey(tx, userId);
+  const sealed = encryptText(key, p.body);
+  const copyOf = async (row: { id: string; mood: number | null; body_ciphertext: Buffer | null; version: number }, current: string) => {
+    const copyId = uuidv7();
+    await tx`insert into journal_entries (id, user_id, goal_id, local_date, mood, body_ciphertext, body_length, version, conflict_of)
+             values (${copyId}, ${userId}, ${p.goalId}, ${p.localDate}, ${row.mood}, ${row.body_ciphertext}, 0, ${row.version}, ${current})`;
+    await log(tx, userId, 'journal', copyId, 'upsert');
+  };
+
+  if (byId) {
+    if (byId.version !== p.baseVersion && !p.resolve) await copyOf({ id: m.entityId, mood: byId.mood, body_ciphertext: byId.body_ciphertext, version: byId.version }, m.entityId);
+    await tx`update journal_entries set mood = ${p.mood}, body_ciphertext = ${sealed}, body_length = ${p.body.length}, version = version + 1, updated_at = now() where id = ${m.entityId}`;
+    if (p.resolve) {
+      const gone = await tx`delete from journal_entries where conflict_of = ${m.entityId} returning id`;
+      for (const g of gone) await log(tx, userId, 'journal', g.id, 'delete');
+    }
+    await log(tx, userId, 'journal', m.entityId, 'upsert');
+    return;
+  }
+  // New id. Another device may already have written this day under a different id: keep that as a conflict copy.
+  const [current] = await tx`select id, mood, body_ciphertext, version from journal_entries
+                             where user_id = ${userId} and goal_id is not distinct from ${p.goalId} and local_date = ${p.localDate} and conflict_of is null for update`;
+  let version = 1;
+  if (current) {
+    version = (current.version as number) + 1;
+    // Step it out of the "one current entry per day" index first (self reference), then point it at the new entry.
+    await tx`update journal_entries set conflict_of = id where id = ${current.id}`;
+  }
+  await tx`insert into journal_entries (id, user_id, goal_id, local_date, mood, body_ciphertext, body_length, version)
+           values (${m.entityId}, ${userId}, ${p.goalId}, ${p.localDate}, ${p.mood}, ${sealed}, ${p.body.length}, ${version})`;
+  if (current) {
+    await tx`update journal_entries set conflict_of = ${m.entityId}, updated_at = now() where id = ${current.id}`;
+    await log(tx, userId, 'journal', current.id, 'upsert');
+  }
+  await log(tx, userId, 'journal', m.entityId, 'upsert');
+}
+
+const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings, journal: applyJournal };
 const ms = (d: Date | null) => (d ? d.getTime() : null);
 
 export async function syncRoutes(app: FastifyInstance) {
@@ -191,6 +258,9 @@ export async function syncRoutes(app: FastifyInstance) {
     const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
     const live = comps.length ? await sql`select task_id, local_date::text, completed_at from task_completions where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${comps.map(c => c.entity_id as string)}::uuid[], ${comps.map(c => c.key as string)}::date[]))` : [];
     const [me] = of('settings').length ? await sql`select settings from users where id = ${req.userId}` : [];
+    const journalIds = of('journal').map(r => r.entity_id as string);
+    const journalRows = journalIds.length ? await sql`select id, goal_id, local_date::text, mood, body_ciphertext, version, conflict_of, updated_at from journal_entries where id in ${sql(journalIds)} and user_id = ${req.userId}` : [];
+    const key = journalRows.length ? await journalKey(sql, req.userId) : null;
 
     const alive = new Set(goals.map(g => g.id as string)), done = new Set(live.map(c => `${c.task_id}:${c.local_date}`));
     return {
@@ -204,6 +274,8 @@ export async function syncRoutes(app: FastifyInstance) {
         completions: comps.filter(c => !done.has(`${c.entity_id}:${c.key}`)).map(c => ({ taskId: c.entity_id, localDate: c.key })),
       },
       settings: me?.settings ?? null,
+      journal: journalRows.map(j => ({ id: j.id, goalId: j.goal_id, localDate: j.local_date, mood: j.mood, body: decryptText(key!, j.body_ciphertext), version: j.version, conflictOf: j.conflict_of, updatedAt: ms(j.updated_at) })),
+      removedJournal: journalIds.filter(id => !journalRows.some(j => j.id === id)),
     };
   });
 }

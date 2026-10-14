@@ -6,6 +6,7 @@ import { auth } from './auth/tokens.js';
 import { authRoutes } from './auth/routes.js';
 import { syncRoutes } from './sync/routes.js';
 import { goalRoutes } from './goals/routes.js';
+import { coachRoutes } from './coach/routes.js';
 import { PlanRequest } from './ai/planSchema.js';
 import { generatePlan } from './ai/goalPlanner.js';
 import { AIUnavailable } from './ai/replicate.js';
@@ -40,6 +41,7 @@ export async function buildApp() {
   await app.register(authRoutes);
   await app.register(syncRoutes);
   await app.register(goalRoutes);
+  await app.register(coachRoutes);
 
   app.post('/v1/ai/plan', { onRequest: auth, config: { rateLimit: { max: 5, timeWindow: '1 day' } } }, async (req, reply) => {
     const body = PlanRequest.safeParse(req.body);
