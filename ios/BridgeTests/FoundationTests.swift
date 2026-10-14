@@ -40,11 +40,15 @@ final class FoundationSnapshotTests: XCTestCase {
             ("light", .init(userInterfaceStyle: .light)), ("dark", .init(userInterfaceStyle: .dark)),
             ("xxxl", .init(traitsFrom: [.init(userInterfaceStyle: .light), .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)])),
         ]
-        let record = ProcessInfo.processInfo.environment["SNAPSHOT_RECORD"] == "1"
-        withSnapshotTesting(record: record ? .all : .never) {
+        let env = ProcessInfo.processInfo.environment
+        // CI passes the folder explicitly: the compiled source path isn't writable from the simulator.
+        let dir = env["SNAPSHOT_DIR"]
+        withSnapshotTesting(record: env["SNAPSHOT_RECORD"] == "1" ? .all : .never) {
             for (variant, traits) in variants {
-                assertSnapshot(of: UIHostingController(rootView: root), as: .image(on: .iPhone13, precision: 0.99, perceptualPrecision: 0.98, traits: traits),
-                               named: "\(name)-\(variant)", file: file, line: line)
+                if let failure = verifySnapshot(of: UIHostingController(rootView: root), as: .image(on: .iPhone13, precision: 0.99, perceptualPrecision: 0.98, traits: traits),
+                                                named: "\(name)-\(variant)", snapshotDirectory: dir, testName: "FoundationSnapshotTests") {
+                    XCTFail(failure, file: file, line: line)
+                }
             }
         }
     }

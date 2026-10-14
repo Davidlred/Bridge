@@ -45,7 +45,8 @@ jobs:
       - name: Snapshots
         run: |
           set -o pipefail
-          if [ -d BridgeTests/__Snapshots__ ]; then MODE=verify; else MODE=record; export TEST_RUNNER_SNAPSHOT_RECORD=1; fi
+          export TEST_RUNNER_SNAPSHOT_DIR="$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__"
+          if [ -d BridgeTests/__Snapshots__ ]; then MODE=verify; else MODE=record; export TEST_RUNNER_SNAPSHOT_RECORD=1; mkdir -p BridgeTests/__Snapshots__; fi
           echo "mode: $MODE" > "$RUNNER_TEMP/snap.log"
           xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
             -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationSnapshotTests \
