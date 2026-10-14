@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.credentials.play)
     implementation(libs.googleid)
     implementation(libs.revenuecat)
+    implementation(libs.coil)
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

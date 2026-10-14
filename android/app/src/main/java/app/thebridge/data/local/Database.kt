@@ -18,7 +18,14 @@ data class GoalEntity(
     val sourceAllianceId: String? = null,
     val colorIndex: Int = 0,
     val updatedAt: Long = System.currentTimeMillis(),
+    val routine: String? = null,       // onboarding step 2, shown in Reality Check
+    val realityNote: String? = null,   // "Why I started"
+    val feasibility: String? = null,   // JSON {verdict, reason, suggestedDeadline}
 )
+
+/** Future Self / If nothing changes. The URL is a signed link; the image itself is cached on disk by a stable key. */
+@Entity(tableName = "goal_images", primaryKeys = ["goalId", "kind"])
+data class GoalImageEntity(val goalId: String, val kind: String, val status: String, val url: String?, val withFace: Boolean, val updatedAt: Long = System.currentTimeMillis())
 
 @Entity(tableName = "tasks", foreignKeys = [ForeignKey(GoalEntity::class, ["id"], ["goalId"], onDelete = ForeignKey.CASCADE)], indices = [Index("goalId")])
 data class TaskEntity(
@@ -66,8 +73,22 @@ data class OutboxEntity(
 @Dao
 interface GoalDao {
     @Query("SELECT * FROM goals WHERE status = 'active' ORDER BY id") fun active(): Flow<List<GoalEntity>>
+    @Query("SELECT * FROM goals WHERE id = :id") suspend fun get(id: String): GoalEntity?
+    @Query("SELECT COUNT(*) FROM goals WHERE status = 'active'") suspend fun activeCount(): Int
+    @Query("SELECT * FROM goals ORDER BY id DESC LIMIT 1") suspend fun latest(): GoalEntity?
+    @Upsert suspend fun upsert(goal: GoalEntity)
     @Upsert suspend fun upsert(goals: List<GoalEntity>)
     @Query("DELETE FROM goals WHERE id IN (:ids)") suspend fun delete(ids: List<String>)
+    @Insert suspend fun enqueue(m: OutboxEntity)
+
+    @Query("SELECT * FROM tasks WHERE goalId IN (SELECT id FROM goals WHERE status = 'active') ORDER BY position")
+    fun activeTasks(): Flow<List<TaskEntity>>
+    @Query("SELECT c.* FROM completions c JOIN tasks t ON t.id = c.taskId JOIN goals g ON g.id = t.goalId WHERE g.status = 'active'")
+    fun activeCompletions(): Flow<List<CompletionEntity>>
+
+    @Query("SELECT * FROM goal_images") fun images(): Flow<List<GoalImageEntity>>
+    @Query("SELECT * FROM goal_images WHERE goalId = :goalId") fun images(goalId: String): Flow<List<GoalImageEntity>>
+    @Upsert suspend fun upsertImages(rows: List<GoalImageEntity>)
 }
 
 @Dao
@@ -76,6 +97,9 @@ interface TaskDao {
     fun tasks(goalId: String): Flow<List<TaskEntity>>
 
     @Upsert suspend fun upsert(task: TaskEntity)
+    @Upsert suspend fun upsert(tasks: List<TaskEntity>)
+    @Query("SELECT * FROM tasks WHERE id = :id") suspend fun get(id: String): TaskEntity?
+    @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM tasks WHERE goalId = :goalId") suspend fun nextPosition(goalId: String): Int
     @Insert suspend fun enqueue(m: OutboxEntity)
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun complete(c: CompletionEntity)
     @Query("DELETE FROM completions WHERE taskId = :taskId AND localDate = :localDate") suspend fun uncomplete(taskId: String, localDate: String)
@@ -109,7 +133,11 @@ interface PullDao {
     @Query("DELETE FROM completions WHERE taskId = :taskId AND localDate = :localDate") suspend fun removeCompletion(taskId: String, localDate: String)
 }
 
-@Database(entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class], version = 1, exportSchema = true)
+@Database(
+    entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class],
+    version = 2, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
+)
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao
     abstract fun tasks(): TaskDao

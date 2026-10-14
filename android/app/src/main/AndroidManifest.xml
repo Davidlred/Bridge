@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".BridgeApp"
@@ -33,6 +35,24 @@
                 <data android:scheme="https" android:host="thebridge.app" android:pathPrefix="/join/" />
             </intent-filter>
         </activity>
+
+        <!-- Local reminders: fired alarms, plus re-arming after reboot or a clock / time-zone change -->
+        <receiver android:name=".data.reminders.ReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Camera captures for the onboarding photo (cache only, deleted after upload) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- WorkManager is initialised by BridgeApp so workers can be injected by Hilt. -->
         <provider

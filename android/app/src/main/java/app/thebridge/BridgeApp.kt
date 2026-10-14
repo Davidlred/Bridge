@@ -6,6 +6,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
+import app.thebridge.data.reminders.ReminderScheduler
 import app.thebridge.data.session.SessionManager
 import app.thebridge.data.session.SessionPhase
 import app.thebridge.data.sync.SyncWorker
@@ -16,6 +17,7 @@ import javax.inject.Inject
 class BridgeApp : Application(), Configuration.Provider {
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var session: SessionManager
+    @Inject lateinit var reminders: ReminderScheduler
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
@@ -23,9 +25,11 @@ class BridgeApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         SyncWorker.schedulePeriodic(this)
+        reminders.createChannel()
+        reminders.rescheduleAsync()
         // Sync whenever the app comes to the foreground.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) { if (session.phase.value == SessionPhase.Ready) SyncWorker.kick(this@BridgeApp) }
+            override fun onStart(owner: LifecycleOwner) { if (session.phase.value == SessionPhase.Ready || session.phase.value == SessionPhase.Onboarding) SyncWorker.kick(this@BridgeApp) }
         })
     }
 }

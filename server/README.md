@@ -31,11 +31,26 @@ Deploy: `fly launch --no-deploy`, `fly secrets set …` (every key in `.env.exam
 | `POST /v1/sync/push` | ≤200 mutations `{id, entity, entityId, op, patch, clientTs}`; idempotent by `id`. Returns `{accepted, rejected:{id: code}}`. |
 | `GET /v1/sync?since=` | Changed goals, tasks, completions, removals and settings since the cursor. |
 
+## API (milestone 2)
+| Route | Notes |
+|---|---|
+| `POST /v1/ai/plan` | Goal + deadline + routine (free text from onboarding, or the structured form) → tasks, label, feasibility. The deadline is never changed. |
+| `POST /v1/ai/reality` | Feasibility only (`realistic` / `stretch` / `unrealistic`, reason, optional suggested date). Used when the deadline changes. 20/day. |
+| `PUT /v1/me/photo` · `DELETE /v1/me/photo` | JPEG/PNG ≤ 6 MB, requires `X-Photo-Consent: 1` (the app shows the consent sheet first). Delete removes the photo **and every image made from it**. |
+| `POST /v1/ai/images` · `GET /v1/ai/images/:goalId` | Starts / polls the "Future Self" and "If nothing changes" images. With a consented photo they are made from it (`MODEL_IMAGE_EDIT`); without one they are conceptual scenes with no faces (`MODEL_IMAGE`). 8/day. Retries only redo failed images. |
+| `GET /v1/media/<key>?exp&sig` | Private files through signed links valid for an hour. |
+
+Goals also sync `routine`, `realityNote` ("Why I started") and `feasibility`. Deleting a goal deletes its images; deleting the account deletes the photo and all images at once (the rest of the account after 30 days).
+
+Images are generated in the API process after the request returns. That is fine for one machine; move it to the worker queue (BullMQ) before running several.
+
 Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, completions are a set (an uncomplete only wins if newer), 3 active goals without `plus` (`goal_limit`), shared-plan tasks are read-only (`shared_task_readonly`), the goal deadline is only ever what the client sent.
 
 ## Before launch
 - **Email provider**: `src/mailer.ts` prints links in development and throws in production. Wire a transactional sender (Resend, Postmark, SES).
 - **Apple token revocation** on account deletion needs the Sign in with Apple private key (not configured yet).
 - **Age gate** at sign-up is waiting on the per-country age-of-consent table (open decision in `CLAUDE.md`).
+
+Storage: set `S3_BUCKET` (+ `S3_ENDPOINT`, credentials) in production, e.g. Fly Tigris. Without it files go to `STORAGE_DIR` on local disk.
 
 Next to build: journal sync (per-user encryption key), coach SSE route, alliances create/join/leave + shared-plan versioning, WebSocket realtime + game engine, RevenueCat webhook, moderation + push workers, account export.

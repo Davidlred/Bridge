@@ -2,7 +2,9 @@
   "name": "bridge-server",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p .",
@@ -14,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1151.0",
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/websocket": "^10.0.1",
     "argon2": "^0.40.3",

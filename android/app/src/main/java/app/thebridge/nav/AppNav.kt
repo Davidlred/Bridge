@@ -73,7 +73,8 @@ import app.thebridge.feature.shell.LogOutSheet
 import app.thebridge.feature.shell.OfflineBanner
 import app.thebridge.feature.shell.ProfileScreen
 import app.thebridge.feature.shell.ShellViewModel
-import app.thebridge.feature.shell.TodayScreen
+import app.thebridge.feature.today.TodayRoute
+import app.thebridge.feature.onboarding.OnboardingFlow
 import app.thebridge.feature.shell.UpgradeScreen
 import app.thebridge.ui.components.BridgeSheet
 import app.thebridge.ui.components.BridgeToast
@@ -107,6 +108,8 @@ import java.time.ZoneId
 @Serializable object Messages
 @Serializable data class DmThread(val contactId: String)
 @Serializable object HallOfFame
+/** Add a second or third goal: the onboarding steps, full screen. */
+@Serializable object AddGoal
 
 // Signed-out flow
 @Serializable object Welcome
@@ -143,21 +146,22 @@ fun AppRoot(auth: AuthViewModel, shell: ShellViewModel = hiltViewModel()) {
             UpgradeScreen(onOpenStore = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) })
             return@Box
         }
-        // Ready and Expired share the tabs, so the key only changes between splash, auth flow and tabs.
-        val stage = Pair(phase == SessionPhase.Launching, phase == SessionPhase.SignedOut)
-        AnimatedContent(stage, transitionSpec = { fadeIn(tween(Motion.fade)) togetherWith fadeOut(tween(Motion.fade)) }, label = "phase") { (launching, signedOut) ->
+        // Ready and Expired share the tabs, so the key only changes between splash, auth flow, first-goal onboarding and tabs.
+        val stage = when (phase) { SessionPhase.Launching -> 0; SessionPhase.SignedOut -> 1; SessionPhase.Onboarding -> 2; else -> 3 }
+        AnimatedContent(stage, transitionSpec = { fadeIn(tween(Motion.fade)) togetherWith fadeOut(tween(Motion.fade)) }, label = "phase") { st ->
             Column(Modifier.fillMaxSize()) {
-                if (!launching && !online) OfflineBanner(queued, Modifier.background(c.warnTint).windowInsetsPadding(WindowInsets.statusBars))
-                when {
-                    launching -> SplashScreen()
-                    signedOut -> AuthFlow(auth)
+                if (st != 0 && !online) OfflineBanner(queued, Modifier.background(c.warnTint).windowInsetsPadding(WindowInsets.statusBars))
+                when (st) {
+                    0 -> SplashScreen()
+                    1 -> AuthFlow(auth)
+                    2 -> OnboardingFlow(adding = false, onExit = null, onFinished = {})
                     else -> MainShell(shell, offlineBannerShown = !online)
                 }
             }
         }
         if (phase is SessionPhase.Expired) ReauthSheet(auth, queued)
         // Above the tab bar when it is showing, bottom-centre otherwise.
-        BridgeToast(toast, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(start = 20.dp, end = 20.dp, bottom = if (phase is SessionPhase.Ready || phase is SessionPhase.Expired) 86.dp else 20.dp))
+        BridgeToast(toast, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(start = 20.dp, end = 20.dp, bottom = if (phase is SessionPhase.Ready || phase is SessionPhase.Expired) 86.dp else 96.dp))
     }
 }
 
@@ -214,8 +218,10 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val reduce = LocalReduceMotion.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     // Hide the bar on full-screen flows
-    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true
+    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true
     val name = user?.displayName.orEmpty()
+    val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
+    val toTab: (Any) -> Unit = { graph -> nav.navigate(graph) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
 
     Column(Modifier.fillMaxSize()) {
         NavHost(
@@ -227,7 +233,8 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
             popExitTransition = { if (reduce) fadeOut(tween(Motion.fade)) else slideOutHorizontally(tween(Motion.push, easing = PushEasing)) { it / 6 } + fadeOut(tween(Motion.fade)) },
         ) {
             navigation<TodayGraph>(startDestination = Today) {
-                composable<Today> { TodayScreen(name) }
+                composable<Today> { TodayRoute(onAddGoal = { nav.navigate(AddGoal) }, onOpenJournal = { toTab(JournalGraph) }) }
+                composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
                 composable<Community> { /* CommunityScreen(goalId) — Feed / Alliance */ }
                 composable<AllianceRoute> { }
@@ -250,6 +257,8 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         name, user?.email, user?.createdAt?.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() },
                         onLogOut = { if (queued > 0) sheet = "logout" else shell.logOut() },
                         onDelete = { shell.clearDeleteError(); sheet = "delete" },
+                        reminders = reminders, onDaily = shell::cycleDaily, onRisk = shell::cycleRisk,
+                        hasPhoto = user?.photoUrl != null, onRemovePhoto = shell::removePhoto,
                     )
                 }
                 composable<HallOfFame> { }

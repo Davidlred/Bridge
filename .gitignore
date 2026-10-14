@@ -18,3 +18,6 @@ ios/build/
 ios/DerivedData/
 xcuserdata/
 .DS_Store
+
+# Server dev media storage
+server/.data/

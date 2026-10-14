@@ -10,13 +10,26 @@ type Prediction = { id: string; status: 'starting' | 'processing' | 'succeeded' 
 
 /** Runs a language model to completion. Uses Prefer: wait, then polls. Aborts and cancels on signal. */
 export async function runText(model: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const output = await runPrediction(model, input, signal);
+  return Array.isArray(output) ? output.join('') : String(output ?? '');
+}
+
+/** Runs an image model to completion and returns the URL of the first image. */
+export async function runImage(model: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const output = await runPrediction(model, input, signal, 180_000);
+  const url = Array.isArray(output) ? output[0] : output;
+  if (typeof url !== 'string' || !/^https?:|^data:/.test(url)) throw new AIUnavailable('image_output_missing');
+  return url;
+}
+
+async function runPrediction(model: string, input: Record<string, unknown>, signal?: AbortSignal, timeoutMs = 90_000): Promise<unknown> {
   const res = await fetch(`${BASE}/models/${model}/predictions`, {
     method: 'POST', headers: { ...headers(), Prefer: 'wait=60' }, body: JSON.stringify({ input }), signal,
   });
   if (res.status === 429 || res.status >= 500) throw new AIUnavailable(`replicate ${res.status}`);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}: ${await res.text()}`, false);
   let p = (await res.json()) as Prediction;
-  const deadline = Date.now() + 90_000;
+  const deadline = Date.now() + timeoutMs;
   try {
     while (p.status === 'starting' || p.status === 'processing') {
       if (Date.now() > deadline) throw new AIUnavailable('timeout');
@@ -28,7 +41,7 @@ export async function runText(model: string, input: Record<string, unknown>, sig
     throw e;
   }
   if (p.status !== 'succeeded') throw new AIUnavailable(p.error ?? p.status);
-  return Array.isArray(p.output) ? p.output.join('') : String(p.output ?? '');
+  return p.output;
 }
 
 /** Streams tokens from a language model via Replicate's SSE stream URL. */

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,7 +34,10 @@ class ShellViewModel @Inject constructor(
     network: NetworkMonitor,
     db: BridgeDb,
     api: ApiClient,
+    private val reminderScheduler: app.thebridge.data.reminders.ReminderScheduler,
+    private val ai: app.thebridge.data.AiRepository,
 ) : ViewModel() {
+    val reminders = reminderScheduler.settings
     val phase = session.phase
     val user = session.user
     val online = network.online
@@ -65,6 +69,21 @@ class ShellViewModel @Inject constructor(
     }
 
     fun clearDeleteError() { _deleteError.value = null }
+
+    // Reminder times cycle through a few sensible choices, as in the prototype; "off" is the last stop.
+    private fun next(current: java.time.LocalTime?, options: List<Int>): java.time.LocalTime? {
+        val all = options.map { java.time.LocalTime.of(it, 0) } + listOf<java.time.LocalTime?>(null)
+        return all[(all.indexOf(current) + 1).mod(all.size)]
+    }
+    fun cycleDaily() = viewModelScope.launch { reminderScheduler.setDaily(next(reminders.first().daily, listOf(7, 8, 9))) }
+    fun cycleRisk() = viewModelScope.launch { reminderScheduler.setStreakRisk(next(reminders.first().streakRisk, listOf(19, 20, 21))) }
+
+    /** Deletes the photo and every image generated from it (server side), then refreshes the profile. */
+    fun removePhoto() = viewModelScope.launch {
+        try { ai.deletePhoto(); session.refreshUser(); toaster.show(UiText.Res(R.string.toast_photo_removed), ToastKind.Ok) }
+        catch (e: OfflineException) { toaster.show(UiText.Res(R.string.error_offline), ToastKind.Warn) }
+        catch (e: Exception) { toaster.show(UiText.Res(R.string.error_generic), ToastKind.Warn) }
+    }
 
     fun deleteAccount() {
         if (_deleting.value) return

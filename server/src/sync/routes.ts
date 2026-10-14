@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { sql, type Tx } from '../db.js';
 import { auth } from '../auth/tokens.js';
 import { HttpError } from '../util.js';
+import { deleteGoalImages } from '../goals/routes.js';
+import { Feasibility } from '../ai/planSchema.js';
 
 export const FREE_GOAL_LIMIT = 3;
 const PULL_PAGE = 1000;
@@ -28,6 +30,9 @@ const GoalPatch = z.object({
   category: z.string().max(40).nullable(),
   status: z.enum(['active', 'archived', 'completed']),
   colorIndex: z.number().int().min(0).max(2),
+  routine: z.string().max(1000).nullable(),         // onboarding step 2, shown in Reality Check
+  realityNote: z.string().max(1000).nullable(),     // "Why I started"
+  feasibility: Feasibility.nullable(),
 }).partial().strict();
 
 const TaskPatch = z.object({
@@ -55,7 +60,7 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
   const [row] = await tx`select user_id, status, start_date::text, deadline::text from goals where id = ${m.entityId} for update`;
   if (row && row.user_id !== userId) reject('forbidden');
   if (m.op === 'delete') {
-    if (row) { await tx`delete from goals where id = ${m.entityId}`; await log(tx, userId, 'goal', m.entityId, 'delete'); }
+    if (row) { await tx`delete from goals where id = ${m.entityId}`; await log(tx, userId, 'goal', m.entityId, 'delete'); await deleteGoalImages(userId, m.entityId); }
     return;
   }
   if (m.op !== 'upsert') reject('invalid');
@@ -68,15 +73,20 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
   }
   if (!row) {
     if (!p.label || !p.statement || !p.startDate || !p.deadline || p.deadline <= p.startDate) reject('invalid');
-    await tx`insert into goals (id, user_id, label, statement, category, start_date, deadline, status, color_index)
-             values (${m.entityId}, ${userId}, ${p.label!}, ${p.statement!}, ${p.category ?? null}, ${p.startDate!}, ${p.deadline!}, ${p.status ?? 'active'}, ${p.colorIndex ?? 0})`;
+    await tx`insert into goals (id, user_id, label, statement, category, start_date, deadline, status, color_index, routine, reality_note, feasibility)
+             values (${m.entityId}, ${userId}, ${p.label!}, ${p.statement!}, ${p.category ?? null}, ${p.startDate!}, ${p.deadline!}, ${p.status ?? 'active'}, ${p.colorIndex ?? 0},
+                     ${p.routine ?? null}, ${p.realityNote ?? null}, ${p.feasibility ? tx.json(p.feasibility) : null})`;
   } else {
     if ((p.deadline ?? row.deadline) <= (p.startDate ?? row.start_date)) reject('invalid');
     await tx`update goals set
         label = coalesce(${p.label ?? null}, label), statement = coalesce(${p.statement ?? null}, statement),
         category = case when ${'category' in p} then ${p.category ?? null} else category end,
         start_date = coalesce(${p.startDate ?? null}::date, start_date), deadline = coalesce(${p.deadline ?? null}::date, deadline),
-        status = coalesce(${p.status ?? null}::goal_status, status), color_index = coalesce(${p.colorIndex ?? null}, color_index), updated_at = now()
+        status = coalesce(${p.status ?? null}::goal_status, status), color_index = coalesce(${p.colorIndex ?? null}, color_index),
+        routine = case when ${'routine' in p} then ${p.routine ?? null} else routine end,
+        reality_note = case when ${'realityNote' in p} then ${p.realityNote ?? null} else reality_note end,
+        feasibility = case when ${'feasibility' in p} then ${p.feasibility ? tx.json(p.feasibility) : null}::jsonb else feasibility end,
+        updated_at = now()
       where id = ${m.entityId}`;
   }
   await log(tx, userId, 'goal', m.entityId, 'upsert');
@@ -177,7 +187,7 @@ export async function syncRoutes(app: FastifyInstance) {
     const of = (entity: string) => [...latest.values()].filter(r => r.entity === entity);
     const goalIds = of('goal').map(r => r.entity_id as string), taskIds = of('task').map(r => r.entity_id as string), comps = of('completion');
 
-    const goals = goalIds.length ? await sql`select id, label, statement, category, start_date::text, deadline::text, status, source_alliance_id, color_index, updated_at from goals where id in ${sql(goalIds)} and user_id = ${req.userId}` : [];
+    const goals = goalIds.length ? await sql`select id, label, statement, category, start_date::text, deadline::text, status, source_alliance_id, color_index, routine, reality_note, feasibility, updated_at from goals where id in ${sql(goalIds)} and user_id = ${req.userId}` : [];
     const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
     const live = comps.length ? await sql`select task_id, local_date::text, completed_at from task_completions where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${comps.map(c => c.entity_id as string)}::uuid[], ${comps.map(c => c.key as string)}::date[]))` : [];
     const [me] = of('settings').length ? await sql`select settings from users where id = ${req.userId}` : [];
@@ -186,7 +196,7 @@ export async function syncRoutes(app: FastifyInstance) {
     return {
       cursor: rows.length ? Number(rows[rows.length - 1]!.server_seq) : since,
       hasMore: rows.length === PULL_PAGE,
-      goals: goals.map(g => ({ id: g.id, label: g.label, statement: g.statement, category: g.category, startDate: g.start_date, deadline: g.deadline, status: g.status, sourceAllianceId: g.source_alliance_id, colorIndex: g.color_index, updatedAt: ms(g.updated_at) })),
+      goals: goals.map(g => ({ id: g.id, label: g.label, statement: g.statement, category: g.category, startDate: g.start_date, deadline: g.deadline, status: g.status, sourceAllianceId: g.source_alliance_id, colorIndex: g.color_index, routine: g.routine, realityNote: g.reality_note, feasibility: g.feasibility, updatedAt: ms(g.updated_at) })),
       tasks: tasks.map(t => ({ id: t.id, goalId: t.goal_id, title: t.title, priority: t.priority, timeOfDay: t.time_of_day, minutes: t.minutes, rationale: t.rationale, notes: t.notes, origin: t.origin, sharedTaskId: t.shared_task_id, position: t.position, deletedAt: ms(t.deleted_at), updatedAt: ms(t.updated_at) })),
       completions: live.map(c => ({ taskId: c.task_id, localDate: c.local_date, completedAt: ms(c.completed_at) })),
       removed: {

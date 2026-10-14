@@ -29,6 +29,7 @@ class SyncWorker @AssistedInject constructor(
     private val db: BridgeDb,
     private val api: SyncApi,
     private val session: SessionManager,
+    private val reminders: app.thebridge.data.reminders.ReminderScheduler,
 ) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result = try {
@@ -41,7 +42,7 @@ class SyncWorker @AssistedInject constructor(
             db.outbox().remove(done.toList())
         }
         // Pulling over unsent local edits would overwrite them, so only pull once the outbox is empty.
-        if (db.outbox().countNow() == 0) api.pullAndApply(db)
+        if (db.outbox().countNow() == 0) { api.pullAndApply(db); reminders.reschedule() }
         Result.success()
     } catch (e: UnauthorizedException) {
         session.expired()                                               // UI shows re-auth sheet; outbox kept
@@ -94,7 +95,10 @@ class RemoteSyncApi @Inject constructor(private val api: ApiClient, private val 
     private suspend fun apply(db: BridgeDb, page: PullResponse) {
         val dao = db.pull()
         dao.removeGoals(page.removed.goals)                              // cascades to that goal's tasks
-        dao.goals(page.goals.map { GoalEntity(it.id, it.label, it.statement, it.startDate, it.deadline, it.status, it.sourceAllianceId, it.colorIndex, it.updatedAt) })
+        dao.goals(page.goals.map {
+            GoalEntity(it.id, it.label, it.statement, it.startDate, it.deadline, it.status, it.sourceAllianceId, it.colorIndex, it.updatedAt, it.routine, it.realityNote,
+                it.feasibility?.let { f -> api.json.encodeToString(app.thebridge.data.remote.Feasibility.serializer(), f) })
+        })
         // A task or completion can arrive after its parent was deleted on another device; skip instead of breaking the foreign key.
         val goals = dao.knownGoals(page.tasks.map { it.goalId }.distinct()).toSet()
         dao.tasks(page.tasks.filter { it.goalId in goals }.map {

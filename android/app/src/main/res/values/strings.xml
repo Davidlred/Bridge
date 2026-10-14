@@ -122,4 +122,245 @@
     <string name="delete_cancel">Keep my account</string>
     <string name="delete_offline">You\'re offline. Connect to delete your account.</string>
     <string name="toast_account_deleted">Your account has been deleted.</string>
+
+    <!-- Onboarding -->
+    <string name="ob_step">%1$d OF 4</string>
+    <string name="ob_kicker_goal">YOUR GOAL</string>
+    <string name="ob_kicker_goal_adding">NEW GOAL · RUNS ALONGSIDE YOUR OTHERS</string>
+    <string name="ob_goal_title">What is the one goal you are committed to achieving?</string>
+    <string name="ob_goal_hint">Type your goal</string>
+    <string name="ob_goal_a11y">Your goal</string>
+    <string name="use_example">Use an example</string>
+    <string name="ob_goal_help">Be specific. Not \'get fit\' — try \'Run a half marathon in under 2 hours.\' You\'ll pick the date below.</string>
+    <string name="ob_goal_has_date">Leave the timing out of your goal. We\'ll use the target date below.</string>
+    <string name="ob_goal_needs_number">Add a number (a distance, a time, an amount) so progress is measurable.</string>
+    <string name="ob_goal_example">Run a half marathon in under 2 hours.</string>
+    <string name="target_date">TARGET DATE</string>
+    <string name="target_date_pick">Pick a date</string>
+    <string name="chip_1_month">1 month</string>
+    <string name="chip_3_months">3 months</string>
+    <string name="chip_6_months">6 months</string>
+    <string name="chip_1_year">1 year</string>
+    <string name="date_err_missing">Pick a target date.</string>
+    <string name="date_err_week">Pick a date at least a week from today.</string>
+    <string name="date_err_day">Pick a date after today.</string>
+    <string name="date_err_far">Pick a date within 5 years.</string>
+    <string name="date_info">%1$d days from today · about %2$d weeks</string>
+    <string name="continue_">Continue</string>
+    <string name="ob_kicker_routine">YOUR CURRENT ROUTINE</string>
+    <string name="ob_routine_title">Walk us through a typical day, from morning to night.</string>
+    <string name="ob_routine_kept">We kept your routine from setup. Update anything this goal touches.</string>
+    <string name="ob_routine_hint">I wake up at…</string>
+    <string name="ob_routine_a11y">Your current routine</string>
+    <string name="ob_routine_help">Include sleep times, work hours, exercise, diet, and any habits — good or bad — you want us to know about.</string>
+    <string name="ob_routine_example">Up at 7:30, phone in bed until 8. Coffee, no breakfast. Desk job 9 to 6, mostly sitting. I run maybe twice a week if I\'m not tired. Dinner around 9, usually takeaway. Scroll until 12:30, asleep by 1. Weekends have no structure.</string>
+    <string name="ob_kicker_photo">YOUR PHOTO</string>
+    <string name="ob_photo_title">Let us show you, you.</string>
+    <string name="ob_photo_body">One clear, front-facing photo. We use it to picture both of your futures.</string>
+    <string name="ob_photo_pick">Take or upload a photo</string>
+    <string name="ob_photo_pick_sub">JPG or PNG · face clearly visible</string>
+    <string name="ob_photo_camera">Use the camera</string>
+    <string name="ob_photo_uploading">UPLOADING</string>
+    <string name="ob_photo_uploaded">UPLOADED</string>
+    <string name="ob_photo_remove">Remove photo</string>
+    <string name="ob_photo_replace">Replace photo</string>
+    <string name="ob_photo_failed">Photo upload failed. Please try again.</string>
+    <string name="ob_photo_failed_sub">Check your connection, or continue without a photo.</string>
+    <string name="ob_photo_retry">Retry upload</string>
+    <string name="ob_photo_privacy">Your photo is used only to personalise your goal visualisations and is never shared.</string>
+    <string name="ob_photo_a11y">Your uploaded photo</string>
+    <string name="ob_generate">Generate My Plan</string>
+    <string name="ob_skip_photo">Skip for now</string>
+    <string name="ob_skip_photo_sub">Your images will be conceptual, without your face</string>
+    <string name="consent_title">Use your photo for AI images?</string>
+    <string name="consent_body">To picture your future, we send this photo to our AI image provider. It creates two images of you: one where you\'ve reached your goal, and one where nothing changes.</string>
+    <string name="consent_point_private">The photo and the images are stored privately and only you can see them.</string>
+    <string name="consent_point_training">They are never used to train AI models or shared with other users.</string>
+    <string name="consent_point_delete">Remove the photo any time in Profile. Every image made from it is deleted with it.</string>
+    <string name="consent_agree">Agree and upload</string>
+    <string name="consent_decline">Not now</string>
+
+    <!-- Generating -->
+    <string name="gen_title">Building your bridge</string>
+    <string name="gen_title_done">Your bridge is ready.</string>
+    <string name="gen_title_failed">We couldn\'t generate your plan right now.</string>
+    <plurals name="gen_seconds_left">
+        <item quantity="one">About %d second left</item>
+        <item quantity="other">About %d seconds left</item>
+    </plurals>
+    <string name="gen_sub_done">Opening your plan…</string>
+    <string name="gen_sub_failed">One part failed. Everything else is saved — retry just that piece.</string>
+    <string name="gen_row_plan">Daily action plan</string>
+    <string name="gen_row_plan_sub">Structured tasks from your routine</string>
+    <string name="gen_row_future">Future Self image</string>
+    <string name="gen_row_future_face">Personalised from your photo</string>
+    <string name="gen_row_future_concept">Conceptual, no face</string>
+    <string name="gen_row_reality">Reality Check image</string>
+    <string name="gen_row_reality_sub">Where your current routine leads</string>
+    <string name="gen_row_failed">Generation failed</string>
+    <string name="gen_scan_photo">YOUR PHOTO</string>
+    <string name="gen_scan_concept">CONCEPTUAL · NO FACE</string>
+    <string name="retry">Retry</string>
+    <string name="gen_own_tasks">Write my own tasks</string>
+    <string name="gen_continue_without_images">Continue without images</string>
+    <string name="gen_clarify_title">One question first</string>
+    <string name="gen_edit_goal">Edit my goal</string>
+    <string name="gen_cancel">Cancel</string>
+    <string name="gen_quota">You\'ve used today\'s AI plans. Try again tomorrow, or write your own tasks.</string>
+
+    <!-- Review -->
+    <string name="review_kicker">FUTURE SELF · AI-GENERATED</string>
+    <string name="review_goal_name">GOAL NAME</string>
+    <string name="review_goal_name_hint">Short name</string>
+    <string name="review_plan_title">Your daily plan</string>
+    <plurals name="review_task_count">
+        <item quantity="one">%d task</item>
+        <item quantity="other">%d tasks</item>
+    </plurals>
+    <string name="review_plan_sub">Edit anything. You can change it later from your dashboard.</string>
+    <string name="review_task_hint">New task</string>
+    <string name="review_task_a11y">Task title</string>
+    <string name="review_delete_task">Delete task</string>
+    <string name="review_empty">Add at least one task to start your journey.</string>
+    <string name="review_heavy">That\'s %1$d tasks a day across %2$d goals. Consider trimming a few.</string>
+    <string name="review_add_task">Add a task</string>
+    <string name="review_start">Start My Journey</string>
+    <string name="review_add_goal">Add This Goal</string>
+    <string name="review_name_err">Give the goal a short name.</string>
+    <string name="toast_day1">Day 1. Let\'s build the first span.</string>
+    <string name="toast_goal_added">%1$s added. %2$d goals running.</string>
+    <string name="ai_label">AI</string>
+
+    <!-- Feasibility -->
+    <string name="verdict_realistic">REALISTIC</string>
+    <string name="verdict_stretch">A STRETCH</string>
+    <string name="verdict_unrealistic">UNREALISTIC AS PLANNED</string>
+    <string name="verdict_use_date">Use %1$s</string>
+    <string name="verdict_keep_date">Your date stays unless you change it.</string>
+    <string name="verdict_refresh_failed">Couldn\'t refresh the check. Showing the last one.</string>
+    <string name="verdict_checking">Checking your date…</string>
+
+    <!-- Today -->
+    <string name="your_goals">Your goals</string>
+    <string name="your_goals_sub">%1$d of 3</string>
+    <string name="add_a_goal">Add a goal</string>
+    <string name="add_goal_chip">Goal</string>
+    <string name="all_goals">All goals</string>
+    <string name="goal_card_day">Day %1$d / %2$d</string>
+    <string name="goal_card_today">%1$d of %2$d today</string>
+    <string name="goal_card_none">No tasks</string>
+    <string name="goal_card_ends">Ends %1$s</string>
+    <string name="seg_today">Today</string>
+    <string name="seg_reality">Reality Check</string>
+    <string name="streak_a11y">Current streak: %1$d days</string>
+    <string name="day_of">DAY %1$d OF %2$d</string>
+    <string name="across_bridge">across the bridge</string>
+    <string name="bridge_a11y">Progress across the bridge: %1$s</string>
+    <string name="start_label">%1$s · START</string>
+    <string name="goal_label">%1$s · GOAL</string>
+    <string name="done_today">%1$d of %2$d done today</string>
+    <string name="stat_streak">STREAK</string>
+    <string name="stat_days">days</string>
+    <string name="stat_days_left">DAYS LEFT</string>
+    <string name="stat_drift">DRIFT</string>
+    <string name="drift_behind">behind pace</string>
+    <string name="drift_ahead">ahead of pace</string>
+    <string name="drift_on">on pace</string>
+    <string name="drift_none">—</string>
+    <string name="lock_title">Today\'s span is complete.</string>
+    <string name="lock_sub">Two minutes in the Journal locks it in.</string>
+    <string name="lock_open">Open Journal</string>
+    <string name="todays_plan">Today\'s plan</string>
+    <string name="no_tasks_title">No tasks for today</string>
+    <string name="no_tasks_body">Add one yourself, or ask your Coach to rebuild your plan.</string>
+    <string name="add_task">Add task</string>
+    <string name="toggle_task_a11y">Mark \"%1$s\" done</string>
+    <string name="untoggle_task_a11y">Mark \"%1$s\" not done</string>
+    <string name="priority_a11y">%1$s priority</string>
+    <string name="priority_high">High</string>
+    <string name="priority_medium">Medium</string>
+    <string name="priority_low">Low</string>
+    <string name="edit_goal_a11y">Edit goal</string>
+    <string name="notif_banner">Reminders are off. Turn on notifications to get your daily nudge.</string>
+    <string name="notif_banner_cta">Settings</string>
+
+    <!-- Reality Check -->
+    <string name="reality_kicker">REALITY CHECK · AI-GENERATED</string>
+    <string name="reality_title">If nothing changes.</string>
+    <string name="reality_sub">This is where your Day 1 routine leads.</string>
+    <string name="reality_routine">YOUR ROUTINE, DAY 1</string>
+    <string name="reality_why">WHY I STARTED</string>
+    <string name="reality_why_hint">Write a note to yourself for the hard days.</string>
+    <string name="reality_back">Back to today\'s plan</string>
+    <string name="reality_image_pending">Your image is still being made.</string>
+    <string name="reality_image_failed">The image couldn\'t be made.</string>
+    <string name="reality_image_retry">Try again</string>
+    <string name="reality_verdict_kicker">CAN YOU MAKE IT BY %1$s?</string>
+
+    <!-- Celebrate -->
+    <string name="celebrate_kicker">%1$s · DAY %2$d COMPLETE</string>
+    <string name="celebrate_title">You crossed today\'s span.</string>
+    <string name="celebrate_streak">day streak</string>
+    <plurals name="celebrate_days_to_go">
+        <item quantity="one">%d day to the other side.</item>
+        <item quantity="other">%d days to the other side.</item>
+    </plurals>
+    <string name="celebrate_body">Take two minutes to write down what worked today.</string>
+    <string name="celebrate_next">Next: %1$s · %2$d left</string>
+    <string name="celebrate_journal">Reflect in Journal</string>
+    <string name="celebrate_back">Back to today</string>
+    <string name="future_self">FUTURE SELF</string>
+
+    <!-- Task sheets -->
+    <string name="task_details">Task details</string>
+    <string name="ai_suggested">AI-SUGGESTED</string>
+    <string name="field_title">TITLE</string>
+    <string name="field_notes">NOTES</string>
+    <string name="field_optional">Optional</string>
+    <string name="field_priority">PRIORITY</string>
+    <string name="field_when">WHEN</string>
+    <string name="field_when_hint">Any time</string>
+    <string name="why_this_task">WHY THIS TASK</string>
+    <string name="save_changes">Save changes</string>
+    <string name="mark_done">Mark done</string>
+    <string name="mark_not_done">Mark not done</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_task_title">Delete this task?</string>
+    <string name="delete_task_body">It will be removed from today\'s plan. This can\'t be undone.</string>
+    <string name="add_task_title">Add a task</string>
+    <string name="add_task_hint">e.g. Stretch for 10 minutes</string>
+    <string name="add_to_today">Add to today</string>
+    <string name="task_name_err">Give the task a name.</string>
+    <string name="toast_task_updated">Task updated.</string>
+    <string name="toast_task_added">Added to today\'s plan.</string>
+    <string name="toast_task_deleted">Task deleted.</string>
+    <string name="shared_task_note">Set by your alliance lead. Only they can change it.</string>
+
+    <!-- Goal sheets -->
+    <string name="edit_goal">Edit goal</string>
+    <string name="field_name">NAME</string>
+    <string name="archive_goal">Archive goal</string>
+    <string name="archive_title">Archive this goal?</string>
+    <string name="archive_body">Its tasks leave your daily plan. Images, journal entries and history are kept.</string>
+    <string name="archive">Archive</string>
+    <string name="toast_goal_updated">Goal updated.</string>
+    <string name="toast_goal_archived">Goal archived. Its images and history are kept.</string>
+    <string name="limit_title">Three goals at a time</string>
+    <string name="limit_body">Each goal adds tasks to every day. Finish or archive one to make room for the next.</string>
+    <string name="limit_manage">Manage my goals</string>
+
+    <!-- Reminders -->
+    <string name="notif_channel_reminders">Reminders</string>
+    <string name="notif_channel_reminders_desc">Your daily plan, task times and streak nudges</string>
+    <string name="notif_daily">Your plan is ready. Let\'s make progress today.</string>
+    <string name="notif_task_body">Planned for %1$s</string>
+    <string name="notif_risk">Don\'t break your streak — one task is better than none.</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_daily_reminder">Daily reminder</string>
+    <string name="settings_streak_risk">Streak at risk</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_photo">Photo</string>
+    <string name="settings_remove_photo">Remove photo and its images</string>
+    <string name="toast_photo_removed">Photo and its images deleted.</string>
 </resources>

@@ -50,6 +50,7 @@ import app.thebridge.ui.theme.LocalReduceMotion
 import app.thebridge.ui.theme.Radius
 import app.thebridge.ui.theme.Space
 import java.time.LocalDate
+import app.thebridge.data.reminders.ReminderSettings
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as DateTextStyle
@@ -69,19 +70,6 @@ private fun EmptyCard(title: String, body: String) {
     Column(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(Radius.card)).border(1.dp, c.line, RoundedCornerShape(Radius.card)).padding(Space.card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = BType.display(20), color = c.ink)
         Text(body, style = BType.body(14, lineHeight = 1.5f), color = c.mut)
-    }
-}
-
-@Composable
-fun TodayScreen(name: String, now: LocalTime = LocalTime.now(), date: LocalDate = LocalDate.now()) {
-    val c = LocalBridgeColors.current
-    val greeting = when (now.hour) { in 3..11 -> R.string.greeting_morning; in 12..16 -> R.string.greeting_afternoon; else -> R.string.greeting_evening }
-    TabPage {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())).uppercase(Locale.getDefault()), style = BType.label(10.5f), color = c.mut)
-            Text(stringResource(greeting, name), style = BType.display(25), color = c.ink, modifier = Modifier.semantics { heading() })
-        }
-        EmptyCard(stringResource(R.string.today_empty_title), stringResource(R.string.today_empty_body))
     }
 }
 
@@ -112,7 +100,11 @@ fun JournalScreen() {
 }
 
 @Composable
-fun ProfileScreen(name: String, email: String?, memberSince: LocalDate?, onLogOut: () -> Unit, onDelete: () -> Unit) {
+fun ProfileScreen(
+    name: String, email: String?, memberSince: LocalDate?, onLogOut: () -> Unit, onDelete: () -> Unit,
+    reminders: ReminderSettings = ReminderSettings(), onDaily: () -> Unit = {}, onRisk: () -> Unit = {},
+    hasPhoto: Boolean = false, onRemovePhoto: () -> Unit = {},
+) {
     val c = LocalBridgeColors.current
     TabPage {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -125,6 +117,14 @@ fun ProfileScreen(name: String, email: String?, memberSince: LocalDate?, onLogOu
                 if (email != null) Text(email, style = BType.body(13), color = c.mut)
             }
         }
+        SettingsSection(stringResource(R.string.settings_notifications)) {
+            SettingsValue(stringResource(R.string.settings_daily_reminder), reminders.daily?.let(::clock) ?: stringResource(R.string.settings_off), onDaily)
+            HorizontalDivider(color = c.line)
+            SettingsValue(stringResource(R.string.settings_streak_risk), reminders.streakRisk?.let(::clock) ?: stringResource(R.string.settings_off), onRisk)
+        }
+        if (hasPhoto) SettingsSection(stringResource(R.string.settings_photo)) {
+            SettingsLink(stringResource(R.string.settings_remove_photo), danger = true, onClick = onRemovePhoto)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.settings_account).uppercase(), style = BType.label(10f), color = c.mut, modifier = Modifier.semantics { heading() })
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(c.s1).border(1.dp, c.line, RoundedCornerShape(Radius.card))) {
@@ -133,6 +133,26 @@ fun ProfileScreen(name: String, email: String?, memberSince: LocalDate?, onLogOu
                 SettingsLink(stringResource(R.string.settings_delete_account), danger = true, onClick = onDelete)
             }
         }
+    }
+}
+
+private fun clock(t: java.time.LocalTime): String = t.format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+
+@Composable
+private fun SettingsSection(title: String, rows: @Composable ColumnScope.() -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title.uppercase(), style = BType.label(10f), color = c.mut, modifier = Modifier.semantics { heading() })
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(c.s1).border(1.dp, c.line, RoundedCornerShape(Radius.card)), content = rows)
+    }
+}
+
+@Composable
+private fun SettingsValue(label: String, value: String, onClick: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = Space.card, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = BType.body(15, FontWeight.Medium), color = c.ink, modifier = Modifier.weight(1f))
+        Text(value, style = BType.body(14), color = c.mut)
     }
 }
 

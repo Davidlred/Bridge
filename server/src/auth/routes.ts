@@ -7,6 +7,8 @@ import { sendMail } from '../mailer.js';
 import { HttpError, randomToken, sha256, uuidv7 } from '../util.js';
 import { auth, issueSession, revokeAllSessions, rotateSession } from './tokens.js';
 import { verifyIdToken, type Identity } from './oidc.js';
+import { signedUrl, storage, userPrefix } from '../storage.js';
+import { deletePhotoAndFaceImages } from '../goals/routes.js';
 
 const ARGON = { type: argon2.argon2id, memoryCost: 64 * 1024, timeCost: 3 } as const;
 const MAX_FAILED_LOGINS = 5;
@@ -31,9 +33,10 @@ const parse = <T extends z.ZodTypeAny>(schema: T, body: unknown): z.infer<T> => 
 const userJson = (u: Record<string, unknown>) => ({
   id: u.id, email: u.email, emailVerified: u.email_verified, displayName: u.display_name,
   coachName: u.coach_name, homeTimezone: u.home_timezone, settings: u.settings, createdAt: (u.created_at as Date).getTime(),
+  photoUrl: u.photo_key && u.photo_consent_at ? signedUrl(u.photo_key as string, (u.photo_consent_at as Date).getTime()) : null,
 });
 const loadUser = async (db: Tx | typeof sql, id: string) => {
-  const [u] = await db`select id, email, email_verified, display_name, coach_name, home_timezone, settings, created_at from users where id = ${id} and deleted_at is null`;
+  const [u] = await db`select id, email, email_verified, display_name, coach_name, home_timezone, settings, created_at, photo_key, photo_consent_at from users where id = ${id} and deleted_at is null`;
   if (!u) throw new HttpError(401, 'unauthorized');
   return userJson(u);
 };
@@ -51,9 +54,9 @@ async function emailLink(db: Tx | typeof sql, userId: string, kind: 'reset' | 'v
 }
 
 /** Finds or creates the account behind a verified Apple/Google identity. Never links by email silently. */
-async function accountFor(tx: Tx, id: Identity, displayName: string | undefined, timezone: string): Promise<string> {
+async function accountFor(tx: Tx, id: Identity, displayName: string | undefined, timezone: string): Promise<{ id: string; created: boolean }> {
   const [known] = await tx`select u.id from auth_identities i join users u on u.id = i.user_id where i.provider = ${id.provider} and i.subject = ${id.subject} and u.deleted_at is null`;
-  if (known) return known.id;
+  if (known) return { id: known.id as string, created: false };
   if (id.email) {
     const owner = await emailOwner(tx, id.email);
     if (owner) throw new HttpError(409, 'email_linked', { provider: owner.provider });
@@ -62,7 +65,7 @@ async function accountFor(tx: Tx, id: Identity, displayName: string | undefined,
   const name = (displayName ?? id.name ?? id.email?.split('@')[0] ?? 'Friend').slice(0, 40).padEnd(2, ' ').trim() || 'Friend';
   await tx`insert into users (id, email, email_verified, display_name, home_timezone) values (${userId}, ${id.email}, ${id.emailVerified}, ${name}, ${timezone})`;
   await tx`insert into auth_identities (provider, subject, user_id) values (${id.provider}, ${id.subject}, ${userId})`;
-  return userId;
+  return { id: userId, created: true };
 }
 
 const page = (title: string, body: string) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · The Bridge</title>
@@ -84,7 +87,7 @@ export async function authRoutes(app: FastifyInstance) {
       await tx`insert into auth_identities (provider, subject, user_id) values ('email', ${b.email}, ${id})`;
       const link = await emailLink(tx, id, 'verify', 24 * 60);
       sendMail({ to: b.email, subject: 'Confirm your email for The Bridge', text: `Confirm your email:\n${link}\n\nThis link works for 24 hours.` }).catch(e => req.log.error({ err: e.message }, 'mail_failed'));
-      return { user: await loadUser(tx, id), ...(await issueSession(tx, id, undefined, b.deviceId ?? null)) };
+      return { user: await loadUser(tx, id), isNew: true, ...(await issueSession(tx, id, undefined, b.deviceId ?? null)) };
     });
   });
 
@@ -108,7 +111,7 @@ export async function authRoutes(app: FastifyInstance) {
       throw new HttpError(401, 'invalid_credentials');
     }
     await sql`update users set failed_logins = 0, locked_until = null where id = ${u!.id}`;
-    return { user: await loadUser(sql, u!.id), ...(await issueSession(sql, u!.id, undefined, b.deviceId ?? null)) };
+    return { user: await loadUser(sql, u!.id), isNew: false, ...(await issueSession(sql, u!.id, undefined, b.deviceId ?? null)) };
   });
 
   for (const provider of ['apple', 'google'] as const) {
@@ -116,8 +119,9 @@ export async function authRoutes(app: FastifyInstance) {
       const b = parse(Social, req.body);
       const identity = await verifyIdToken(provider, b.idToken, b.nonce);
       return sql.begin(async tx => {
-        const id = await accountFor(tx, identity, b.displayName, b.timezone);
-        return { user: await loadUser(tx, id), ...(await issueSession(tx, id, undefined, b.deviceId ?? null)) };
+        // isNew sends a first-time user to goal onboarding instead of an empty Today.
+        const { id, created } = await accountFor(tx, identity, b.displayName, b.timezone);
+        return { user: await loadUser(tx, id), isNew: created, ...(await issueSession(tx, id, undefined, b.deviceId ?? null)) };
       });
     });
   }
@@ -133,6 +137,10 @@ export async function authRoutes(app: FastifyInstance) {
 
   // Soft-delete now (signed out everywhere, sign-in methods released, content hidden); hard-delete after 30 days by purgeDeletedAccounts().
   app.delete('/v1/account', { onRequest: auth }, async (req, reply) => {
+    // The photo and every image made from it go now, not after 30 days.
+    await deletePhotoAndFaceImages(req.userId);
+    await sql`delete from goal_images where user_id = ${req.userId}`;
+    await storage.deletePrefix(userPrefix(req.userId)).catch(e => req.log.error({ err: e.message }, 'storage_delete_failed'));
     await sql.begin(async tx => {
       await tx`update users set deleted_at = now(), email = null, password_hash = null where id = ${req.userId}`;
       await tx`delete from auth_identities where user_id = ${req.userId}`;

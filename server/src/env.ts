@@ -18,6 +18,15 @@ const Env = z.object({
   MODEL_COACH: z.string().min(3),
   MODEL_FAST: z.string().min(3),
   MODEL_IMAGE: z.string().min(3),
+  // Image model that edits a reference photo (keeps the person's face) for Future Self / If nothing changes
+  MODEL_IMAGE_EDIT: z.string().min(3).default('black-forest-labs/flux-kontext-pro'),
+  // Object storage (S3 API, e.g. Tigris on Fly). Without S3_BUCKET files go to STORAGE_DIR on local disk (development only).
+  S3_BUCKET: z.string().optional(),
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_REGION: z.string().default('auto'),
+  STORAGE_DIR: z.string().default('.data/media'),
+  // Signs short-lived media links. Defaults to a value derived from the JWT key.
+  MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 });
 
 const parsed = Env.parse(process.env);
