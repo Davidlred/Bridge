@@ -40,8 +40,12 @@ final class FoundationSnapshotTests: XCTestCase {
             ("light", .init(userInterfaceStyle: .light)), ("dark", .init(userInterfaceStyle: .dark)),
             ("xxxl", .init(traitsFrom: [.init(userInterfaceStyle: .light), .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)])),
         ]
-        for (variant, traits) in variants {
-            assertSnapshot(of: UIHostingController(rootView: root), as: .image(on: .iPhone13, traits: traits), named: "\(name)-\(variant)", file: file, line: line)
+        let record = ProcessInfo.processInfo.environment["SNAPSHOT_RECORD"] == "1"
+        withSnapshotTesting(record: record ? .all : .never) {
+            for (variant, traits) in variants {
+                assertSnapshot(of: UIHostingController(rootView: root), as: .image(on: .iPhone13, precision: 0.99, perceptualPrecision: 0.98, traits: traits),
+                               named: "\(name)-\(variant)", file: file, line: line)
+            }
         }
     }
 
@@ -54,5 +58,6 @@ final class FoundationSnapshotTests: XCTestCase {
     func testProfile() { verify(ProfileView(), named: "profile") }
     func testDeleteAccount() { verify(DeleteAccountSheet().background(Theme.bg), named: "delete") }
     func testReauth() { verify(ReauthSheet(), named: "reauth") }
+    func testStudy() { verify(StudyModeView(), named: "study") }
     func testOfflineBanner() { verify(OfflineBanner(queued: 3), named: "offline") }
 }

@@ -187,6 +187,13 @@ final class GoalStore {
         commit()
     }
 
+    /// Suggestion state and deletes of coach messages sync to the account's other devices.
+    func syncChat(_ id: UUID, op: String, patch: [String: Any] = [:]) {
+        enqueue("chat", id, op, patch)
+        try? ctx.save()
+        Task { await SyncEngine.shared.mutated() }
+    }
+
     // MARK: Journal
 
     func journalEntry(goalId: UUID?, date: String) -> JournalEntity? {

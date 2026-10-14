@@ -63,6 +63,11 @@ struct Changes: Decodable, Sendable {
     let cursor: Int; let hasMore: Bool
     let goals: [Goal]; let tasks: [Task]; let completions: [Completion]; let removed: Removed
     let journal: [Journal]?; let removedJournal: [UUID]?
+    struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let role: String; let text: String; let suggestion: Suggestion?; let status: String; let suggestionState: String?; let createdAt: Double }
+    let chat: [Chat]?; let removedChat: [UUID]?
+    /// Synced settings the app shows locally (unknown keys are ignored).
+    struct Settings: Decodable, Sendable { let coachReadsJournal: Bool? }
+    let settings: Settings?
 }
 
 /// All HTTP goes through here. Feature models call it; views never do.

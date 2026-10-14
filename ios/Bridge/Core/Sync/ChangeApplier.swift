@@ -44,6 +44,20 @@ enum ChangeApplier {
             row.goalId = j.goalId; row.localDate = j.localDate; row.mood = j.mood; row.body = j.body
             row.version = j.version; row.syncedVersion = j.version; row.conflictOf = j.conflictOf
         }
+        // Coach conversation from the account's other devices
+        for id in page.removedChat ?? [] {
+            if let row = try ctx.fetch(FetchDescriptor<ChatMessageEntity>(predicate: #Predicate { $0.id == id })).first { ctx.delete(row) }
+        }
+        for c in page.chat ?? [] {
+            let id = c.id
+            let row = try ctx.fetch(FetchDescriptor<ChatMessageEntity>(predicate: #Predicate { $0.id == id })).first ?? {
+                let fresh = ChatMessageEntity(id: c.id, conversation: c.conversation, role: c.role, text: c.text, status: c.status, createdAt: date(c.createdAt) ?? .now)
+                ctx.insert(fresh); return fresh
+            }()
+            row.text = c.text; row.status = c.status; row.suggestionState = c.suggestionState
+            row.suggestionJSON = try c.suggestion.map { try JSONEncoder().encode($0) }
+        }
+        if let on = page.settings?.coachReadsJournal { UserDefaults.standard.set(on, forKey: "coachReadsJournal") }
         for c in page.completions where try completion(c.taskId, c.localDate, ctx) == nil {
             ctx.insert(CompletionEntity(taskId: c.taskId, localDate: c.localDate, completedAt: date(c.completedAt) ?? .now))
         }

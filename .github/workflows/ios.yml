@@ -41,13 +41,24 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests -only-testing:BridgeTests/GoalsCoreTests \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" || true
           grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/test.log"
+      # No reference images yet: record them (they are published with the log, then committed). Otherwise verify against them.
+      - name: Snapshots
+        run: |
+          set -o pipefail
+          if [ -d BridgeTests/__Snapshots__ ]; then MODE=verify; else MODE=record; export TEST_RUNNER_SNAPSHOT_RECORD=1; fi
+          echo "mode: $MODE" > "$RUNNER_TEMP/snap.log"
+          xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
+            -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationSnapshotTests \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee -a "$RUNNER_TEMP/snap.log" | grep -E "Test Case|Executed [0-9]+ tests|\*\* [A-Z ]+ \*\*" || true
+          if [ "$MODE" = verify ]; then grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/snap.log"; fi
       # The build log is published to the ci-logs branch so compiler errors can be read without a GitHub login.
       - name: Publish log
         if: always()
         working-directory: ${{ runner.temp }}
         run: |
           mkdir out && cd out
-          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" ../test.log 2>/dev/null | cut -c1-400 | head -200; } > ios.txt
+          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" ../test.log 2>/dev/null | cut -c1-400 | head -200; echo; echo "== snapshots =="; grep -E "mode:|Test Case.*(passed|failed)|Executed [0-9]+ tests|\.swift:[0-9]+: error" ../snap.log 2>/dev/null | cut -c1-300 | head -80; } > ios.txt
+          [ -d "$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__" ] && cp -R "$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__" snapshots || true
           tail -400 ../build.log > build-tail.txt 2>/dev/null || true
           git init -q -b ci-logs
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

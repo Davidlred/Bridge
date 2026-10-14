@@ -22,13 +22,17 @@ final class CoachModel {
     @ObservationIgnored private var background: Task<Void, Never>?
     @ObservationIgnored private var ctx: ModelContext { Persistence.container.mainContext }
 
+    /// The current conversation. On a fresh device it continues the newest conversation pulled from the account.
     var conversation: UUID {
         if let s = UserDefaults.standard.string(forKey: "coachConversation"), let id = UUID(uuidString: s) { return id }
-        let id = UUIDv7.next(); UserDefaults.standard.set(id.uuidString, forKey: "coachConversation"); return id
+        let id = messages.last?.conversation ?? UUIDv7.next(); UserDefaults.standard.set(id.uuidString, forKey: "coachConversation"); return id
     }
     var busy: Bool { awaiting || streaming }
 
-    init() { reload() }
+    init() {
+        reload()
+        NotificationCenter.default.addObserver(forName: .syncApplied, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.reload() } }
+    }
     func reload() { messages = (try? ctx.fetch(FetchDescriptor<ChatMessageEntity>(sortBy: [SortDescriptor(\.createdAt)]))) ?? [] }
 
     var shown: [ChatMessageEntity] { showEarlier ? messages : messages.filter { $0.conversation == conversation } }
@@ -59,10 +63,13 @@ final class CoachModel {
             ["id": g.id.uuidString.lowercased(), "label": g.label, "statement": g.statement, "deadline": g.deadline, "day": g.progress.day, "total": g.progress.total, "streak": g.progress.streak,
              "tasks": g.tasks.prefix(20).map { t -> [String: Any] in ["title": t.title, "done": t.done, "priority": t.priority, "timeOfDay": t.timeOfDay as Any? ?? NSNull()] }]
         }
-        let body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
-                                   "focusGoalId": focus?.id.uuidString.lowercased() ?? NSNull()]
-        awaiting = true; notice = nil
         let reply = ChatMessageEntity(conversation: conv, role: "coach", text: "", status: "streaming", createdAt: .now.addingTimeInterval(0.001))
+        // Ids let the server store this exchange so it follows the account to other devices.
+        let body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
+                                   "focusGoalId": focus?.id.uuidString.lowercased() ?? NSNull(),
+                                   "conversation": conv.uuidString.lowercased(), "messageId": user.id.uuidString.lowercased(), "replyId": reply.id.uuidString.lowercased(),
+                                   "sentAt": Int(user.createdAt.timeIntervalSince1970 * 1000)]
+        awaiting = true; notice = nil
         let payload = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
         let replyId = reply.id, userId = user.id
         pendingReply = reply
@@ -107,6 +114,7 @@ final class CoachModel {
     /// Retry after "Reply interrupted": drop the partial reply and ask the question again.
     func retryInterrupted(_ reply: ChatMessageEntity, store: GoalStore, focus: GoalState?) {
         guard let question = messages.last(where: { $0.role == "user" && $0.createdAt < reply.createdAt }) else { return }
+        store.syncChat(reply.id, op: "delete")
         ctx.delete(reply); try? ctx.save(); reload()
         send(store: store, focus: focus, retry: question)
     }
@@ -115,9 +123,10 @@ final class CoachModel {
         guard let s = Self.suggestion(m), let focus else { return }
         store.addSuggestedTask(goalId: focus.id, s)
         m.suggestionState = "added"; try? ctx.save(); reload()
+        store.syncChat(m.id, op: "upsert", patch: ["suggestionState": "added"])
         happyUntil = .now.addingTimeInterval(1.3)
     }
-    func dismiss(_ m: ChatMessageEntity) { m.suggestionState = "dismissed"; try? ctx.save(); reload() }
+    func dismiss(_ m: ChatMessageEntity, store: GoalStore) { m.suggestionState = "dismissed"; try? ctx.save(); reload(); store.syncChat(m.id, op: "upsert", patch: ["suggestionState": "dismissed"]) }
 
     // Study Mode timer: pauses 10 s after the app goes to the background.
     func enterStudy() { studySeconds = 0; studyReplyId = nil; studyPaused = false; startTimer() }
@@ -256,7 +265,7 @@ struct CoachView: View {
                                 Text("Add to \(focus?.label ?? "")").font(BFont.body(14, .semibold)).lineLimit(1).foregroundStyle(Theme.onAcc).frame(maxWidth: .infinity, minHeight: 44).background(Theme.acc, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .disabled(focus == nil)
-                            Button("Dismiss") { model.dismiss(m) }.font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).padding(.horizontal, 16).frame(minHeight: 44).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                            Button("Dismiss") { model.dismiss(m, store: store) }.font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).padding(.horizontal, 16).frame(minHeight: 44).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
                         }
                         .padding(.top, 4)
                     }
