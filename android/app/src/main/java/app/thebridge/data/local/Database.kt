@@ -47,17 +47,59 @@ data class TaskEntity(
 @Entity(tableName = "completions", primaryKeys = ["taskId", "localDate"])
 data class CompletionEntity(val taskId: String, val localDate: String, val completedAt: Long = System.currentTimeMillis())
 
-@Entity(tableName = "journal", indices = [Index(value = ["goalId", "localDate"], unique = true)])
+/**
+ * One reflection per goal per local day. [syncedVersion] is the server version this device last saw (sent as baseVersion).
+ * A row with [conflictOf] set is the other device's version of an entry, kept until the user picks one.
+ */
+@Entity(tableName = "journal", indices = [Index(value = ["goalId", "localDate"]), Index("conflictOf")])
 data class JournalEntity(
     @PrimaryKey val id: String,
     val goalId: String?,
     val localDate: String,
     val mood: Int? = null,
-    val body: String = "",         // database encrypted with SQLCipher; key in Android Keystore
+    val body: String = "",
     val version: Int = 1,
     val syncedVersion: Int = 0,
     val updatedAt: Long = System.currentTimeMillis(),
+    val conflictOf: String? = null,
 )
+
+/** Coach conversation, kept on this device. [conversation] groups messages; "New conversation" starts a new one. */
+@Entity(tableName = "chat", indices = [Index("conversation")])
+data class ChatMessageEntity(
+    @PrimaryKey val id: String,
+    val conversation: String,
+    val role: String,                  // user | coach
+    val text: String,
+    val status: String = "sent",       // sent | sending | failed | streaming | interrupted | done
+    val suggestion: String? = null,    // JSON {title, rationale, priority, timeOfDay}
+    val suggestionState: String? = null, // pending | added | dismissed
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface JournalDao {
+    @Query("SELECT * FROM journal WHERE conflictOf IS NULL ORDER BY localDate DESC") fun all(): Flow<List<JournalEntity>>
+    @Query("SELECT * FROM journal WHERE conflictOf IS NOT NULL") fun conflicts(): Flow<List<JournalEntity>>
+    @Query("SELECT * FROM journal WHERE localDate = :date AND conflictOf IS NULL AND ((:goalId IS NULL AND goalId IS NULL) OR goalId = :goalId) LIMIT 1")
+    suspend fun current(goalId: String?, date: String): JournalEntity?
+    @Query("SELECT * FROM journal WHERE id = :id") suspend fun get(id: String): JournalEntity?
+    @Upsert suspend fun upsert(e: JournalEntity)
+    @Upsert suspend fun upsert(e: List<JournalEntity>)
+    @Query("DELETE FROM journal WHERE id IN (:ids)") suspend fun delete(ids: List<String>)
+    @Query("DELETE FROM journal WHERE conflictOf = :id") suspend fun deleteConflicts(id: String)
+    @Insert suspend fun enqueue(m: OutboxEntity)
+}
+
+@Dao
+interface ChatDao {
+    @Query("SELECT * FROM chat ORDER BY createdAt") fun all(): Flow<List<ChatMessageEntity>>
+    @Query("SELECT * FROM chat WHERE id = :id") suspend fun get(id: String): ChatMessageEntity?
+    @Upsert suspend fun upsert(m: ChatMessageEntity)
+    @Query("UPDATE chat SET text = :text, status = :status WHERE id = :id") suspend fun update(id: String, text: String, status: String)
+    @Query("SELECT * FROM chat WHERE conversation = :conversation ORDER BY createdAt DESC LIMIT :limit") suspend fun recent(conversation: String, limit: Int): List<ChatMessageEntity>
+    @Query("DELETE FROM chat WHERE id = :id") suspend fun delete(id: String)
+}
 
 @Entity(tableName = "outbox")
 data class OutboxEntity(
@@ -134,15 +176,17 @@ interface PullDao {
 }
 
 @Database(
-    entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class],
-    version = 2, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class],
+    version = 3, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao
     abstract fun tasks(): TaskDao
     abstract fun outbox(): OutboxDao
     abstract fun pull(): PullDao
+    abstract fun journal(): JournalDao
+    abstract fun chat(): ChatDao
 }
 
 object LocalDay {

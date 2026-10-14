@@ -12,8 +12,20 @@ import app.thebridge.feature.auth.LogInPage
 import app.thebridge.feature.auth.SignUpScreen
 import app.thebridge.feature.auth.SplashScreen
 import app.thebridge.feature.auth.WelcomeScreen
-import app.thebridge.feature.shell.CoachScreen
-import app.thebridge.feature.shell.JournalScreen
+import app.thebridge.data.JournalItem
+import app.thebridge.data.local.ChatMessageEntity
+import app.thebridge.data.local.JournalEntity
+import app.thebridge.data.remote.SuggestionDto
+import app.thebridge.feature.coach.ChatItem
+import app.thebridge.feature.coach.CoachActions
+import app.thebridge.feature.coach.CoachScreen
+import app.thebridge.feature.coach.CoachUi
+import app.thebridge.feature.coach.StudyModeScreen
+import app.thebridge.feature.journal.JournalActions
+import app.thebridge.feature.journal.JournalScreen
+import app.thebridge.feature.journal.JournalTab
+import app.thebridge.feature.journal.JournalUi
+import app.thebridge.feature.journal.SaveState
 import app.thebridge.feature.shell.OfflineBanner
 import app.thebridge.feature.shell.ProfileScreen
 import app.thebridge.data.GoalState
@@ -112,13 +124,41 @@ class ScreenshotTest {
             mapOf("future" to GoalImageEntity("g", "future", "running", null, true), "reality" to GoalImageEntity("g", "reality", "running", null, true)), 0, 0), {}, {}, {}, {})
     }
     @Test fun obGenerationFailed() = snap("ob-generation-failed") { GeneratingStep(ob(OnboardingDraft(goalId = "g", step = Step.Generating, plan = PlanState.Failed, imagesError = true)), {}, {}, {}, {}) }
+    // --- Milestone 3 ---
+    private fun msg(id: String, role: String, text: String, status: String = "done", suggestion: SuggestionDto? = null, state: String? = null) =
+        ChatItem(ChatMessageEntity(id, "c1", role, text, status, null, state), suggestion, false)
+    private val chat = listOf(
+        msg("m1", "coach", "Morning, Sharon. Your easy runs are 12 s/km faster than in week one. Today's priority is sleep."),
+        msg("m2", "user", "Work's been heavy. Any quick wins?"),
+        msg("m3", "coach", "Move breakfast prep to the evening. It frees 15 minutes and protects your 10:30 bedtime.",
+            suggestion = SuggestionDto("Prep tomorrow's breakfast before 9 PM", "Frees 15 minutes and protects your bedtime.", "Medium", "8:30 PM"), state = "pending"),
+        msg("m4", "user", "And if I miss a run?", status = "failed"),
+    )
+    @Test fun coachChat() = snap("coach") { CoachScreen(CoachUi(goals = listOf(marathon), focus = marathon, items = chat), CoachActions()) }
+    @Test fun coachEmpty() = snap("coach-empty") { CoachScreen(CoachUi(goals = listOf(marathon), focus = marathon), CoachActions()) }
+    @Test fun coachThinking() = snap("coach-thinking") { CoachScreen(CoachUi(goals = listOf(marathon, spanish), focus = marathon, items = chat.take(2), awaiting = true), CoachActions()) }
+    @Test fun studyMode() = snap("study") {
+        StudyModeScreen(CoachUi(goals = listOf(marathon), focus = marathon, items = chat, studySeconds = 754, studyNotes = "Hill repeats on Thursday, keep the long run easy.", studyReply = "m3"),
+            {}, {}, {}, {}, {}, {}, {}, {}, {})
+    }
+    private val entry = JournalEntity("j1", "g1", "2026-10-13", 3, "Long run felt easier than last week. Legs got heavy around km 9 but I held pace.")
+    @Test fun journalToday() = snap("journal") { JournalScreen(JournalUi(goals = listOf(marathon), goalId = "g1", mood = 3, text = entry.body, save = SaveState.Saved, today = "2026-10-13"), JournalActions()) { 24 } }
+    @Test fun journalEmpty() = snap("journal-empty") { JournalScreen(JournalUi(goals = listOf(marathon), goalId = "g1", today = "2026-10-13"), JournalActions()) { 24 } }
+    @Test fun journalConflict() = snap("journal-conflict") {
+        val item = JournalItem(entry, entry.copy(id = "j2", body = "Written on the tablet: legs heavy, held pace anyway.", conflictOf = "j1"))
+        JournalScreen(JournalUi(goals = listOf(marathon, spanish), goalId = "g1", text = entry.body, today = "2026-10-13", conflict = item, history = listOf(item)), JournalActions(back = {})) { 24 }
+    }
+    @Test fun journalHistory() = snap("journal-history") {
+        JournalScreen(JournalUi(tab = JournalTab.History, goals = listOf(marathon), goalId = "g1", today = "2026-10-14",
+            history = listOf(JournalItem(entry, null), JournalItem(entry.copy(id = "j0", localDate = "2026-10-12", mood = 1, body = "Skipped mobility. Work ran late and I ate at 10."), null))), JournalActions()) { 24 }
+    }
+    @Test fun journalHistoryEmpty() = snap("journal-history-empty") { JournalScreen(JournalUi(tab = JournalTab.History, goals = listOf(marathon), goalId = "g1"), JournalActions()) { null } }
+
     @Test fun obReview() = snap("ob-review") {
         ReviewStep(ob(OnboardingDraft(goalId = "g", step = Step.Review, goal = "Run a half marathon in under 2 hours.", deadline = "2027-02-09", label = "Half marathon", plan = PlanState.Done,
             feasibility = Feasibility("realistic", "Seventeen weeks is enough with three runs a week.", null),
             tasks = listOf(DraftTask("a", "Easy run — 5 km", "High", ai = true), DraftTask("b", "Mobility — 10 min", ai = true), DraftTask("c", "In bed by 10:30 PM", ai = true)))), {}, {}, { _, _ -> }, {}, {}, {})
     }
-    @Test fun coach() = snap("coach") { CoachScreen("Arc") }
-    @Test fun journal() = snap("journal") { JournalScreen() }
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }
     @Test fun upgrade() = snap("upgrade") { UpgradeScreen {} }

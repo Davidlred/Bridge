@@ -41,6 +41,8 @@ data class GoalState(
     val progress: GoalProgress,
     val feasibility: Feasibility?,
     val images: Map<String, GoalImageEntity>,
+    /** Today's reflection for this goal has text or a mood ("Locked in."). */
+    val journaledToday: Boolean = false,
 ) {
     val future: GoalImageEntity? get() = images["future"]
     val reality: GoalImageEntity? get() = images["reality"]
@@ -69,8 +71,9 @@ class GoalRepository @Inject constructor(
     private fun today(): LocalDate = LocalDate.parse(LocalDay.today())
 
     /** Active goals with today's plan and progress, oldest first (the order of the goal card colours). */
-    fun activeGoals(): Flow<List<GoalState>> = combine(db.goals().active(), db.goals().activeTasks(), db.goals().activeCompletions(), db.goals().images()) { goals, tasks, completions, images ->
+    fun activeGoals(): Flow<List<GoalState>> = combine(db.goals().active(), db.goals().activeTasks(), db.goals().activeCompletions(), db.goals().images(), db.journal().all()) { goals, tasks, completions, images, journal ->
         val today = today()
+        val journaled = journal.filter { it.localDate == today.toString() && (it.body.isNotBlank() || it.mood != null) }.mapNotNull { it.goalId }.toSet()
         val doneOn = completions.groupBy { it.taskId }.mapValues { (_, c) -> c.map { LocalDate.parse(it.localDate) }.toSet() }
         goals.map { g ->
             val live = tasks.filter { it.goalId == g.id && it.deletedAt == null }
@@ -82,6 +85,7 @@ class GoalRepository @Inject constructor(
                 progress = Progress.of(LocalDate.parse(g.startDate), LocalDate.parse(g.deadline), today, created, doneOn.filterKeys { it in created }),
                 feasibility = g.feasibility?.let { runCatching { json.decodeFromString(Feasibility.serializer(), it) }.getOrNull() },
                 images = images.filter { it.goalId == g.id }.associateBy { it.kind },
+                journaledToday = g.id in journaled,
             )
         }
     }
@@ -163,6 +167,17 @@ class GoalRepository @Inject constructor(
     suspend fun addTask(goalId: String, title: String, notes: String?, priority: String, timeOfDay: String?) {
         val row = TaskEntity(UuidV7.next(), goalId, title.trim(), priority, timeOfDay?.trim()?.ifEmpty { null }, notes = notes?.trim()?.ifEmpty { null }, position = db.tasks().nextPosition(goalId))
         write { enqueue -> db.tasks().upsert(row); enqueue("task", row.id, "upsert", taskPatch(row, create = true)) }
+    }
+
+    /** A coach suggestion accepted with "Add to plan": an AI task with its reason. */
+    suspend fun addSuggestedTask(goalId: String, title: String, priority: String, timeOfDay: String?, rationale: String?) {
+        val row = TaskEntity(UuidV7.next(), goalId, title.trim().take(120), priority, timeOfDay?.take(24), rationale = rationale?.take(200), origin = "ai", position = db.tasks().nextPosition(goalId))
+        write { enqueue -> db.tasks().upsert(row); enqueue("task", row.id, "upsert", taskPatch(row, create = true)) }
+    }
+
+    /** Synced user settings (e.g. coachReadsJournal). [userId] is the settings row id on the server. */
+    suspend fun saveSetting(userId: String, key: String, value: Boolean) {
+        write { enqueue -> enqueue("settings", userId, "upsert", buildJsonObject { put(key, value) }) }
     }
 
     suspend fun updateTask(id: String, title: String, notes: String?, priority: String, timeOfDay: String?) {

@@ -66,9 +66,10 @@ import app.thebridge.feature.auth.LogInScreen
 import app.thebridge.feature.auth.SignUpScreen
 import app.thebridge.feature.auth.SplashScreen
 import app.thebridge.feature.auth.WelcomeScreen
-import app.thebridge.feature.shell.CoachScreen
+import app.thebridge.feature.coach.CoachRoute
+import app.thebridge.feature.coach.StudyRoute
+import app.thebridge.feature.journal.JournalRoute
 import app.thebridge.feature.shell.DeleteAccountSheet
-import app.thebridge.feature.shell.JournalScreen
 import app.thebridge.feature.shell.LogOutSheet
 import app.thebridge.feature.shell.OfflineBanner
 import app.thebridge.feature.shell.ProfileScreen
@@ -103,7 +104,10 @@ import java.time.ZoneId
 @Serializable data class AllianceChat(val allianceId: String)
 @Serializable data class GameNight(val allianceId: String)
 @Serializable data class InvitePreview(val code: String)
-@Serializable data class StudyMode(val taskId: String)
+/** Full-screen focus timer with the coach strip. */
+@Serializable object StudyMode
+/** The journal pushed from Today ("Lock it in"), with a back link to Today. */
+@Serializable data class JournalFromToday(val goalId: String)
 @Serializable data class JournalEntry(val goalId: String, val localDate: String)
 @Serializable object Messages
 @Serializable data class DmThread(val contactId: String)
@@ -221,6 +225,9 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true
     val name = user?.displayName.orEmpty()
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
+    val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
+    // One coach ViewModel for the tab and Study Mode, so they share the conversation.
+    val coachVm = app.thebridge.feature.coach.rememberCoachViewModel()
     val toTab: (Any) -> Unit = { graph -> nav.navigate(graph) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
 
     Column(Modifier.fillMaxSize()) {
@@ -233,22 +240,25 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
             popExitTransition = { if (reduce) fadeOut(tween(Motion.fade)) else slideOutHorizontally(tween(Motion.push, easing = PushEasing)) { it / 6 } + fadeOut(tween(Motion.fade)) },
         ) {
             navigation<TodayGraph>(startDestination = Today) {
-                composable<Today> { TodayRoute(onAddGoal = { nav.navigate(AddGoal) }, onOpenJournal = { toTab(JournalGraph) }) }
+                composable<Today> { TodayRoute(onAddGoal = { nav.navigate(AddGoal) }, onOpenJournal = { goalId -> nav.navigate(JournalFromToday(goalId)) }) }
+                composable<JournalFromToday> { JournalRoute(goalId = it.toRoute<JournalFromToday>().goalId, onBack = { nav.popBackStack() }) }
                 composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
                 composable<Community> { /* CommunityScreen(goalId) — Feed / Alliance */ }
                 composable<AllianceRoute> { }
                 composable<AllianceChat> { }
                 composable<GameNight> { }
-                composable<StudyMode> { }
                 composable<InvitePreview>(deepLinks = listOf(navDeepLink<InvitePreview>(basePath = "https://thebridge.app/join"))) {
                     val code = it.toRoute<InvitePreview>().code.uppercase()
                     /* InvitePreviewScreen(code) */
                 }
             }
-            navigation<CoachGraph>(startDestination = Coach) { composable<Coach> { CoachScreen(user?.coachName ?: stringResource(R.string.coach_default_name)) } }
+            navigation<CoachGraph>(startDestination = Coach) {
+                composable<Coach> { CoachRoute(coachVm, onStudy = { nav.navigate(StudyMode) }) }
+                composable<StudyMode> { StudyRoute(coachVm, onExit = { nav.popBackStack() }) }
+            }
             navigation<JournalGraph>(startDestination = Journal) {
-                composable<Journal> { JournalScreen() }
+                composable<Journal> { JournalRoute() }
                 composable<JournalEntry> { }
             }
             navigation<ProfileGraph>(startDestination = Profile) {
@@ -259,6 +269,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         onDelete = { shell.clearDeleteError(); sheet = "delete" },
                         reminders = reminders, onDaily = shell::cycleDaily, onRisk = shell::cycleRisk,
                         hasPhoto = user?.photoUrl != null, onRemovePhoto = shell::removePhoto,
+                        coachName = user?.coachName ?: "Arc", onRenameCoach = shell::renameCoach, coachReadsJournal = coachReadsJournal, onCoachReadsJournal = shell::setCoachReadsJournal,
                     )
                 }
                 composable<HallOfFame> { }

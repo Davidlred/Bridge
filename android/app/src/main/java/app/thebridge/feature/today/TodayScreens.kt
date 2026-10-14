@@ -108,7 +108,7 @@ import kotlin.math.sin
 data class TodayActions(
     val openGoal: (String?) -> Unit = {}, val showView: (GoalView) -> Unit = {}, val toggle: (String, Boolean) -> Unit = { _, _ -> },
     val addGoal: () -> Unit = {}, val openTask: (PlanTask) -> Unit = {}, val newTask: () -> Unit = {}, val editGoal: (GoalState) -> Unit = {},
-    val openJournal: () -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
+    val openJournal: (String) -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
     val recheck: (String) -> Unit = {}, val retryImages: (GoalState) -> Unit = {}, val openNotificationSettings: (() -> Unit)? = null,
 )
 
@@ -318,7 +318,7 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
                 Text(stringResource(when { d == null || d == 0 -> R.string.drift_on; d < 0 -> R.string.drift_behind; else -> R.string.drift_ahead }), style = BType.body(11), color = c.mut)
             }
         }
-        if (p.allDone) LockCard(g, actions.openJournal)
+        if (p.allDone) LockCard(g) { actions.openJournal(g.goal.id) }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Text(stringResource(R.string.todays_plan), style = BType.display(19), color = c.ink, modifier = Modifier.semantics { heading() })
             Text("${p.doneToday}/${p.tasksToday}", style = BType.label(12f, 0f), color = c.mut)
@@ -374,14 +374,19 @@ fun BridgeArc(progress: Float, today: Float, modifier: Modifier) {
 @Composable
 private fun LockCard(g: GoalState, onJournal: () -> Unit) {
     val c = LocalBridgeColors.current
-    Row(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(18.dp)).border(1.dp, c.accLine, RoundedCornerShape(18.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Row(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(18.dp)).border(1.dp, if (g.journaledToday) c.ok else c.accLine, RoundedCornerShape(18.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         GoalImage(g.future?.url, null, Modifier.size(width = 56.dp, height = 68.dp).clip(RoundedCornerShape(12.dp)))
+        // "Lock it in" turns into "Locked in." once today's reflection has text or a mood.
+        val locked = g.journaledToday
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(stringResource(R.string.lock_title), style = BType.display(15), color = c.ink)
-            Text(stringResource(R.string.lock_sub), style = BType.body(13), color = c.mut)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (locked) Icon(painterResource(R.drawable.ic_lock), null, tint = c.ok, modifier = Modifier.size(18.dp))
+                Text(stringResource(if (locked) R.string.lock_done_title else R.string.lock_title), style = BType.display(15), color = c.ink)
+            }
+            Text(stringResource(if (locked) R.string.lock_done_sub else R.string.lock_sub), style = BType.body(13), color = c.mut)
         }
-        Box(Modifier.size(44.dp).background(c.acc, CircleShape).clickable(role = Role.Button, onClick = onJournal), contentAlignment = Alignment.Center) {
-            Icon(painterResource(R.drawable.ic_arrow_forward), stringResource(R.string.lock_open), tint = c.onAcc, modifier = Modifier.size(22.dp))
+        Box(Modifier.size(44.dp).background(if (locked) c.okTint else c.acc, CircleShape).clickable(role = Role.Button, onClick = onJournal), contentAlignment = Alignment.Center) {
+            Icon(painterResource(if (locked) R.drawable.ic_book else R.drawable.ic_arrow_forward), stringResource(if (locked) R.string.lock_read else R.string.lock_open), tint = if (locked) c.ok else c.onAcc, modifier = Modifier.size(22.dp))
         }
     }
 }

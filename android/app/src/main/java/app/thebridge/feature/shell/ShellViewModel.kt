@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -36,8 +38,13 @@ class ShellViewModel @Inject constructor(
     api: ApiClient,
     private val reminderScheduler: app.thebridge.data.reminders.ReminderScheduler,
     private val ai: app.thebridge.data.AiRepository,
+    private val goals: app.thebridge.data.GoalRepository,
+    private val store: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+    private val api2: ApiClient,
 ) : ViewModel() {
+    private companion object { val COACH_READS_JOURNAL = androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal") }
     val reminders = reminderScheduler.settings
+    val coachReadsJournal = store.data.map { it[COACH_READS_JOURNAL] == true }
     val phase = session.phase
     val user = session.user
     val online = network.online
@@ -77,6 +84,19 @@ class ShellViewModel @Inject constructor(
     }
     fun cycleDaily() = viewModelScope.launch { reminderScheduler.setDaily(next(reminders.first().daily, listOf(7, 8, 9))) }
     fun cycleRisk() = viewModelScope.launch { reminderScheduler.setStreakRisk(next(reminders.first().streakRisk, listOf(19, 20, 21))) }
+
+    /** Empty or offensive names come back as "Arc" from the server. */
+    fun renameCoach(name: String) = viewModelScope.launch {
+        try { api2.updateMe(coachName = name); session.refreshUser() }
+        catch (e: OfflineException) { toaster.show(UiText.Res(R.string.error_offline), ToastKind.Warn) }
+        catch (e: Exception) { toaster.show(UiText.Res(R.string.error_generic), ToastKind.Warn) }
+    }
+
+    /** "Let my coach read my journal": stored locally for the switch and synced so the server knows. */
+    fun setCoachReadsJournal(on: Boolean) = viewModelScope.launch {
+        store.edit { it[COACH_READS_JOURNAL] = on }
+        session.user.value?.id?.let { goals.saveSetting(it, "coachReadsJournal", on) }
+    }
 
     /** Deletes the photo and every image generated from it (server side), then refreshes the profile. */
     fun removePhoto() = viewModelScope.launch {

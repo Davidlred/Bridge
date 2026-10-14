@@ -363,4 +363,87 @@
     <string name="settings_photo">Photo</string>
     <string name="settings_remove_photo">Remove photo and its images</string>
     <string name="toast_photo_removed">Photo and its images deleted.</string>
+
+    <!-- Coach -->
+    <string name="coach_status_listening">Listening…</string>
+    <string name="coach_status_thinking">Thinking it through…</string>
+    <string name="coach_status_talking">Talking</string>
+    <string name="coach_status_happy">Added. Nice one.</string>
+    <string name="coach_ctx_one">KNOWS YOUR GOAL · DAY %1$d</string>
+    <string name="coach_ctx_many">%1$d GOALS IN CONTEXT · FOCUS: %2$s</string>
+    <string name="coach_study">Study</string>
+    <string name="coach_new_chat">New conversation</string>
+    <string name="coach_new_conversation">NEW CONVERSATION</string>
+    <string name="coach_show_earlier">Show earlier conversation</string>
+    <string name="coach_greeting">I\'ve read your goal and your routine. Week one is deliberately light so it sticks. Ask me anything, or tell me what\'s getting in the way.</string>
+    <string name="coach_chip_meditate">I want to start meditating</string>
+    <string name="coach_chip_missed">I missed yesterday</string>
+    <string name="coach_chip_easier">Make tomorrow easier</string>
+    <string name="coach_input_hint">Message your coach</string>
+    <string name="coach_send">Send</string>
+    <string name="coach_add_to_plan">ADD TO PLAN</string>
+    <string name="coach_add_to">Add to %1$s</string>
+    <string name="coach_dismiss">Dismiss</string>
+    <string name="coach_added">Added: %1$s</string>
+    <string name="coach_dismissed">Suggestion dismissed</string>
+    <string name="coach_added_toast">Added to today\'s plan.</string>
+    <string name="coach_added_today">Added to today\'s plan</string>
+    <string name="coach_not_sent">Not sent · Tap to retry</string>
+    <string name="coach_interrupted">Reply interrupted · Retry</string>
+    <string name="coach_quota">You\'ve reached today\'s coach messages. They reset tomorrow.</string>
+    <string name="coach_offline">You\'re offline. We\'ll keep the message here.</string>
+    <string name="study_mode">STUDY MODE</string>
+    <string name="study_exit">Exit</string>
+    <string name="study_working_toward">Working toward: %1$s</string>
+    <string name="study_notes_hint">Start writing, or just think. Your coach is one tap away below.</string>
+    <string name="study_ask_hint">Ask your coach…</string>
+    <string name="study_coach">COACH</string>
+    <string name="study_add">Add \"%1$s\"</string>
+    <string name="study_paused_title">Timer paused</string>
+    <string name="study_paused_body">You left the app for a while, so we paused your session.</string>
+    <string name="study_resume">Resume</string>
+
+    <!-- Journal -->
+    <string name="journal_history">History</string>
+    <string name="journal_all_goals">All goals</string>
+    <string name="journal_feeling">How are you feeling?</string>
+    <string name="mood_drained">Drained</string>
+    <string name="mood_low">Low</string>
+    <string name="mood_steady">Steady</string>
+    <string name="mood_good">Good</string>
+    <string name="mood_strong">Strong</string>
+    <string name="journal_hint">How did today go? What did you learn? What will you do differently tomorrow?</string>
+    <string name="journal_autosave">Auto-saves as you type</string>
+    <string name="journal_saving">Saving…</string>
+    <string name="journal_saved">Saved</string>
+    <string name="journal_saved_offline">Saved on this phone · syncs later</string>
+    <plurals name="journal_words">
+        <item quantity="one">%d word</item>
+        <item quantity="other">%d words</item>
+    </plurals>
+    <string name="journal_lock_in">Lock in today</string>
+    <string name="journal_locked_toast">Locked in. See you tomorrow.</string>
+    <string name="journal_entry_saved">Entry saved.</string>
+    <string name="journal_empty_history">Your story starts today. Log your first reflection.</string>
+    <string name="journal_write_today">Write today\'s entry</string>
+    <string name="journal_day">DAY %1$d</string>
+    <string name="journal_no_mood">No mood logged</string>
+    <string name="journal_edit_entry">Edit entry</string>
+    <string name="journal_save_entry">Save entry</string>
+    <string name="journal_conflict_title">Two versions of this entry</string>
+    <string name="journal_conflict_body">It was changed on another device too. Keep the version below, or the one you\'re editing.</string>
+    <string name="journal_keep_this">Keep mine</string>
+    <string name="journal_keep_other">Keep this one</string>
+    <string name="lock_done_title">Locked in.</string>
+    <string name="lock_done_sub">Reflection saved. See you tomorrow.</string>
+    <string name="lock_read">Read your entry</string>
+
+    <!-- Settings (milestone 3) -->
+    <string name="settings_coach">Coach</string>
+    <string name="settings_coach_name">Coach name</string>
+    <string name="settings_coach_journal">Let my coach read my journal</string>
+    <string name="settings_coach_journal_sub">Your last three entries are shared with the coach for context. Never used for training.</string>
+    <string name="coach_rename_title">Rename your coach</string>
+    <string name="coach_rename_hint">Arc</string>
+    <string name="save">Save</string>
 </resources>

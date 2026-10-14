@@ -3,6 +3,7 @@ package app.thebridge.feature.shell
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,37 +77,13 @@ private fun EmptyCard(title: String, body: String) {
 }
 
 @Composable
-fun CoachScreen(coachName: String) {
-    val c = LocalBridgeColors.current
-    val label = stringResource(R.string.coach_mascot, coachName)
-    TabPage {
-        Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.semantics { contentDescription = label }) { CoachMascot(MascotMood.Idle, reduceMotion = LocalReduceMotion.current) }
-            Text(coachName, style = BType.display(21), color = c.ink, modifier = Modifier.semantics { heading() })
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(6.dp).background(c.mut2, CircleShape))
-                Text(stringResource(R.string.coach_status_idle), style = BType.body(13), color = c.mut)
-            }
-        }
-        Text(stringResource(R.string.coach_empty_body), style = BType.body(14, lineHeight = 1.5f), color = c.mut, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-@Composable
-fun JournalScreen() {
-    val c = LocalBridgeColors.current
-    TabPage {
-        Text(stringResource(R.string.journal_title), style = BType.display(25), color = c.ink, modifier = Modifier.semantics { heading() })
-        EmptyCard(stringResource(R.string.journal_empty_title), stringResource(R.string.journal_empty_body))
-    }
-}
-
-@Composable
 fun ProfileScreen(
     name: String, email: String?, memberSince: LocalDate?, onLogOut: () -> Unit, onDelete: () -> Unit,
     reminders: ReminderSettings = ReminderSettings(), onDaily: () -> Unit = {}, onRisk: () -> Unit = {},
     hasPhoto: Boolean = false, onRemovePhoto: () -> Unit = {},
+    coachName: String = "Arc", onRenameCoach: (String) -> Unit = {}, coachReadsJournal: Boolean = false, onCoachReadsJournal: (Boolean) -> Unit = {},
 ) {
+    var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val c = LocalBridgeColors.current
     TabPage {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -122,6 +101,11 @@ fun ProfileScreen(
             HorizontalDivider(color = c.line)
             SettingsValue(stringResource(R.string.settings_streak_risk), reminders.streakRisk?.let(::clock) ?: stringResource(R.string.settings_off), onRisk)
         }
+        SettingsSection(stringResource(R.string.settings_coach)) {
+            SettingsValue(stringResource(R.string.settings_coach_name), coachName) { renaming = true }
+            HorizontalDivider(color = c.line)
+            SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
+        }
         if (hasPhoto) SettingsSection(stringResource(R.string.settings_photo)) {
             SettingsLink(stringResource(R.string.settings_remove_photo), danger = true, onClick = onRemovePhoto)
         }
@@ -132,6 +116,34 @@ fun ProfileScreen(
                 HorizontalDivider(color = c.line)
                 SettingsLink(stringResource(R.string.settings_delete_account), danger = true, onClick = onDelete)
             }
+        }
+    }
+    if (renaming) RenameCoachSheet(coachName, onSave = { onRenameCoach(it); renaming = false }, onDismiss = { renaming = false })
+}
+
+@Composable
+private fun SettingsToggle(label: String, sub: String?, on: Boolean, onChange: (Boolean) -> Unit) {
+    val c = LocalBridgeColors.current
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(on, role = Role.Switch, onValueChange = onChange).padding(horizontal = Space.card, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(label, style = BType.body(15, FontWeight.Medium), color = c.ink)
+            if (sub != null) Text(sub, style = BType.body(12), color = c.mut)
+        }
+        // 44×24 track, knob 20; on = okFill (as in the prototype)
+        Box(Modifier.size(width = 44.dp, height = 24.dp).background(if (on) c.okFill else c.track, CircleShape).padding(2.dp), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.size(20.dp).background(c.s1, CircleShape))
+        }
+    }
+}
+
+@Composable
+private fun RenameCoachSheet(current: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(current) }
+    BridgeSheet(onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SheetTitle(stringResource(R.string.coach_rename_title))
+            app.thebridge.ui.components.BridgeField(stringResource(R.string.settings_coach_name).uppercase(), name, { name = it.take(20) }, stringResource(R.string.coach_rename_hint))
+            PrimaryButton(stringResource(R.string.save), { onSave(name) })
         }
     }
 }

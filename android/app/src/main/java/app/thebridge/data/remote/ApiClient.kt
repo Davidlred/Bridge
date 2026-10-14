@@ -35,6 +35,8 @@ class ApiException(val status: Int, val code: String, val body: JsonObject) : Ex
 class UnauthorizedException : Exception()
 /** No connection, DNS failure, timeout. */
 class OfflineException(cause: IOException) : Exception(cause)
+/** A coach reply stopped part way. The partial text is kept and the user can retry. */
+class StreamInterrupted : Exception()
 
 @Serializable data class UserDto(val id: String, val email: String? = null, val displayName: String, val coachName: String = "Arc", val createdAt: Long = 0, val photoUrl: String? = null)
 /** [isNew]: the account was just created, so the user goes to goal onboarding. */
@@ -58,13 +60,23 @@ class OfflineException(cause: IOException) : Exception(cause)
 @Serializable data class CompletionDto(val taskId: String, val localDate: String, val completedAt: Long = 0)
 @Serializable data class CompletionKey(val taskId: String, val localDate: String)
 @Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList())
-@Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null)
+@Serializable data class JournalDto(val id: String, val goalId: String? = null, val localDate: String, val mood: Int? = null, val body: String = "", val version: Int = 1, val conflictOf: String? = null, val updatedAt: Long = 0)
+@Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList())
+@Serializable data class SuggestionDto(val title: String, val rationale: String = "", val priority: String = "Medium", val timeOfDay: String? = null)
+
+/** Events of one coach reply. */
+sealed interface CoachEvent {
+    data class Token(val text: String) : CoachEvent
+    data class Suggest(val suggestion: SuggestionDto) : CoachEvent
+}
 
 /** All HTTP goes through here. Repositories call it; ViewModels never do. */
 @Singleton
 class ApiClient @Inject constructor(private val http: OkHttpClient, private val vault: TokenVault) {
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val refreshLock = Mutex()
+    /** Coach replies can stream for a while; no read timeout between tokens beyond a minute. */
+    private val streamHttp = http.newBuilder().readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
     private val _upgradeRequired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** Emits when the server answers 426: show the blocking "Update The Bridge" screen. */
     val upgradeRequired = _upgradeRequired.asSharedFlow()
@@ -80,6 +92,49 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun forgotPassword(email: String) { call("POST", "/v1/auth/password/forgot", buildJsonObject { put("email", email) }, authed = false) }
     suspend fun logOut() { call("POST", "/v1/auth/logout", JsonObject(emptyMap()), authed = true) }
     suspend fun deleteAccount() { call("DELETE", "/v1/account", null, authed = true) }
+
+    suspend fun updateMe(coachName: String? = null, displayName: String? = null): UserDto = json.decodeFromString<MeResponse>(call("PATCH", "/v1/me", buildJsonObject {
+        if (coachName != null) put("coachName", coachName); if (displayName != null) put("displayName", displayName)
+    }, authed = true)).user
+
+    /**
+     * Streams a coach reply (Server-Sent Events). Calls [onEvent] for each token and the optional suggestion.
+     * Throws OfflineException / ApiException before the stream starts, or [StreamInterrupted] if it breaks part way.
+     */
+    suspend fun coach(body: JsonObject, onEvent: suspend (CoachEvent) -> Unit) = withContext(Dispatchers.IO) {
+        suspend fun open(bearer: String): okhttp3.Response {
+            val req = Request.Builder().url(BuildConfig.API_BASE + "/v1/coach/messages").post(body.toString().toRequestBody(JSON))
+                .header("Accept", "text/event-stream").header("X-Platform", "android").header("X-App-Version", BuildConfig.VERSION_NAME)
+                .header("Authorization", "Bearer $bearer").build()
+            return try { streamHttp.newCall(req).execute() } catch (e: IOException) { throw OfflineException(e) }
+        }
+        val used = vault.read() ?: throw UnauthorizedException()
+        var res = open(used.access)
+        if (res.code == 401) { res.close(); call("GET", "/v1/me", null, authed = true); res = open(vault.read()!!.access) }   // refreshes the token
+        res.use { r ->
+            if (!r.isSuccessful) { Raw(r.code, r.body?.string().orEmpty()).orThrow() }
+            val source = r.body!!.source()
+            var event = ""; var finished = false
+            try {
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    when {
+                        line.startsWith("event: ") -> event = line.removePrefix("event: ")
+                        line.startsWith("data: ") -> {
+                            val data = json.decodeFromString<JsonObject>(line.removePrefix("data: "))
+                            when (event) {
+                                "token" -> onEvent(CoachEvent.Token(data["text"]!!.jsonPrimitive.content))
+                                "suggestion" -> onEvent(CoachEvent.Suggest(json.decodeFromJsonElement(SuggestionDto.serializer(), data)))
+                                "done" -> finished = true
+                                "error" -> throw StreamInterrupted()
+                            }
+                        }
+                    }
+                }
+            } catch (e: IOException) { throw StreamInterrupted() }
+            if (!finished) throw StreamInterrupted()
+        }
+    }
 
     suspend fun me(): UserDto = json.decodeFromString<MeResponse>(call("GET", "/v1/me", null, authed = true)).user
 
@@ -129,9 +184,9 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
         second.orThrow()
     }
 
-    private class Raw(val status: Int, val text: String)
+    internal class Raw(val status: Int, val text: String)
 
-    private fun Raw.orThrow(): String {
+    internal fun Raw.orThrow(): String {
         if (status in 200..299) return text
         if (status == 426) _upgradeRequired.tryEmit(Unit)
         val obj = runCatching { json.decodeFromString<JsonObject>(text) }.getOrDefault(JsonObject(emptyMap()))

@@ -7,6 +7,7 @@ import androidx.work.*
 import app.thebridge.data.local.BridgeDb
 import app.thebridge.data.local.CompletionEntity
 import app.thebridge.data.local.GoalEntity
+import app.thebridge.data.local.JournalEntity
 import app.thebridge.data.local.OutboxEntity
 import app.thebridge.data.local.TaskEntity
 import app.thebridge.data.remote.ApiClient
@@ -105,6 +106,8 @@ class RemoteSyncApi @Inject constructor(private val api: ApiClient, private val 
             TaskEntity(it.id, it.goalId, it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, it.notes, it.origin, it.sharedTaskId, it.position, it.deletedAt, it.updatedAt)
         })
         page.removed.completions.forEach { dao.removeCompletion(it.taskId, it.localDate) }
+        db.journal().delete(page.removedJournal)
+        db.journal().upsert(page.journal.map { JournalEntity(it.id, it.goalId, it.localDate, it.mood, it.body, it.version, it.version, it.updatedAt, it.conflictOf) })
         val tasks = dao.knownTasks(page.completions.map { it.taskId }.distinct()).toSet()
         dao.completions(page.completions.filter { it.taskId in tasks }.map { CompletionEntity(it.taskId, it.localDate, it.completedAt) })
     }

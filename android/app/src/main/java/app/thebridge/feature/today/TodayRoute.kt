@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 
 /** Today tab: wires [TodayScreen] and its sheets to the ViewModel. */
 @Composable
-fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: () -> Unit, vm: TodayViewModel = hiltViewModel()) {
+fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, vm: TodayViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }        // "task:<id>" | "add" | "goal:<id>" | "limit"
@@ -80,7 +80,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: () -> Unit, vm: TodayViewMo
     ui.celebrate?.let { id ->
         val g = ui.goals.find { it.goal.id == id } ?: return@let
         val next = ui.goals.firstOrNull { it.goal.id != id && it.progress.tasksToday > it.progress.doneToday }
-        CelebrateScreen(g, g.progress.streak, next, onNext = { vm.closeCelebrate(); next?.let { vm.openGoal(it.goal.id) } }, onJournal = { vm.closeCelebrate(); onOpenJournal() }, onClose = vm::closeCelebrate)
+        CelebrateScreen(g, g.progress.streak, next, onNext = { vm.closeCelebrate(); next?.let { vm.openGoal(it.goal.id) } }, onJournal = { vm.closeCelebrate(); onOpenJournal(id) }, onClose = vm::closeCelebrate)
     }
 }
 
