@@ -71,7 +71,6 @@ input{box-sizing:border-box;width:100%;height:52px;border-radius:14px;border:1px
 @media(prefers-color-scheme:dark){body{background:#0C0C0C;color:#F2F2F2}p{color:#8C8C8C}input{background:#151515;color:#F2F2F2;border-color:rgba(255,255,255,.12)}button{background:#E8643A;color:#1A0C06}}</style><main><h1>${title}</h1>${body}</main></html>`;
 
 export async function authRoutes(app: FastifyInstance) {
-  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))));
   const strict = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
 
   app.post('/v1/auth/email/signup', strict, async req => {
@@ -122,46 +121,6 @@ export async function authRoutes(app: FastifyInstance) {
       });
     });
   }
-
-  // --- Sign in with Apple on Android: browser tab → Apple → form_post back here → deep link with a one-time code ---
-  app.get<{ Querystring: { challenge?: string } }>('/v1/auth/apple/web/start', strict, async (req, reply) => {
-    if (!env.APPLE_SERVICES_ID) throw new HttpError(503, 'provider_not_configured');
-    const challenge = z.string().regex(/^[A-Za-z0-9_-]{43}$/).safeParse(req.query.challenge);
-    if (!challenge.success) throw new HttpError(400, 'invalid_request');
-    const state = randomToken(), nonce = randomToken(16);
-    await sql`insert into auth_handoffs (state, nonce, challenge, expires_at) values (${state}, ${nonce}, ${challenge.data}, now() + interval '10 minutes')`;
-    const q = new URLSearchParams({ client_id: env.APPLE_SERVICES_ID, redirect_uri: `${env.PUBLIC_URL}/v1/auth/apple/web/callback`, response_type: 'code id_token', response_mode: 'form_post', scope: 'name email', state, nonce });
-    return reply.redirect(`https://appleid.apple.com/auth/authorize?${q}`);
-  });
-
-  app.post<{ Body: Record<string, string> }>('/v1/auth/apple/web/callback', strict, async (req, reply) => {
-    const back = (params: Record<string, string>) => reply.redirect(`thebridge://auth?${new URLSearchParams(params)}`);
-    const { state = '', id_token, user } = req.body ?? {};
-    const [h] = await sql`select nonce from auth_handoffs where state = ${state} and code_hash is null and expires_at > now()`;
-    if (!h || !id_token) return back({ error: 'cancelled' });      // user cancelled on Apple's page, or the link is stale
-    try {
-      const identity = await verifyIdToken('apple', id_token, h.nonce, [env.APPLE_SERVICES_ID!]);
-      let firstName: string | undefined;                               // Apple sends the name once, on first authorization
-      try { firstName = Name.parse(JSON.parse(user ?? '{}')?.name?.firstName); } catch { /* not provided */ }
-      const code = randomToken();
-      await sql.begin(async tx => {
-        const id = await accountFor(tx, identity, firstName, 'UTC');
-        await tx`update auth_handoffs set user_id = ${id}, code_hash = ${sha256(code)}, expires_at = now() + interval '2 minutes' where state = ${state}`;
-      });
-      return back({ code });
-    } catch (e) {
-      const err = e instanceof HttpError ? e : null;
-      return back({ error: err?.message ?? 'failed', ...(err?.extra.provider ? { provider: String(err.extra.provider) } : {}) });
-    }
-  });
-
-  app.post('/v1/auth/exchange', strict, async req => {
-    const b = parse(z.object({ code: z.string().min(20).max(128), verifier: z.string().min(43).max(128), timezone: Timezone, deviceId: DeviceId }), req.body);
-    const [h] = await sql`delete from auth_handoffs where code_hash = ${sha256(b.code)} and expires_at > now() returning user_id, challenge`;
-    if (!h || sha256(b.verifier).toString('base64url') !== h.challenge) throw new HttpError(401, 'invalid_code');
-    await sql`update users set home_timezone = ${b.timezone} where id = ${h.user_id} and home_timezone = 'UTC'`;
-    return { user: await loadUser(sql, h.user_id), ...(await issueSession(sql, h.user_id, undefined, b.deviceId ?? null)) };
-  });
 
   app.post('/v1/auth/refresh', strict, async req => rotateSession(parse(z.object({ refreshToken: z.string().min(40).max(200) }), req.body).refreshToken));
 
@@ -233,7 +192,6 @@ export async function authRoutes(app: FastifyInstance) {
 export async function purgeDeletedAccounts(): Promise<number> {
   const gone = await sql`delete from users where deleted_at < now() - interval '30 days' returning id`;
   await sql`delete from processed_mutations where processed_at < now() - interval '7 days'`;
-  await sql`delete from auth_handoffs where expires_at < now() - interval '1 day'`;
   await sql`delete from email_tokens where expires_at < now() - interval '7 days'`;
   await sql`delete from sessions where expires_at < now() - interval '7 days'`;
   return gone.length;

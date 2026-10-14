@@ -24,8 +24,7 @@ Deploy: `fly launch --no-deploy`, `fly secrets set …` (every key in `.env.exam
 | Route | Notes |
 |---|---|
 | `POST /v1/auth/email/signup` · `login` | argon2id. 5 wrong passwords → `429 too_many_attempts` for 15 min. `409 email_taken` / `email_linked {provider}`. |
-| `POST /v1/auth/apple` · `google` | Body `{idToken, nonce?, displayName?, timezone}`. Verified against the provider JWKS. Never links accounts by email silently. |
-| `GET /v1/auth/apple/web/start` → `POST …/callback` → `POST /v1/auth/exchange` | Sign in with Apple on Android (browser tab, PKCE-bound one-time code, returns via `thebridge://auth`). Needs `APPLE_SERVICES_ID`. |
+| `POST /v1/auth/apple` · `google` | Apple is offered on iOS only, Google on Android only. Body `{idToken, nonce?, displayName?, timezone}`. Verified against the provider JWKS. Never links accounts by email silently. |
 | `POST /v1/auth/refresh` | Rotates. Replaying an old refresh token revokes the whole family. |
 | `POST /v1/auth/logout`, `GET /v1/me`, `DELETE /v1/account` | Delete = soft-delete now (signed out everywhere, email released), hard-delete after 30 days. |
 | `POST /v1/auth/password/forgot` · `reset`, `GET /reset`, `GET /verify` | Single-use emailed links (reset 15 min, verify 24 h). |

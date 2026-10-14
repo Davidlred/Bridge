@@ -34,7 +34,6 @@
     <!-- Sign up / Log in -->
     <string name="signup_title">Create your account</string>
     <string name="signup_subtitle">Takes about two minutes, including your plan.</string>
-    <string name="continue_apple">Continue with Apple</string>
     <string name="continue_google">Continue with Google</string>
     <string name="or_with_email">OR WITH EMAIL</string>
     <string name="field_first_name">FIRST NAME</string>
@@ -59,6 +58,7 @@
     <string name="err_forgot_needs_email">Enter your email first, then tap Forgot.</string>
     <string name="err_email_taken">An account with this email already exists. Log in instead.</string>
     <string name="err_email_linked">This email is linked to %1$s sign-in. Continue with %1$s?</string>
+    <string name="err_email_linked_apple">This email belongs to an account created with Apple on iPhone. Use a different email here.</string>
     <string name="err_email_linked_password">This email already has an account. Log in with your password.</string>
     <plurals name="err_too_many_attempts">
         <item quantity="one">Too many attempts. Try again in %d minute, or reset your password.</item>
@@ -67,7 +67,6 @@
     <string name="err_signup_offline">You\'re offline. We\'ll need a connection to create your account.</string>
     <string name="err_login_offline">You\'re offline. We\'ll need a connection to log you in.</string>
     <string name="err_provider_unavailable">%1$s sign-in isn\'t available right now. Use email instead.</string>
-    <string name="provider_apple">Apple</string>
     <string name="provider_google">Google</string>
     <string name="toast_reset_sent">Reset link sent to %1$s</string>
     <string name="toast_signed_in_with">Signed in with %1$s</string>

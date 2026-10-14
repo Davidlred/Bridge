@@ -173,17 +173,11 @@ struct SignUpView: View {
         ScrollView {
             VStack(spacing: 22) {
                 AuthHeader(title: "Create your account", subtitle: "Takes about two minutes, including your plan.")
-                VStack(spacing: 10) {
-                    // Apple first: required by App Review whenever another social sign-in is offered.
-                    SignInWithAppleButton(.continue, onRequest: auth.prepareApple, onCompletion: auth.finishApple)
-                        .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
-                        .frame(height: 52).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
-                    Button(action: auth.google) {
-                        Text("Continue with Google").font(BFont.body(15, .semibold)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, minHeight: 52)
-                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.line, lineWidth: 1))
-                    }
-                }
-                .disabled(auth.busy)
+                // iOS offers Sign in with Apple only; Google sign-in is on Android.
+                SignInWithAppleButton(.continue, onRequest: auth.prepareApple, onCompletion: auth.finishApple)
+                    .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
+                    .frame(height: 52).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
+                    .disabled(auth.busy)
                 HStack(spacing: 12) {
                     Rectangle().fill(Theme.track).frame(height: 1)
                     Text("OR WITH EMAIL").bridgeLabel(11).fixedSize()

@@ -69,7 +69,6 @@ dependencies {
     implementation(libs.credentials)
     implementation(libs.credentials.play)
     implementation(libs.googleid)
-    implementation(libs.browser)
     implementation(libs.revenuecat)
 
     testImplementation(libs.junit)

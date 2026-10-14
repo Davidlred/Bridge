@@ -1,6 +1,5 @@
 package app.thebridge
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,18 +17,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) handleAuthReturn(intent)
         setContent { BridgeTheme { AppRoot(auth) } }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleAuthReturn(intent)
-    }
-
-    /** thebridge://auth?code=… comes back from the Sign in with Apple browser tab. */
-    private fun handleAuthReturn(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme == "thebridge" && uri.host == "auth") auth.appleCallback(uri)
     }
 }

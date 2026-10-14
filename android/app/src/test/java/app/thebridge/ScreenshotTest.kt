@@ -45,8 +45,8 @@ class ScreenshotTest {
 
     @Test fun splash() = snap("splash") { SplashScreen() }
     @Test fun welcome() = snap("welcome") { WelcomeScreen({}, {}) }
-    @Test fun signUp() = snap("signup") { SignUpScreen(filled, {}, {}, {}, {}, {}, {}, {}, {}) }
-    @Test fun signUpErrors() = snap("signup-errors") { SignUpScreen(errors, {}, {}, {}, {}, {}, {}, {}, {}) }
+    @Test fun signUp() = snap("signup") { SignUpScreen(filled, {}, {}, {}, {}, {}, {}, {}) }
+    @Test fun signUpErrors() = snap("signup-errors") { SignUpScreen(errors, {}, {}, {}, {}, {}, {}, {}) }
     @Test fun logIn() = snap("login") { LogInPage(AuthUiState(email = "sharon@example.com"), {}, {}, {}, {}, {}, {}) }
     @Test fun logInWrongPassword() = snap("login-error") { LogInPage(filled.copy(passwordError = UiText.Res(R.string.err_credentials)), {}, {}, {}, {}, {}, {}) }
     @Test fun logInLocked() = snap("login-locked") { LogInPage(filled.copy(formError = UiText.Plural(R.plurals.err_too_many_attempts, 15)), {}, {}, {}, {}, {}, {}) }

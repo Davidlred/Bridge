@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 import Network
-@preconcurrency import GoogleSignIn
 
 @main
 struct BridgeApp: App {
@@ -21,10 +20,7 @@ struct BridgeApp: App {
                 .environment(toaster)
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
-                .onOpenURL { url in
-                    if GIDSignIn.sharedInstance.handle(url) { return }
-                    router.handle(url: url)
-                }
+                .onOpenURL { router.handle(url: $0) }
         }
         .modelContainer(Persistence.container)
         .onChange(of: scenePhase) { _, phase in
@@ -81,7 +77,6 @@ final class SessionStore {
         TokenStore.write(nil)
         try? Persistence.wipe()
         UserDefaults.standard.removeObject(forKey: Self.userKey)
-        GIDSignIn.sharedInstance.signOut()
         user = nil
         phase = .signedOut
     }

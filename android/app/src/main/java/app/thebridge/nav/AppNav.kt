@@ -2,7 +2,6 @@ package app.thebridge.nav
 
 import android.content.Intent
 import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -35,7 +34,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -85,7 +83,6 @@ import app.thebridge.ui.theme.LocalBridgeColors
 import app.thebridge.ui.theme.LocalReduceMotion
 import app.thebridge.ui.theme.Motion
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.ZoneId
@@ -169,9 +166,7 @@ private fun AuthFlow(auth: AuthViewModel) {
     val nav = rememberNavController()
     val state by auth.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val reduce = LocalReduceMotion.current
-    val startApple: () -> Unit = { scope.launch { CustomTabsIntent.Builder().build().launchUrl(ctx, auth.appleStartUri()) } }
     val go: (Any) -> Unit = { route -> auth.clearErrors(); nav.navigate(route) { popUpTo(Welcome); launchSingleTop = true } }
 
     NavHost(
@@ -183,7 +178,7 @@ private fun AuthFlow(auth: AuthViewModel) {
     ) {
         composable<Welcome> { WelcomeScreen(onGetStarted = { go(SignUp) }, onLogIn = { go(LogIn) }) }
         composable<SignUp> {
-            SignUpScreen(state, auth::onName, auth::onEmail, auth::onPassword, onSubmit = auth::signUp, onApple = startApple, onGoogle = { auth.google(ctx) },
+            SignUpScreen(state, auth::onName, auth::onEmail, auth::onPassword, onSubmit = auth::signUp, onGoogle = { auth.google(ctx) },
                 onBack = { nav.popBackStack() }, onLogIn = { go(LogIn) })
         }
         composable<LogIn> {

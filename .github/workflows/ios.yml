@@ -39,7 +39,7 @@ jobs:
           set -o pipefail
           xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
             -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case|Executed|\*\* " || true
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" || true
           grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/test.log"
       # The build log is published to the ci-logs branch so compiler errors can be read without a GitHub login.
       - name: Publish log
@@ -47,7 +47,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           mkdir out && cd out
-          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "error:|Test Case|Executed|\*\* " ../test.log 2>/dev/null | head -200; } > ios.txt
+          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" ../test.log 2>/dev/null | cut -c1-400 | head -200; } > ios.txt
           tail -400 ../build.log > build-tail.txt 2>/dev/null || true
           git init -q -b ci-logs
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

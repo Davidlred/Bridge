@@ -1,14 +1,11 @@
 package app.thebridge.data.session
 
 import android.content.Context
-import android.net.Uri
-import android.util.Base64
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import app.thebridge.BuildConfig
 import app.thebridge.data.local.BridgeDb
 import app.thebridge.data.remote.ApiClient
 import app.thebridge.data.remote.AuthResponse
@@ -21,8 +18,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import java.security.MessageDigest
-import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -91,7 +86,7 @@ class SessionManager @Inject constructor(
     private suspend fun clearLocal() {
         SyncWorker.cancel(ctx)
         withContext(Dispatchers.IO) { vault.write(null); db.clearAllTables() }
-        store.edit { it.remove(USER); it.remove(CURSOR); it.remove(VERIFIER) }
+        store.edit { it.remove(USER); it.remove(CURSOR) }
         _user.value = null
         _phase.value = SessionPhase.SignedOut
     }
@@ -99,20 +94,8 @@ class SessionManager @Inject constructor(
     suspend fun cursor(): Long = store.data.first()[CURSOR] ?: 0
     suspend fun setCursor(value: Long) { store.edit { it[CURSOR] = value } }
 
-    // --- Sign in with Apple (browser tab, PKCE-bound hand-off) ---
-    suspend fun appleStartUri(): Uri {
-        val verifier = ByteArray(32).also(SecureRandom()::nextBytes).b64()
-        store.edit { it[VERIFIER] = verifier }
-        val challenge = MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()).b64()
-        return Uri.parse("${BuildConfig.API_BASE}/v1/auth/apple/web/start?challenge=$challenge")
-    }
-
-    suspend fun appleVerifier(): String? = store.data.first()[VERIFIER]
-
-    private fun ByteArray.b64() = Base64.encodeToString(this, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
-
     private companion object {
         val USER = stringPreferencesKey("user"); val DEVICE = stringPreferencesKey("device_id")
-        val CURSOR = longPreferencesKey("sync_cursor"); val VERIFIER = stringPreferencesKey("apple_verifier")
+        val CURSOR = longPreferencesKey("sync_cursor")
     }
 }

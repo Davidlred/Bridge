@@ -195,7 +195,7 @@ private fun FormError(error: UiText?) {
 @Composable
 fun SignUpScreen(
     state: AuthUiState, onName: (String) -> Unit, onEmail: (String) -> Unit, onPassword: (String) -> Unit,
-    onSubmit: () -> Unit, onApple: () -> Unit, onGoogle: () -> Unit, onBack: () -> Unit, onLogIn: () -> Unit,
+    onSubmit: () -> Unit, onGoogle: () -> Unit, onBack: () -> Unit, onLogIn: () -> Unit,
 ) {
     val c = LocalBridgeColors.current
     val focus = LocalFocusManager.current
@@ -205,10 +205,8 @@ fun SignUpScreen(
     ) {
         BackButton(onBack, Modifier.offset(x = (-10).dp))
         AuthHeader(stringResource(R.string.signup_title), stringResource(R.string.signup_subtitle))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SocialButton(stringResource(R.string.continue_apple), filled = true, enabled = !state.busy, onClick = onApple)
-            SocialButton(stringResource(R.string.continue_google), filled = false, enabled = !state.busy, onClick = onGoogle)
-        }
+        // Android offers Google only; Sign in with Apple is on iOS.
+        SocialButton(stringResource(R.string.continue_google), filled = true, enabled = !state.busy, onClick = onGoogle)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.weight(1f).height(1.dp).background(c.track))
             Text(stringResource(R.string.or_with_email), style = BType.label(11f, 0.14f), color = c.mut)

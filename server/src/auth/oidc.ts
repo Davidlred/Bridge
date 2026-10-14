@@ -8,8 +8,8 @@ const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2
 export type Identity = { provider: 'apple' | 'google'; subject: string; email: string | null; emailVerified: boolean; name: string | null };
 
 /** Verifies a native ID token against the provider's JWKS. `nonce` is the raw value the client generated. */
-export async function verifyIdToken(provider: 'apple' | 'google', idToken: string, nonce?: string, audiences?: string[]): Promise<Identity> {
-  const aud = audiences ?? (provider === 'apple' ? env.APPLE_CLIENT_IDS : env.GOOGLE_CLIENT_IDS);
+export async function verifyIdToken(provider: 'apple' | 'google', idToken: string, nonce?: string): Promise<Identity> {
+  const aud = provider === 'apple' ? env.APPLE_CLIENT_IDS : env.GOOGLE_CLIENT_IDS;
   if (!aud.length) throw new HttpError(503, 'provider_not_configured');
   const { payload } = await jwtVerify(idToken, provider === 'apple' ? appleKeys : googleKeys, {
     issuer: provider === 'apple' ? 'https://appleid.apple.com' : ['https://accounts.google.com', 'accounts.google.com'],

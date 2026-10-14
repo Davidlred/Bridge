@@ -1,6 +1,5 @@
 import AuthenticationServices
 import CryptoKit
-@preconcurrency import GoogleSignIn
 import SwiftUI
 
 /// Pure input rules, shared by sign up, log in and the tests. Copy matches the prototype.
@@ -96,22 +95,6 @@ final class AuthModel {
         }
     }
 
-    // MARK: Google
-
-    func google() {
-        guard let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String, !clientID.isEmpty,
-              let presenter = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first else {
-            formError = unavailable("Google"); return
-        }
-        submit(offline: String(localized: "You're offline. Try again when you reconnect."), provider: "Google") {
-            let result: GIDSignInResult
-            do { result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter) }
-            catch let e as GIDSignInError where e.code == .canceled { return nil }
-            guard let token = result.user.idToken?.tokenString else { throw APIError.server(status: 503, code: "provider_not_configured", provider: nil, retryAfterSec: nil) }
-            return try await APIClient.shared.social("google", idToken: token, nonce: nil, name: result.user.profile?.givenName)
-        }
-    }
-
     // MARK: Shared
 
     private func unavailable(_ provider: String) -> String { String(localized: "\(provider) sign-in isn't available right now. Use email instead.") }
@@ -134,12 +117,13 @@ final class AuthModel {
                 case "invalid_credentials": passwordError = String(localized: "Incorrect email or password.")
                 case "email_taken": emailError = String(localized: "An account with this email already exists. Log in instead.")
                 case "email_linked":
-                    let other = linked == "google" ? "Google" : linked == "apple" ? "Apple" : nil
-                    formError = other.map { String(localized: "This email is linked to \($0) sign-in. Continue with \($0)?") } ?? String(localized: "This email already has an account. Log in with your password.")
+                    formError = linked == "apple" ? String(localized: "This email is linked to Apple sign-in. Continue with Apple?")
+                        : linked == "google" ? String(localized: "This email belongs to an account created with Google on Android. Use a different email here.")
+                        : String(localized: "This email already has an account. Log in with your password.")
                 case "too_many_attempts":
                     let minutes = ((retry ?? 900) + 59) / 60
                     formError = String(localized: "Too many attempts. Try again in \(minutes) minutes, or reset your password.")
-                case "provider_not_configured": formError = unavailable(provider ?? "Google")
+                case "provider_not_configured": formError = unavailable(provider ?? "Apple")
                 default: formError = String(localized: "Something went wrong. Try again.")
                 }
             } catch {

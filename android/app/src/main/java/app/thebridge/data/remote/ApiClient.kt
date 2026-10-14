@@ -66,8 +66,6 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
         post("/v1/auth/email/login", buildJsonObject { put("email", email); put("password", password); put("deviceId", deviceId) })
     suspend fun google(idToken: String, nonce: String, deviceId: String): AuthResponse =
         post("/v1/auth/google", buildJsonObject { put("idToken", idToken); put("nonce", nonce); put("timezone", tz); put("deviceId", deviceId) })
-    suspend fun exchange(code: String, verifier: String, deviceId: String): AuthResponse =
-        post("/v1/auth/exchange", buildJsonObject { put("code", code); put("verifier", verifier); put("timezone", tz); put("deviceId", deviceId) })
     suspend fun forgotPassword(email: String) { call("POST", "/v1/auth/password/forgot", buildJsonObject { put("email", email) }, authed = false) }
     suspend fun logOut() { call("POST", "/v1/auth/logout", JsonObject(emptyMap()), authed = true) }
     suspend fun deleteAccount() { call("DELETE", "/v1/account", null, authed = true) }

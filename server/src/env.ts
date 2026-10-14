@@ -13,8 +13,6 @@ const Env = z.object({
   PUBLIC_URL: z.string().url().optional(),
   APPLE_CLIENT_IDS: list,
   GOOGLE_CLIENT_IDS: list,
-  // Apple Services ID used by the Android (web) Sign in with Apple flow
-  APPLE_SERVICES_ID: z.string().optional(),
   REPLICATE_API_TOKEN: z.string().min(1),
   MODEL_PLANNER: z.string().min(3),
   MODEL_COACH: z.string().min(3),

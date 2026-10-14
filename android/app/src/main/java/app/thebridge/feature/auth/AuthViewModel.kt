@@ -1,7 +1,6 @@
 package app.thebridge.feature.auth
 
 import android.content.Context
-import android.net.Uri
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
@@ -115,25 +114,6 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /** Where to send the browser tab for Sign in with Apple. The result comes back through [appleCallback]. */
-    suspend fun appleStartUri(): Uri = session.appleStartUri()
-
-    /** Handles thebridge://auth?code=… (or ?error=…) after the Apple browser flow. */
-    fun appleCallback(uri: Uri) {
-        val code = uri.getQueryParameter("code")
-        val error = uri.getQueryParameter("error")
-        if (code == null) {
-            if (error != null && error != "cancelled") _state.update { it.copy(formError = message(ApiException(400, error, providerBody(uri.getQueryParameter("provider"))), R.string.provider_apple)) }
-            return
-        }
-        submit(R.string.error_offline, provider = R.string.provider_apple) {
-            val verifier = session.appleVerifier() ?: throw ApiException(401, "invalid_code", kotlinx.serialization.json.JsonObject(emptyMap()))
-            api.exchange(code, verifier, session.deviceId())
-        }
-    }
-
-    private fun providerBody(provider: String?) = kotlinx.serialization.json.buildJsonObject { if (provider != null) put("provider", kotlinx.serialization.json.JsonPrimitive(provider)) }
-
     private fun submit(offlineMessage: Int, welcomeBack: Boolean = false, provider: Int? = null, request: suspend () -> AuthResponse?) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, formError = null) }
@@ -165,7 +145,7 @@ class AuthViewModel @Inject constructor(
     private fun message(e: ApiException, provider: Int?): UiText = when (e.code) {
         "email_linked" -> when (e.provider) {
             "google" -> UiText.ResArg(R.string.err_email_linked, R.string.provider_google)
-            "apple" -> UiText.ResArg(R.string.err_email_linked, R.string.provider_apple)
+            "apple" -> UiText.Res(R.string.err_email_linked_apple)
             else -> UiText.Res(R.string.err_email_linked_password)
         }
         "too_many_attempts" -> UiText.Plural(R.plurals.err_too_many_attempts, ((e.retryAfterSec ?: 900) + 59) / 60)

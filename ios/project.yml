@@ -10,9 +10,6 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     DEVELOPMENT_TEAM: ""
     API_BASE_URL: https://api.thebridge.app
-    # From the iOS OAuth client in Google Cloud. Empty = Google sign-in reports unavailable.
-    GOOGLE_IOS_CLIENT_ID: ""
-    GOOGLE_REVERSED_CLIENT_ID: ""
   configs:
     Debug:
       API_BASE_URL: http://localhost:8080
@@ -25,9 +22,6 @@ packages:
     from: "3.0.0"
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
-    from: "8.0.0"
-  GoogleSignIn:
-    url: https://github.com/google/GoogleSignIn-iOS
     from: "8.0.0"
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
@@ -51,9 +45,6 @@ targets:
           - Geist.ttf
           - GeistMono.ttf
         APIBaseURL: $(API_BASE_URL)
-        GIDClientID: $(GOOGLE_IOS_CLIENT_ID)
-        CFBundleURLTypes:
-          - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID)]
         BGTaskSchedulerPermittedIdentifiers: [app.thebridge.sync]
         UIBackgroundModes: [fetch, remote-notification]
         ITSAppUsesNonExemptEncryption: true
@@ -67,7 +58,6 @@ targets:
       - package: RevenueCat
       - package: PostHog
       - package: Sentry
-      - package: GoogleSignIn
   BridgeTests:
     type: bundle.unit-test
     platform: iOS

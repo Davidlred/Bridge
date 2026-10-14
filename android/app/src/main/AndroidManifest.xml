@@ -32,13 +32,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="thebridge.app" android:pathPrefix="/join/" />
             </intent-filter>
-            <!-- Return from Sign in with Apple (browser tab) -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="thebridge" android:host="auth" />
-            </intent-filter>
         </activity>
 
         <!-- WorkManager is initialised by BridgeApp so workers can be injected by Hilt. -->
