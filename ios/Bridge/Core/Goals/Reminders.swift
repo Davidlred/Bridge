@@ -1,6 +1,6 @@
 import Foundation
 import SwiftData
-import UserNotifications
+@preconcurrency import UserNotifications
 
 /// Reminder times chosen in Profile → Notifications. nil = off.
 struct ReminderSettings: Equatable, Sendable {

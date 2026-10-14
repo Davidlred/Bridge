@@ -1,5 +1,4 @@
 import SwiftUI
-import UserNotifications
 
 enum GoalView: Hashable { case today, reality }
 
