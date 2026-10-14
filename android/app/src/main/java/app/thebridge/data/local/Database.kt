@@ -94,6 +94,9 @@ interface JournalDao {
 @Dao
 interface ChatDao {
     @Query("SELECT * FROM chat ORDER BY createdAt") fun all(): Flow<List<ChatMessageEntity>>
+    @Upsert suspend fun upsert(m: List<ChatMessageEntity>)
+    @Query("DELETE FROM chat WHERE id IN (:ids)") suspend fun delete(ids: List<String>)
+    @Insert suspend fun enqueue(o: OutboxEntity)
     @Query("SELECT * FROM chat WHERE id = :id") suspend fun get(id: String): ChatMessageEntity?
     @Upsert suspend fun upsert(m: ChatMessageEntity)
     @Query("UPDATE chat SET text = :text, status = :status WHERE id = :id") suspend fun update(id: String, text: String, status: String)

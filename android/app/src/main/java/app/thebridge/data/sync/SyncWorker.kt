@@ -3,6 +3,7 @@ package app.thebridge.data.sync
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.room.withTransaction
+import androidx.datastore.preferences.core.edit
 import androidx.work.*
 import app.thebridge.data.local.BridgeDb
 import app.thebridge.data.local.CompletionEntity
@@ -78,7 +79,11 @@ interface SyncApi {
 }
 
 @Singleton
-class RemoteSyncApi @Inject constructor(private val api: ApiClient, private val session: SessionManager) : SyncApi {
+class RemoteSyncApi @Inject constructor(
+    private val api: ApiClient,
+    private val session: SessionManager,
+    private val store: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+) : SyncApi {
 
     override suspend fun push(batch: List<OutboxEntity>): SyncApi.PushResult {
         val res = api.push(batch.map { MutationDto(it.id, it.entity, it.entityId, it.op, api.json.decodeFromString<JsonObject>(it.patch), it.createdAt) })
@@ -108,6 +113,17 @@ class RemoteSyncApi @Inject constructor(private val api: ApiClient, private val 
         page.removed.completions.forEach { dao.removeCompletion(it.taskId, it.localDate) }
         db.journal().delete(page.removedJournal)
         db.journal().upsert(page.journal.map { JournalEntity(it.id, it.goalId, it.localDate, it.mood, it.body, it.version, it.version, it.updatedAt, it.conflictOf) })
+        // Coach conversation from the account's other devices
+        db.chat().delete(page.removedChat)
+        db.chat().upsert(page.chat.map {
+            app.thebridge.data.local.ChatMessageEntity(it.id, it.conversation, it.role, it.text, it.status,
+                it.suggestion?.let { s -> api.json.encodeToString(app.thebridge.data.remote.SuggestionDto.serializer(), s) }, it.suggestionState, it.createdAt)
+        })
+        // Synced settings that the app shows locally
+        page.settings?.get("coachReadsJournal")?.let { v ->
+            val on = (v as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+            store.edit { it[androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal")] = on }
+        }
         val tasks = dao.knownTasks(page.completions.map { it.taskId }.distinct()).toSet()
         dao.completions(page.completions.filter { it.taskId in tasks }.map { CompletionEntity(it.taskId, it.localDate, it.completedAt) })
     }

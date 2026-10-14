@@ -4,7 +4,7 @@ import { env } from '../env.js';
 import { sql } from '../db.js';
 import { auth } from '../auth/tokens.js';
 import { HttpError } from '../util.js';
-import { decryptText, journalKey } from '../crypto.js';
+import { decryptText, encryptText, journalKey } from '../crypto.js';
 import { AIUnavailable, streamText } from '../ai/replicate.js';
 import { takeQuota } from '../goals/routes.js';
 
@@ -23,6 +23,11 @@ export const CoachRequest = z.object({
   focusGoalId: z.string().uuid().nullish(),
   mode: z.enum(['chat', 'study']).default('chat'),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Ids for syncing the exchange to the user's other devices (optional for older clients).
+  conversation: z.string().uuid().optional(),
+  messageId: z.string().uuid().optional(),
+  replyId: z.string().uuid().optional(),
+  sentAt: z.number().int().optional(),
 });
 type CoachRequest = z.infer<typeof CoachRequest>;
 
@@ -102,6 +107,22 @@ function prompt(req: CoachRequest, journal: string[]): string {
   ].filter(Boolean).join('\n\n');
 }
 
+/** Stores one message (encrypted with the user's key) and logs it for sync. */
+export async function saveMessage(userId: string, id: string, conversation: string, role: 'user' | 'coach', text: string,
+  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date) {
+  await sql.begin(async tx => {
+    const [other] = await tx`select user_id from coach_messages where id = ${id}`;
+    if (other && other.user_id !== userId) return;                 // never touch another user's row
+    const key = await journalKey(tx, userId);
+    const body = encryptText(key, JSON.stringify({ text, suggestion }));
+    await tx`insert into coach_messages (id, user_id, conversation, role, body_ciphertext, status, suggestion_state, created_at)
+             values (${id}, ${userId}, ${conversation}, ${role}, ${body}, ${status}, ${suggestion ? 'pending' : null}, ${at})
+             on conflict (id) do update set body_ciphertext = excluded.body_ciphertext, status = excluded.status,
+               suggestion_state = coalesce(coach_messages.suggestion_state, excluded.suggestion_state)`;
+    await tx`insert into changes (user_id, entity, entity_id, op) values (${userId}, 'chat', ${id}, 'upsert')`;
+  });
+}
+
 export async function coachRoutes(app: FastifyInstance) {
   // Server-Sent Events: "token" {text}* → "suggestion" {…}? → "done" {} | "error" {error}
   app.post('/v1/coach/messages', { onRequest: auth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
@@ -129,20 +150,29 @@ export async function coachRoutes(app: FastifyInstance) {
     const ctrl = new AbortController();
     req.raw.on('close', () => ctrl.abort());
 
+    // The question is stored before the model runs, so it reaches the user's other devices even if the reply fails.
+    const store = r.conversation && r.messageId && r.replyId;
+    const sentAt = new Date(r.sentAt ?? Date.now());
+    if (store) await saveMessage(req.userId, r.messageId!, r.conversation!, 'user', r.message, null, 'sent', sentAt);
+    let replyText = '';
+    let suggestion: z.infer<typeof Suggestion> | null = null;
+    let status: 'done' | 'interrupted' = 'interrupted';
     try {
       if (crisis) {
-        for (const word of CRISIS_REPLY.split(/(?<= )/)) send('token', { text: word });
+        for (const word of CRISIS_REPLY.split(/(?<= )/)) { replyText += word; send('token', { text: word }); }
       } else {
         const splitter = new SuggestionSplitter();
         const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode), prompt: prompt(r, journal), max_tokens: 600, temperature: 0.6 };
         for await (const chunk of streamText(env.MODEL_COACH, input, ctrl.signal)) {
           const text = splitter.push(chunk);
-          if (text) send('token', { text });
+          if (text) { replyText += text; send('token', { text }); }
         }
-        const { rest, suggestion } = splitter.finish();
-        if (rest) send('token', { text: rest });
+        const end = splitter.finish();
+        if (end.rest) { replyText += end.rest; send('token', { text: end.rest }); }
+        suggestion = end.suggestion;
         if (suggestion) send('suggestion', suggestion);
       }
+      status = 'done';
       send('done', {});
     } catch (e) {
       if (!ctrl.signal.aborted) {
@@ -150,6 +180,12 @@ export async function coachRoutes(app: FastifyInstance) {
         send('error', { error: e instanceof AIUnavailable ? 'coach_unavailable' : 'internal' });
       }
     } finally {
+      // Saved before the stream closes, so the reply is already there when the app syncs right after.
+      // A partial reply is kept as "interrupted" (the app shows "Reply interrupted · Retry"); an empty one isn't stored.
+      if (store && replyText) {
+        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText, suggestion, status, new Date(sentAt.getTime() + 1))
+          .catch(e => req.log.error({ err: e.message }, 'coach_save_failed'));
+      }
       out.end();
     }
   });

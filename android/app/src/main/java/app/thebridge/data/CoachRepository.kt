@@ -37,11 +37,19 @@ class CoachRepository @Inject constructor(
     private val api: ApiClient,
     private val goals: GoalRepository,
     private val store: DataStore<Preferences>,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val ctx: android.content.Context,
 ) {
     val messages: Flow<List<ChatMessageEntity>> = db.chat().all()
-    val conversation: Flow<String?> = store.data.map { it[CONVERSATION] }
+    /** The current conversation. On a fresh device it continues the newest conversation pulled from the account. */
+    val conversation: Flow<String?> = kotlinx.coroutines.flow.combine(store.data.map { it[CONVERSATION] }, messages) { pref, msgs -> pref ?: msgs.lastOrNull()?.conversation }
 
-    private suspend fun conversationId(): String = store.data.first()[CONVERSATION] ?: UuidV7.next().also { id -> store.edit { it[CONVERSATION] = id } }
+    private suspend fun conversationId(): String = conversation.first() ?: UuidV7.next().also { id -> store.edit { it[CONVERSATION] = id } }
+
+    /** Suggestion state and deletes sync to the account's other devices; messages themselves are stored by the server with the reply. */
+    private suspend fun enqueue(id: String, op: String, patch: kotlinx.serialization.json.JsonObject) {
+        db.chat().enqueue(app.thebridge.data.local.OutboxEntity(UuidV7.next(), "chat", id, op, patch.toString()))
+        app.thebridge.data.sync.SyncWorker.kick(ctx)
+    }
 
     /** Starts a fresh conversation; earlier ones stay on the device behind "Show earlier conversation". */
     suspend fun newConversation() { store.edit { it[CONVERSATION] = UuidV7.next() } }
@@ -56,8 +64,11 @@ class CoachRepository @Inject constructor(
         val userMsg = retryId?.let { db.chat().get(it) }?.copy(status = "sending") ?: ChatMessageEntity(UuidV7.next(), conv, "user", text.trim(), status = "sending")
         db.chat().upsert(userMsg)
         val active = goals.activeGoals().first()
+        val reply = ChatMessageEntity(UuidV7.next(), conv, "coach", "", status = "streaming", createdAt = System.currentTimeMillis() + 1)
         val body = buildJsonObject {
             put("message", userMsg.text); put("mode", mode); put("localDate", LocalDay.today()); put("focusGoalId", focusGoalId)
+            // Ids let the server store this exchange so it follows the account to other devices.
+            put("conversation", conv); put("messageId", userMsg.id); put("replyId", reply.id); put("sentAt", userMsg.createdAt)
             putJsonArray("history") { history.forEach { m -> add(buildJsonObject { put("role", m.role); put("text", m.text.take(4000)) }) } }
             putJsonArray("goals") {
                 active.take(3).forEach { g ->
@@ -69,7 +80,6 @@ class CoachRepository @Inject constructor(
                 }
             }
         }
-        val reply = ChatMessageEntity(UuidV7.next(), conv, "coach", "", status = "streaming", createdAt = System.currentTimeMillis() + 1)
         var started = false
         val text = StringBuilder()
         return try {
@@ -106,15 +116,20 @@ class CoachRepository @Inject constructor(
         val s = suggestion(m) ?: return false
         goals.addSuggestedTask(goalId, s.title, s.priority, s.timeOfDay, s.rationale)
         db.chat().upsert(m.copy(suggestionState = "added"))
+        enqueue(m.id, "upsert", buildJsonObject { put("suggestionState", "added") })
         return true
     }
 
-    suspend fun dismissSuggestion(m: ChatMessageEntity) = db.chat().upsert(m.copy(suggestionState = "dismissed"))
+    suspend fun dismissSuggestion(m: ChatMessageEntity) {
+        db.chat().upsert(m.copy(suggestionState = "dismissed"))
+        enqueue(m.id, "upsert", buildJsonObject { put("suggestionState", "dismissed") })
+    }
 
     /** Retry after "Reply interrupted": drop the partial reply and send the question again. */
     suspend fun retryInterrupted(reply: ChatMessageEntity, focusGoalId: String?, onFirstToken: () -> Unit): CoachProblem? {
         val question = db.chat().recent(reply.conversation, 50).firstOrNull { it.role == "user" && it.createdAt < reply.createdAt } ?: return CoachProblem.Failed
         db.chat().delete(reply.id)
+        enqueue(reply.id, "delete", buildJsonObject {})
         return send(question.text, focusGoalId, retryId = question.id, onFirstToken = onFirstToken)
     }
 

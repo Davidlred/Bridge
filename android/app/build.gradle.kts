@@ -71,6 +71,8 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.revenuecat)
     implementation(libs.coil)
+    implementation(libs.sqlcipher)
+    implementation(libs.sqlite)
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

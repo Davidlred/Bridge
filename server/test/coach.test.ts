@@ -150,11 +150,52 @@ db('coach and journal', () => {
     expect(p.journal.find((j: { id: string }) => j.id === first)).toMatchObject({ conflictOf: second, body: 'written on the phone' });
   });
 
-  it('deletes the journal at once when the account is deleted', async () => {
+  it('syncs the conversation to the account\'s other devices, encrypted at rest', async () => {
+    const a = await signUp();
+    const conversation = uuidv7(), messageId = uuidv7(), replyId = uuidv7();
+    script = ['Lay out your kit tonight.', '\n```json\n{"suggestTask":{"title":"Lay out running kit","priority":"Low"}}\n```'];
+    await ask(a.accessToken, 'Make tomorrow easier', { conversation, messageId, replyId, sentAt: 1_000 });
+    // A second phone signs in and pulls from scratch
+    const p = await pull(a.accessToken);
+    expect(p.chat).toEqual([
+      expect.objectContaining({ id: messageId, conversation, role: 'user', text: 'Make tomorrow easier', status: 'sent', createdAt: 1_000 }),
+      expect.objectContaining({ id: replyId, conversation, role: 'coach', text: 'Lay out your kit tonight.\n', status: 'done', suggestionState: 'pending',
+        suggestion: expect.objectContaining({ title: 'Lay out running kit' }) }),
+    ]);
+    const [row] = await sql`select body_ciphertext from coach_messages where id = ${replyId}`;
+    expect(Buffer.from(row!.body_ciphertext).toString('utf8')).not.toContain('kit');
+    // Accepting the suggestion on one phone shows as added on the other
+    await push(a.accessToken, [{ id: uuidv7(), entity: 'chat', entityId: replyId, op: 'upsert', clientTs: 2, patch: { suggestionState: 'added' } }]);
+    const p2 = await pull(a.accessToken, p.cursor);
+    expect(p2.chat).toEqual([expect.objectContaining({ id: replyId, suggestionState: 'added' })]);
+    // Deleting (retrying an interrupted reply) removes it everywhere
+    await push(a.accessToken, [{ id: uuidv7(), entity: 'chat', entityId: replyId, op: 'delete', clientTs: 3, patch: {} }]);
+    expect((await pull(a.accessToken, p2.cursor)).removedChat).toEqual([replyId]);
+  });
+
+  it('keeps a partial reply as interrupted, and never lets another user touch the conversation', async () => {
+    const a = await signUp(), b = await signUp();
+    const conversation = uuidv7(), messageId = uuidv7(), replyId = uuidv7();
+    const { streamText } = await import('../src/ai/replicate.js');
+    vi.mocked(streamText).mockImplementationOnce(async function* () { yield 'Half a tho'; throw new Error('connection reset'); });
+    await ask(a.accessToken, 'Plan my week', { conversation, messageId, replyId });
+    expect((await pull(a.accessToken)).chat.find((c: { id: string }) => c.id === replyId)).toMatchObject({ text: 'Half a tho', status: 'interrupted' });
+    // b reuses a's ids: nothing of a's changes, and b's pull shows none of a's messages
+    script = ['ok'];
+    await ask(b.accessToken, 'Hijack', { conversation, messageId, replyId });
+    expect(Object.values((await push(b.accessToken, [{ id: uuidv7(), entity: 'chat', entityId: replyId, op: 'delete', clientTs: 1, patch: {} }])).rejected)).toEqual(['forbidden']);
+    expect((await pull(b.accessToken)).chat).toEqual([]);
+    expect((await pull(a.accessToken)).chat.find((c: { id: string }) => c.id === messageId)).toMatchObject({ text: 'Plan my week' });
+  });
+
+  it('deletes the journal and the conversation at once when the account is deleted', async () => {
     const a = await signUp();
     await push(a.accessToken, [journal(uuidv7(), 'private', 0)]);
+    script = ['ok'];
+    await ask(a.accessToken, 'private question', { conversation: uuidv7(), messageId: uuidv7(), replyId: uuidv7() });
     await app.inject({ method: 'DELETE', url: '/v1/account', headers: h(a.accessToken) });
     expect((await sql`select 1 from journal_entries where user_id = ${a.user.id}`).length).toBe(0);
+    expect((await sql`select 1 from coach_messages where user_id = ${a.user.id}`).length).toBe(0);
     expect((await sql`select journal_dek from users where id = ${a.user.id}`)[0]!.journal_dek).toBeNull();
   });
 });

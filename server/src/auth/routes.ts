@@ -148,6 +148,7 @@ export async function authRoutes(app: FastifyInstance) {
     // The photo, every image made from it and the journal go now, not after 30 days.
     await deletePhotoAndFaceImages(req.userId);
     await sql`delete from journal_entries where user_id = ${req.userId}`;
+    await sql`delete from coach_messages where user_id = ${req.userId}`;
     await sql`update users set journal_dek = null where id = ${req.userId}`;
     await sql`delete from goal_images where user_id = ${req.userId}`;
     await storage.deletePrefix(userPrefix(req.userId)).catch(e => req.log.error({ err: e.message }, 'storage_delete_failed'));

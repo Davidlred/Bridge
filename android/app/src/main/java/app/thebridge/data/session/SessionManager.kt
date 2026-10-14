@@ -49,6 +49,7 @@ class SessionManager @Inject constructor(
     /** Reads local state only; never waits on the network. */
     suspend fun bootstrap() {
         if (_phase.value != SessionPhase.Launching) return
+        if (app.thebridge.data.local.DatabaseKey.takeResync(ctx)) store.edit { it.remove(CURSOR) }
         val prefs = store.data.first()
         val saved = prefs[USER]?.let { runCatching { api.json.decodeFromString<UserDto>(it) }.getOrNull() }
         val tokens = withContext(Dispatchers.IO) { vault.read() }

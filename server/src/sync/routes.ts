@@ -14,7 +14,7 @@ const PULL_PAGE = 1000;
 const ISODate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const Mutation = z.object({
   id: z.string().uuid(),
-  entity: z.enum(['goal', 'task', 'completion', 'settings', 'journal']),
+  entity: z.enum(['goal', 'task', 'completion', 'settings', 'journal', 'chat']),
   entityId: z.string().uuid(),
   op: z.enum(['upsert', 'delete', 'complete', 'uncomplete']),
   patch: z.record(z.unknown()).default({}),
@@ -214,7 +214,23 @@ async function applyJournal(tx: Tx, userId: string, m: Mutation) {
   await log(tx, userId, 'journal', m.entityId, 'upsert');
 }
 
-const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings, journal: applyJournal };
+/** Coach messages are created by the coach route; devices only change a suggestion's state or delete a message. */
+async function applyChat(tx: Tx, userId: string, m: Mutation) {
+  const [row] = await tx`select user_id from coach_messages where id = ${m.entityId} for update`;
+  if (!row) return;                                   // never reached the server (failed send): nothing to do
+  if (row.user_id !== userId) reject('forbidden');
+  if (m.op === 'delete') {
+    await tx`delete from coach_messages where id = ${m.entityId}`;
+    await log(tx, userId, 'chat', m.entityId, 'delete');
+    return;
+  }
+  if (m.op !== 'upsert') reject('invalid');
+  const p = check(z.object({ suggestionState: z.enum(['pending', 'added', 'dismissed']) }).strict(), m.patch);
+  await tx`update coach_messages set suggestion_state = ${p.suggestionState} where id = ${m.entityId}`;
+  await log(tx, userId, 'chat', m.entityId, 'upsert');
+}
+
+const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings, journal: applyJournal, chat: applyChat };
 const ms = (d: Date | null) => (d ? d.getTime() : null);
 
 export async function syncRoutes(app: FastifyInstance) {
@@ -260,7 +276,9 @@ export async function syncRoutes(app: FastifyInstance) {
     const [me] = of('settings').length ? await sql`select settings from users where id = ${req.userId}` : [];
     const journalIds = of('journal').map(r => r.entity_id as string);
     const journalRows = journalIds.length ? await sql`select id, goal_id, local_date::text, mood, body_ciphertext, version, conflict_of, updated_at from journal_entries where id in ${sql(journalIds)} and user_id = ${req.userId}` : [];
-    const key = journalRows.length ? await journalKey(sql, req.userId) : null;
+    const chatIds = of('chat').map(r => r.entity_id as string);
+    const chatRows = chatIds.length ? await sql`select id, conversation, role, body_ciphertext, status, suggestion_state, created_at from coach_messages where id in ${sql(chatIds)} and user_id = ${req.userId}` : [];
+    const key = journalRows.length || chatRows.length ? await journalKey(sql, req.userId) : null;
 
     const alive = new Set(goals.map(g => g.id as string)), done = new Set(live.map(c => `${c.task_id}:${c.local_date}`));
     return {
@@ -276,6 +294,11 @@ export async function syncRoutes(app: FastifyInstance) {
       settings: me?.settings ?? null,
       journal: journalRows.map(j => ({ id: j.id, goalId: j.goal_id, localDate: j.local_date, mood: j.mood, body: decryptText(key!, j.body_ciphertext), version: j.version, conflictOf: j.conflict_of, updatedAt: ms(j.updated_at) })),
       removedJournal: journalIds.filter(id => !journalRows.some(j => j.id === id)),
+      chat: chatRows.map(c => {
+        const body = JSON.parse(decryptText(key!, c.body_ciphertext)) as { text: string; suggestion: unknown };
+        return { id: c.id, conversation: c.conversation, role: c.role, text: body.text, suggestion: body.suggestion ?? null, status: c.status, suggestionState: c.suggestion_state, createdAt: ms(c.created_at) };
+      }),
+      removedChat: chatIds.filter(id => !chatRows.some(c => c.id === id)),
     };
   });
 }
