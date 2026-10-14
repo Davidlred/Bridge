@@ -32,6 +32,8 @@ struct GoalState: Identifiable, Equatable {
     let tasks: [PlanTask]
     let progress: GoalProgress
     let images: [String: GoalImage]
+    /// Today's reflection for this goal has text or a mood ("Locked in.").
+    var journaledToday = false
 }
 
 struct NewTask { var title: String; var priority = "Medium"; var timeOfDay: String?; var minutes: Int?; var rationale: String?; var notes: String?; var ai = false }
@@ -59,6 +61,8 @@ final class GoalStore {
         let completions = (try? ctx.fetch(FetchDescriptor<CompletionEntity>())) ?? []
         let doneOn = Dictionary(grouping: completions, by: \.taskId).mapValues { Set($0.map(\.localDate)) }
         let images = (try? ctx.fetch(FetchDescriptor<GoalImageEntity>())) ?? []
+        let journaled = Set(((try? ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.localDate == today && $0.conflictOf == nil }))) ?? [])
+            .filter { !$0.body.isEmpty || $0.mood != nil }.compactMap(\.goalId))
         goals = active.sorted { $0.id.uuidString < $1.id.uuidString }.map { g in
             let live = g.tasks.filter { $0.deletedAt == nil }
             let created = Dictionary(uniqueKeysWithValues: live.map { ($0.id, Progress.createdDay($0.id, start: g.startDate)) })
@@ -69,7 +73,8 @@ final class GoalStore {
                 routine: g.routine, realityNote: g.realityNote, feasibility: g.feasibilityJSON.flatMap { try? JSONDecoder().decode(Feasibility.self, from: $0) },
                 tasks: tasks,
                 progress: Progress.of(start: g.startDate, deadline: g.deadline, today: today, taskCreated: created, completions: doneOn.filter { created[$0.key] != nil }),
-                images: Dictionary(uniqueKeysWithValues: images.filter { $0.goalId == g.id }.map { ($0.kind, GoalImage(status: $0.status, url: $0.url, withFace: $0.withFace)) })
+                images: Dictionary(uniqueKeysWithValues: images.filter { $0.goalId == g.id }.map { ($0.kind, GoalImage(status: $0.status, url: $0.url, withFace: $0.withFace)) }),
+                journaledToday: journaled.contains(g.id)
             )
         }
     }
@@ -165,6 +170,50 @@ final class GoalStore {
     }
 
     /// Ticks a task for the current local day (which closes at 03:00).
+    /// A coach suggestion accepted with "Add to plan": an AI task with its reason.
+    func addSuggestedTask(goalId: UUID, _ s: Suggestion) {
+        guard let g = goalRow(goalId) else { return }
+        let row = TaskEntity(id: UUIDv7.next(), title: String(s.title.prefix(120)), priority: s.priority, origin: "ai", position: (g.tasks.map(\.position).max() ?? -1) + 1)
+        row.timeOfDay = s.timeOfDay; row.rationale = s.rationale.isEmpty ? nil : String(s.rationale.prefix(200)); row.goal = g
+        ctx.insert(row)
+        enqueue("task", row.id, "upsert", ["goalId": goalId.uuidString.lowercased(), "title": row.title, "priority": row.priority, "timeOfDay": row.timeOfDay ?? NSNull(),
+                                            "rationale": row.rationale ?? NSNull(), "origin": "ai", "position": row.position])
+        commit()
+    }
+
+    /// Synced user settings (e.g. coachReadsJournal).
+    func saveSetting(userId: UUID, _ key: String, _ value: Bool) {
+        enqueue("settings", userId, "upsert", [key: value])
+        commit()
+    }
+
+    // MARK: Journal
+
+    func journalEntry(goalId: UUID?, date: String) -> JournalEntity? {
+        let rows = (try? ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.localDate == date && $0.conflictOf == nil }))) ?? []
+        return rows.first { $0.goalId == goalId }
+    }
+    func journalHistory() -> [JournalEntity] {
+        (try? ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.conflictOf == nil }, sortBy: [SortDescriptor(\.localDate, order: .reverse)]))) ?? []
+    }
+    func journalConflict(of id: UUID) -> JournalEntity? {
+        try? ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.conflictOf == id })).first
+    }
+
+    /// Autosave: row + outbox in one save. `resolve` drops the other device's copy after the user picks.
+    func saveJournal(goalId: UUID?, date: String, mood: Int?, body: String, resolve: Bool = false) {
+        let text = String(body.prefix(10_000))
+        let row = journalEntry(goalId: goalId, date: date) ?? { let e = JournalEntity(id: UUIDv7.next(), goalId: goalId, localDate: date); ctx.insert(e); return e }()
+        row.mood = mood; row.body = text; row.updatedAt = .now
+        if resolve, let other = journalConflict(of: row.id) { ctx.delete(other) }
+        var patch: [String: Any] = ["goalId": goalId?.uuidString.lowercased() ?? NSNull(), "localDate": date, "mood": mood ?? NSNull(), "body": text, "baseVersion": row.syncedVersion]
+        if resolve { patch["resolve"] = true }
+        enqueue("journal", row.id, "upsert", patch)
+        try? ctx.save()
+        reload()
+        Task { await SyncEngine.shared.mutated() }
+    }
+
     func setDone(_ id: UUID, _ done: Bool) {
         let day = LocalDay.today()
         let key = CompletionEntity.key(id, day)

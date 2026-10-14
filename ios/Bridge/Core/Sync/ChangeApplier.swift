@@ -33,6 +33,17 @@ enum ChangeApplier {
         for c in page.removed.completions {
             if let row = try completion(c.taskId, c.localDate, ctx) { ctx.delete(row) }
         }
+        for id in page.removedJournal ?? [] {
+            if let row = try ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.id == id })).first { ctx.delete(row) }
+        }
+        for j in page.journal ?? [] {
+            let id = j.id
+            let row = try ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.id == id })).first ?? {
+                let fresh = JournalEntity(id: j.id, goalId: j.goalId, localDate: j.localDate); ctx.insert(fresh); return fresh
+            }()
+            row.goalId = j.goalId; row.localDate = j.localDate; row.mood = j.mood; row.body = j.body
+            row.version = j.version; row.syncedVersion = j.version; row.conflictOf = j.conflictOf
+        }
         for c in page.completions where try completion(c.taskId, c.localDate, ctx) == nil {
             ctx.insert(CompletionEntity(taskId: c.taskId, localDate: c.localDate, completedAt: date(c.completedAt) ?? .now))
         }

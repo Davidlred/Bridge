@@ -59,6 +59,8 @@ import SwiftData
     static func key(_ taskId: UUID, _ localDate: String) -> String { "\(taskId.uuidString)|\(localDate)" }
 }
 
+/// One reflection per goal per local day. `syncedVersion` is the server version this device last saw (sent as baseVersion).
+/// A row with `conflictOf` set is the other device's version of an entry, kept until the user picks one.
 @Model final class JournalEntity {
     @Attribute(.unique) var id: UUID
     var goalId: UUID?
@@ -68,8 +70,24 @@ import SwiftData
     var version: Int
     var syncedVersion: Int
     var updatedAt: Date
+    var conflictOf: UUID?
     init(id: UUID, goalId: UUID?, localDate: String) {
         self.id = id; self.goalId = goalId; self.localDate = localDate; self.body = ""; self.version = 1; self.syncedVersion = 0; self.updatedAt = .now
+    }
+}
+
+/// Coach conversation, kept on this device. "New conversation" starts a new `conversation` id.
+@Model final class ChatMessageEntity {
+    @Attribute(.unique) var id: UUID
+    var conversation: UUID
+    var role: String               // user | coach
+    var text: String
+    var status: String             // sent | sending | failed | streaming | interrupted | done
+    var suggestionJSON: Data?
+    var suggestionState: String?   // pending | added | dismissed
+    var createdAt: Date
+    init(id: UUID = UUIDv7.next(), conversation: UUID, role: String, text: String, status: String, createdAt: Date = .now) {
+        self.id = id; self.conversation = conversation; self.role = role; self.text = text; self.status = status; self.createdAt = createdAt
     }
 }
 
@@ -102,7 +120,7 @@ import SwiftData
 }
 
 enum Persistence {
-    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self]
+    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self, ChatMessageEntity.self]
     static let container: ModelContainer = {
         do { return try ModelContainer(for: Schema(models)) } catch { fatalError("Could not open the local database: \(error)") }
     }()
@@ -111,7 +129,7 @@ enum Persistence {
     static func wipe() throws {
         let ctx = ModelContext(container)
         try ctx.delete(model: OutboxEntity.self); try ctx.delete(model: CompletionEntity.self); try ctx.delete(model: JournalEntity.self)
-        try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self); try ctx.delete(model: GoalImageEntity.self)
+        try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self); try ctx.delete(model: GoalImageEntity.self); try ctx.delete(model: ChatMessageEntity.self)
         try ctx.save()
         UserDefaults.standard.removeObject(forKey: "syncCursor")
     }

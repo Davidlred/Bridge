@@ -107,7 +107,7 @@ struct TodayView: View {
         .sheet(item: $sheet) { s in sheetView(s).presentationDetents([.large]).presentationDragIndicator(.visible).presentationBackground(Theme.s1) }
         .fullScreenCover(item: Binding(get: { model.celebrate.flatMap { id in goals.first { $0.id == id } } }, set: { if $0 == nil { model.celebrate = nil } })) { g in
             let next = goals.first { $0.id != g.id && $0.progress.tasksToday > $0.progress.doneToday }
-            CelebrateView(goal: g, next: next, onNext: { model.celebrate = nil; if let next { model.open(next.id) } }, onJournal: { model.celebrate = nil; router.tab = .journal }, onClose: { model.celebrate = nil })
+            CelebrateView(goal: g, next: next, onNext: { model.celebrate = nil; if let next { model.open(next.id) } }, onJournal: { model.celebrate = nil; router.today.append(Route.journalEntry(goalId: g.id, localDate: LocalDay.today())) }, onClose: { model.celebrate = nil })
         }
     }
 
@@ -271,15 +271,22 @@ struct TodayView: View {
             if p.allDone {
                 HStack(spacing: 14) {
                     RemoteImage(url: g.images["future"]?.url).frame(width: 56, height: 68).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)).accessibilityHidden(true)
+                    // "Lock it in" turns into "Locked in." once today's reflection has text or a mood.
+                    let locked = g.journaledToday
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Today's span is complete.").font(BFont.display(15)).foregroundStyle(Theme.ink)
-                        Text("Two minutes in the Journal locks it in.").font(BFont.body(13)).foregroundStyle(Theme.mut)
+                        HStack(spacing: 6) {
+                            if locked { Image(systemName: "lock.fill").foregroundStyle(Theme.ok).font(.system(size: 14)) }
+                            Text(locked ? "Locked in." : "Today's span is complete.").font(BFont.display(15)).foregroundStyle(Theme.ink)
+                        }
+                        Text(locked ? "Reflection saved. See you tomorrow." : "Two minutes in the Journal locks it in.").font(BFont.body(13)).foregroundStyle(Theme.mut)
                     }
                     Spacer()
-                    Button { router.tab = .journal } label: { Image(systemName: "arrow.right").foregroundStyle(Theme.onAcc).frame(width: 44, height: 44).background(Theme.acc, in: Circle()) }
-                        .accessibilityLabel("Open Journal")
+                    Button { router.today.append(Route.journalEntry(goalId: g.id, localDate: LocalDay.today())) } label: {
+                        Image(systemName: locked ? "book" : "arrow.right").foregroundStyle(locked ? Theme.ok : Theme.onAcc).frame(width: 44, height: 44).background(locked ? Theme.okTint : Theme.acc, in: Circle())
+                    }
+                    .accessibilityLabel(locked ? "Read your entry" : "Open Journal")
                 }
-                .padding(12).background(Theme.s1, in: RoundedRectangle(cornerRadius: 18, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.accLine, lineWidth: 1))
+                .padding(12).background(Theme.s1, in: RoundedRectangle(cornerRadius: 18, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(g.journaledToday ? Theme.ok : Theme.accLine, lineWidth: 1))
             }
             HStack(alignment: .lastTextBaseline) {
                 Text("Today's plan").font(BFont.display(19)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)

@@ -31,6 +31,10 @@ struct AuthResponse: Decodable, Sendable {
     }
 }
 
+struct Suggestion: Codable, Equatable, Sendable { let title: String; var rationale: String = ""; var priority: String = "Medium"; var timeOfDay: String? }
+enum CoachEvent: Sendable { case token(String), suggestion(Suggestion) }
+enum CoachStreamError: Error { case interrupted }
+
 struct Feasibility: Codable, Equatable, Sendable { let verdict: String; let reason: String; let suggestedDeadline: String? }
 struct PlanTaskDTO: Decodable, Sendable { let title: String; let priority: String; let timeOfDay: String; let minutes: Int; let rationale: String }
 struct PlanDTO: Decodable, Sendable { let needsClarification: String?; let label: String; let goal: String; let feasibility: Feasibility; let tasks: [PlanTaskDTO] }
@@ -55,8 +59,10 @@ struct Changes: Decodable, Sendable {
     struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double? }
     struct Completion: Decodable, Sendable { let taskId: UUID; let localDate: String; let completedAt: Double? }
     struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion] }
+    struct Journal: Decodable, Sendable { let id: UUID; let goalId: UUID?; let localDate: String; let mood: Int?; let body: String; let version: Int; let conflictOf: UUID? }
     let cursor: Int; let hasMore: Bool
     let goals: [Goal]; let tasks: [Task]; let completions: [Completion]; let removed: Removed
+    let journal: [Journal]?; let removedJournal: [UUID]?
 }
 
 /// All HTTP goes through here. Feature models call it; views never do.
@@ -82,6 +88,53 @@ actor APIClient {
         if let name, name.count >= 2 { body["displayName"] = name }
         return try await send("POST", "/v1/auth/\(provider)", body)
     }
+    /// Coach name (empty or offensive names come back as "Arc") or display name.
+    func updateMe(coachName: String? = nil, displayName: String? = nil) async throws -> UserDTO {
+        struct R: Decodable { let user: UserDTO }
+        var body: [String: Any] = [:]
+        if let coachName { body["coachName"] = coachName }
+        if let displayName { body["displayName"] = displayName }
+        return try JSONDecoder().decode(R.self, from: try await raw("PATCH", "/v1/me", body, authed: true)).user
+    }
+
+    /// Streams a coach reply (Server-Sent Events). Calls `onEvent` for each token and the optional suggestion.
+    /// Throws before the stream starts (offline, quota) or `CoachStreamError.interrupted` part way.
+    func coach(_ payload: Data, onEvent: @escaping @MainActor @Sendable (CoachEvent) -> Void) async throws {
+        func open(_ bearer: String) async throws -> (URLSession.AsyncBytes, HTTPURLResponse) {
+            var req = URLRequest(url: URL(string: "/v1/coach/messages", relativeTo: base)!)
+            req.httpMethod = "POST"; req.httpBody = payload; req.timeoutInterval = 60
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type"); req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+            req.setValue("ios", forHTTPHeaderField: "X-Platform"); req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+            do {
+                let (bytes, res) = try await session.bytes(for: req)
+                return (bytes, res as! HTTPURLResponse)
+            } catch is URLError { throw APIError.offline }
+        }
+        guard let used = TokenStore.read() else { throw APIError.unauthorized }
+        var (bytes, res) = try await open(used.access)
+        if res.statusCode == 401 { _ = try await me(); (bytes, res) = try await open(TokenStore.read()!.access) }   // refreshes the token
+        guard (200..<300).contains(res.statusCode) else {
+            var data = Data(); for try await b in bytes { data.append(b) }
+            _ = try check((data, res.statusCode)); return
+        }
+        var event = "", finished = false
+        do {
+            for try await line in bytes.lines {
+                if line.hasPrefix("event: ") { event = String(line.dropFirst(7)) }
+                else if line.hasPrefix("data: "), let data = line.dropFirst(6).data(using: .utf8) {
+                    switch event {
+                    case "token": if let t = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["text"] as? String { await onEvent(.token(t)) }
+                    case "suggestion": if let s = try? JSONDecoder().decode(Suggestion.self, from: data) { await onEvent(.suggestion(s)) }
+                    case "done": finished = true
+                    case "error": throw CoachStreamError.interrupted
+                    default: break
+                    }
+                }
+            }
+        } catch is URLError { throw CoachStreamError.interrupted }
+        if !finished { throw CoachStreamError.interrupted }
+    }
+
     func me() async throws -> UserDTO {
         struct R: Decodable { let user: UserDTO }
         return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/me", nil, authed: true)).user

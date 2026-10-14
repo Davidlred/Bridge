@@ -9,6 +9,7 @@ struct BridgeApp: App {
     @State private var network = NetworkStatus()
     @State private var toaster = Toaster()
     @State private var goals = GoalStore()
+    @State private var coach = CoachModel()
     @AppStorage("themeOverride") private var themeOverride: String = "system"
     @Environment(\.scenePhase) private var scenePhase
 
@@ -20,6 +21,7 @@ struct BridgeApp: App {
                 .environment(network)
                 .environment(toaster)
                 .environment(goals)
+                .environment(coach)
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }

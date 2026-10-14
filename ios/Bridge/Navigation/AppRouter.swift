@@ -21,6 +21,8 @@ enum Route: Hashable, Codable {
     case settings
     /// Add a second or third goal: the onboarding steps, full screen.
     case addGoal
+    /// Study Mode from the Coach tab.
+    case study
 }
 
 enum Tab: Hashable { case today, coach, journal, profile }
@@ -78,11 +80,20 @@ private extension View {
             // Feature screens replace the placeholder as their milestones land (goal detail: 2, study mode: 3, community/game night: 4–5).
             switch route {
             case .addGoal: AddGoalScreen().toolbar(.hidden, for: .tabBar)
+            case .study: StudyModeView().toolbar(.hidden, for: .tabBar)
+            case .journalEntry(let goalId, _): JournalFromToday(goalId: goalId)
             case .studyMode, .gameNight: PlaceholderScreen(title: String(describing: route)).toolbar(.hidden, for: .tabBar)
             default: PlaceholderScreen(title: String(describing: route))
             }
         }
     }
+}
+
+/// The journal pushed from Today ("Lock it in"), with a back link to Today.
+private struct JournalFromToday: View {
+    let goalId: UUID
+    @Environment(AppRouter.self) private var router
+    var body: some View { JournalView(goalId: goalId, onBack: { router.today.removeLast() }).navigationBarBackButtonHidden() }
 }
 
 private struct AddGoalScreen: View {

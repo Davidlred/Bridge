@@ -28,40 +28,16 @@ private struct EmptyCard: View {
     }
 }
 
-struct CoachView: View {
-    @Environment(SessionStore.self) private var session
-    var body: some View {
-        let name = session.user?.coachName ?? String(localized: "Arc")
-        TabPage {
-            VStack(spacing: 8) {
-                CoachMascot(mood: .idle).accessibilityLabel("\(name), your coach")
-                Text(name).font(BFont.display(21)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                HStack(spacing: 6) {
-                    Circle().fill(Theme.mut2).frame(width: 6, height: 6)
-                    Text("Here when you need me").font(BFont.body(13)).foregroundStyle(Theme.mut)
-                }
-                Text("Once you have a goal, ask anything about your plan.").font(BFont.body(14)).foregroundStyle(Theme.mut).multilineTextAlignment(.center).padding(.top, 10)
-            }
-            .frame(maxWidth: .infinity).padding(.top, 12)
-        }
-    }
-}
-
-struct JournalView: View {
-    var body: some View {
-        TabPage {
-            Text("Journal").font(BFont.display(25)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            EmptyCard(title: "Nothing written yet", message: "Finish a day and lock it in. Your entries collect here.")
-        }
-    }
-}
-
 struct ProfileView: View {
     @Environment(SessionStore.self) private var session
     @Environment(Toaster.self) private var toaster
     @State private var sheet: Sheet?
     @State private var unsynced = 0
     @State private var reminders = ReminderSettings.load()
+    @State private var renaming = false
+    @State private var coachName = ""
+    @AppStorage("coachReadsJournal") private var coachReadsJournal = false
+    @Environment(GoalStore.self) private var goals
     enum Sheet: String, Identifiable { case delete, logOut; var id: String { rawValue } }
 
     var body: some View {
@@ -83,6 +59,20 @@ struct ProfileView: View {
                 Divider().overlay(Theme.line)
                 SettingsValue(label: "Streak at risk", value: Self.clock(reminders.streakRisk)) { reminders.streakRisk = Self.next(reminders.streakRisk, [19, 20, 21]); saveReminders() }
             }
+            SettingsSection(title: "Coach") {
+                SettingsValue(label: "Coach name", value: session.user?.coachName ?? "Arc") { coachName = session.user?.coachName ?? "Arc"; renaming = true }
+                Divider().overlay(Theme.line)
+                Toggle(isOn: Binding(get: { coachReadsJournal }, set: { on in
+                    coachReadsJournal = on
+                    if let id = session.user?.id { goals.saveSetting(userId: id, "coachReadsJournal", on) }
+                })) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Let my coach read my journal").font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                        Text("Your last three entries are shared with the coach for context. Never used for training.").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                    }
+                }
+                .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)
+            }
             if session.user?.photoUrl != nil {
                 SettingsSection(title: "Photo") { SettingsLink(label: "Remove photo and its images", danger: true, action: removePhoto) }
             }
@@ -99,6 +89,11 @@ struct ProfileView: View {
                 .background(Theme.s1, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(Theme.line, lineWidth: 1))
             }
+        }
+        .alert("Rename your coach", isPresented: $renaming) {
+            TextField("Arc", text: $coachName)
+            Button("Save") { Task { _ = try? await APIClient.shared.updateMe(coachName: String(coachName.prefix(20))); await session.refreshUser() } }
+            Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $sheet) { which in
             Group {
