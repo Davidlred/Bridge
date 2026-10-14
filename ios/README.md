@@ -10,7 +10,7 @@ cd ios && xcodegen && open Bridge.xcodeproj
 Fonts are bundled as variable fonts in `Bridge/Resources/Fonts/` (Bricolage Grotesque, Geist, Geist Mono; SIL OFL).
 Debug builds call `http://localhost:8080`. Sign-in on iOS is Apple or email; Google sign-in is Android-only.
 
-> The milestone-1 Swift code was written on Windows and has **not been compiled yet**. Expect to fix a few compiler errors on the first Xcode build, then record snapshots.
+> There is no Mac in the loop yet: every push that touches ios/ is built and unit-tested on a GitHub macOS runner (.github/workflows/ios.yml), and the result is published to the ci-logs branch (ios.txt). Snapshot tests (FoundationSnapshotTests) have no reference images yet; record them on a Mac or in CI before relying on them.
 
 ## Layout
 ```
