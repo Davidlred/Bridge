@@ -136,6 +136,12 @@ struct BridgeField: View {
     var capitalization: TextInputAutocapitalization = .never
     @FocusState private var focused: Bool
 
+    init(label: LocalizedStringKey, placeholder: LocalizedStringKey, text: Binding<String>, error: String? = nil, secure: Bool = false, contentType: UITextContentType? = nil,
+         keyboard: UIKeyboardType = .default, capitalization: TextInputAutocapitalization = .never) {
+        self.label = label; self.placeholder = placeholder; _text = text; self.error = error; self.secure = secure
+        self.contentType = contentType; self.keyboard = keyboard; self.capitalization = capitalization
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(label).bridgeLabel(11)

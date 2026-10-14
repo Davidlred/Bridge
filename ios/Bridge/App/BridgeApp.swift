@@ -10,6 +10,7 @@ struct BridgeApp: App {
     @State private var toaster = Toaster()
     @State private var goals = GoalStore()
     @State private var coach = CoachModel()
+    @State private var social = SocialStore()
     @AppStorage("themeOverride") private var themeOverride: String = "system"
     @Environment(\.scenePhase) private var scenePhase
 
@@ -22,6 +23,7 @@ struct BridgeApp: App {
                 .environment(toaster)
                 .environment(goals)
                 .environment(coach)
+                .environment(social)
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }
@@ -136,6 +138,7 @@ struct RootView: View {
     @Environment(SessionStore.self) private var session
     @Environment(NetworkStatus.self) private var network
     @Environment(Toaster.self) private var toaster
+    @Environment(SocialStore.self) private var social
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var auth = AuthModel()
     @State private var mustUpgrade = false
@@ -169,8 +172,10 @@ struct RootView: View {
         .task { auth.attach(session: session, toaster: toaster); await session.bootstrap() }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in session.expired() }
         .onReceive(NotificationCenter.default.publisher(for: .upgradeRequired)) { _ in mustUpgrade = true }
+        .onChange(of: session.phase) { _, phase in if phase == .ready { Task { await social.registerDevice() } } }
         .onChange(of: network.online) { was, now in
             if now && !was {
+                Task { await social.flushQueued() }                // alliance chat written offline
                 let n = queued
                 toaster.show(n > 0 ? String(localized: "Back online. Synced \(n) changes.") : String(localized: "Back online."), .ok)
             } else { queued = Persistence.outboxCount() }

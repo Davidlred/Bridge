@@ -16,6 +16,7 @@ import SwiftData
     var routine: String?           // onboarding step 2, shown in Reality Check
     var realityNote: String?       // "Why I started"
     var feasibilityJSON: Data?     // {verdict, reason, suggestedDeadline}
+    var category: String?          // from the plan; groups Community by kind of goal
     @Relationship(deleteRule: .cascade, inverse: \TaskEntity.goal) var tasks: [TaskEntity] = []
 
     init(id: UUID, label: String, statement: String, startDate: String, deadline: String, colorIndex: Int) {
@@ -105,6 +106,31 @@ import SwiftData
     }
 }
 
+/// Server responses kept for offline reading: the Community feed per goal and the user's alliances.
+@Model final class SocialCacheEntity {
+    @Attribute(.unique) var key: String
+    var json: Data
+    var updatedAt: Date
+    init(key: String, json: Data) { self.key = key; self.json = json; self.updatedAt = .now }
+}
+
+/// Alliance chat. `id` is the client id (the server dedupes by it). Messages written offline stay "queued" and send when the
+/// connection is back; `status` is sent | queued | failed.
+@Model final class AllianceMessageEntity {
+    @Attribute(.unique) var id: String
+    var allianceId: String
+    var serverId: String?
+    var userId: String?
+    var name: String?
+    var body: String
+    var mine: Bool
+    var createdAt: Date
+    var status: String
+    init(id: String, allianceId: String, body: String, mine: Bool, status: String = "sent", createdAt: Date = .now) {
+        self.id = id; self.allianceId = allianceId; self.body = body; self.mine = mine; self.status = status; self.createdAt = createdAt
+    }
+}
+
 /// Every local mutation writes one of these in the same transaction.
 @Model final class OutboxEntity {
     @Attribute(.unique) var id: UUID   // idempotency key on the server
@@ -120,7 +146,7 @@ import SwiftData
 }
 
 enum Persistence {
-    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self, ChatMessageEntity.self]
+    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self, ChatMessageEntity.self, SocialCacheEntity.self, AllianceMessageEntity.self]
     static let container: ModelContainer = {
         do { return try ModelContainer(for: Schema(models)) } catch { fatalError("Could not open the local database: \(error)") }
     }()
@@ -130,6 +156,7 @@ enum Persistence {
         let ctx = ModelContext(container)
         try ctx.delete(model: OutboxEntity.self); try ctx.delete(model: CompletionEntity.self); try ctx.delete(model: JournalEntity.self)
         try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self); try ctx.delete(model: GoalImageEntity.self); try ctx.delete(model: ChatMessageEntity.self)
+        try ctx.delete(model: SocialCacheEntity.self); try ctx.delete(model: AllianceMessageEntity.self)
         try ctx.save()
         UserDefaults.standard.removeObject(forKey: "syncCursor")
     }

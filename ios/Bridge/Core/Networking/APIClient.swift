@@ -37,7 +37,7 @@ enum CoachStreamError: Error { case interrupted }
 
 struct Feasibility: Codable, Equatable, Sendable { let verdict: String; let reason: String; let suggestedDeadline: String? }
 struct PlanTaskDTO: Decodable, Sendable { let title: String; let priority: String; let timeOfDay: String; let minutes: Int; let rationale: String }
-struct PlanDTO: Decodable, Sendable { let needsClarification: String?; let label: String; let goal: String; let feasibility: Feasibility; let tasks: [PlanTaskDTO] }
+struct PlanDTO: Decodable, Sendable { let needsClarification: String?; let label: String; let goal: String; let category: String?; let feasibility: Feasibility; let tasks: [PlanTaskDTO] }
 struct GoalImageDTO: Decodable, Sendable { let kind: String; let status: String; let url: String?; let withFace: Bool? }
 
 /// One outbox row on its way to the server. `patch` is the JSON object of changed fields.
@@ -55,7 +55,7 @@ struct PushResult: Decodable, Sendable { let accepted: Set<UUID>; let rejected: 
     }
 }
 struct Changes: Decodable, Sendable {
-    struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility? }
+    struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility?; let category: String? }
     struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double? }
     struct Completion: Decodable, Sendable { let taskId: UUID; let localDate: String; let completedAt: Double? }
     struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion] }
@@ -66,9 +66,34 @@ struct Changes: Decodable, Sendable {
     struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let role: String; let text: String; let suggestion: Suggestion?; let status: String; let suggestionState: String?; let createdAt: Double }
     let chat: [Chat]?; let removedChat: [UUID]?
     /// Synced settings the app shows locally (unknown keys are ignored).
-    struct Settings: Decodable, Sendable { let coachReadsJournal: Bool? }
+    struct Settings: Decodable, Sendable { let coachReadsJournal: Bool?; let share: String? }
     let settings: Settings?
 }
+
+// MARK: Social (milestone 4). Names are first names only; the server never sends other people's goal text or tasks.
+struct ReactionCounts: Codable, Equatable, Sendable { var respect = 0; var keepGoing = 0; var inspired = 0 }
+struct PostDTO: Codable, Equatable, Sendable, Identifiable {
+    let id: String; var userId: String?; var mine = false; let name: String; let kind: String; var value: Int?; var createdAt: Double = 0
+    var reactions = ReactionCounts(); var reacted: [String] = []
+}
+struct CommunityDTO: Codable, Equatable, Sendable { let unlocked: Bool; var streak = 0; var widened = false; var posts: [PostDTO] = [] }
+struct MemberDTO: Codable, Equatable, Sendable { let userId: String; let name: String; let role: String; var away = false; var me = false }
+struct DoneCount: Codable, Equatable, Sendable { var done = 0; var total = 0 }
+struct SharedPlanDTO: Codable, Equatable, Sendable { let lead: String; let goal: String; let deadline: String; var me = DoneCount(); var group = DoneCount(); var isLead = false }
+struct AllianceFeedDTO: Codable, Equatable, Sendable { var name: String?; let what: String; var title: String?; var at: Double = 0 }
+struct AllianceDTO: Codable, Equatable, Sendable, Identifiable {
+    let id: String; let name: String; let planMode: String; let inviteCode: String; var cap = 15; let startDate: String; var role: String?; var goalId: String?
+    var streak = 0; var members: [MemberDTO] = []; var memberCount = 0; var shared: SharedPlanDTO?; var feed: [AllianceFeedDTO] = []
+    var isShared: Bool { planMode == "shared" }
+}
+struct PreviewTaskDTO: Codable, Equatable, Sendable { let title: String; var priority = "Medium"; var timeOfDay: String? }
+struct PaceDTO: Codable, Equatable, Sendable { let groupDay: Int; let groupTotal: Int; let yourTotal: Int }
+struct InvitePreviewDTO: Codable, Equatable, Sendable {
+    let id: String; let name: String; let planMode: String; let lead: String; let members: Int; let cap: Int; let spotsLeft: Int
+    var goal: String?; var label: String?; var deadline: String?; var tasks: [PreviewTaskDTO] = []; var pace: PaceDTO?
+}
+struct AllianceMessageDTO: Codable, Equatable, Sendable { let id: String; var clientId: String?; var userId: String?; var name: String?; var mine = false; let body: String; var createdAt: Double = 0 }
+private struct AllianceEnvelope: Decodable { let alliance: AllianceDTO }
 
 /// All HTTP goes through here. Feature models call it; views never do.
 actor APIClient {
@@ -176,6 +201,55 @@ actor APIClient {
     func forgotPassword(email: String) async throws { _ = try await raw("POST", "/v1/auth/password/forgot", ["email": email], authed: false) }
     func logOut() async throws { _ = try await raw("POST", "/v1/auth/logout", [:], authed: true) }
     func deleteAccount() async throws { _ = try await raw("DELETE", "/v1/account", nil, authed: true) }
+
+    // MARK: Community and alliances
+    func community(goalId: UUID) async throws -> CommunityDTO { try JSONDecoder().decode(CommunityDTO.self, from: try await raw("GET", "/v1/community?goalId=\(goalId.uuidString.lowercased())", nil, authed: true)) }
+    /// Progress to share. The server checks it against its own completions and the sharing setting.
+    func announce(goalId: UUID, kind: String, value: Int?) async throws {
+        var body: [String: Any] = ["goalId": goalId.uuidString.lowercased(), "kind": kind]
+        if let value { body["value"] = value }
+        _ = try await raw("POST", "/v1/community/posts", body, authed: true)
+    }
+    func react(postId: String, kind: String, on: Bool) async throws { _ = try await raw(on ? "PUT" : "DELETE", "/v1/community/posts/\(postId)/reactions/\(kind)", nil, authed: true) }
+    func report(kind: String, id: String, reason: String) async throws { _ = try await raw("POST", "/v1/reports", ["targetKind": kind, "targetId": id, "reason": reason], authed: true) }
+    func block(userId: String) async throws { _ = try await raw("PUT", "/v1/blocks/\(userId)", nil, authed: true) }
+    func alliances() async throws -> [AllianceDTO] {
+        struct R: Decodable { let alliances: [AllianceDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/alliances", nil, authed: true)).alliances
+    }
+    func createAlliance(name: String, planMode: String, goalId: UUID) async throws -> AllianceDTO {
+        try JSONDecoder().decode(AllianceEnvelope.self, from: try await raw("POST", "/v1/alliances", ["name": name, "planMode": planMode, "goalId": goalId.uuidString.lowercased()], authed: true)).alliance
+    }
+    func previewAlliance(code: String) async throws -> InvitePreviewDTO {
+        struct R: Decodable { let preview: InvitePreviewDTO }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/alliances/preview/\(code)", nil, authed: true)).preview
+    }
+    func joinAlliance(code: String, goalId: UUID?) async throws -> AllianceDTO {
+        var body: [String: Any] = ["code": code]
+        if let goalId { body["goalId"] = goalId.uuidString.lowercased() }
+        return try JSONDecoder().decode(AllianceEnvelope.self, from: try await raw("POST", "/v1/alliances/join", body, authed: true)).alliance
+    }
+    func leaveAlliance(_ id: String) async throws { _ = try await raw("POST", "/v1/alliances/\(id)/leave", nil, authed: true) }
+    func applyPlanNow(_ id: String) async throws { _ = try await raw("POST", "/v1/alliances/\(id)/apply-now", nil, authed: true) }
+    func allianceMessages(_ id: String) async throws -> [AllianceMessageDTO] {
+        struct R: Decodable { let messages: [AllianceMessageDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/alliances/\(id)/messages", nil, authed: true)).messages
+    }
+    func sendAllianceMessage(_ id: String, clientId: UUID, body: String) async throws -> AllianceMessageDTO {
+        struct R: Decodable { let message: AllianceMessageDTO }
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(id)/messages", ["clientId": clientId.uuidString.lowercased(), "body": body], authed: true)).message
+    }
+    /// This install, for push and the home time zone. `pushToken` is nil until APNs is configured.
+    func registerDevice(pushToken: String?) async throws {
+        _ = try await raw("PUT", "/v1/devices", ["id": DeviceID.value, "platform": "ios", "pushToken": pushToken ?? NSNull(), "timezone": timezone,
+                                                 "locale": Locale.current.identifier(.bcp47), "appVersion": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"], authed: true)
+    }
+    /// The realtime socket. The token goes in the first frame, never the URL.
+    nonisolated func socketURL() -> URL {
+        var c = URLComponents(url: URL(string: "/v1/rt", relativeTo: base)!, resolvingAgainstBaseURL: true)!
+        c.scheme = c.scheme == "https" ? "wss" : "ws"
+        return c.url!
+    }
 
     // MARK: Sync
     func push(_ batch: [Mutation]) async throws -> PushResult {

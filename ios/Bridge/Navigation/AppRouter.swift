@@ -5,7 +5,8 @@ enum Route: Hashable, Codable {
     case goal(UUID)
     case task(UUID)
     case realityCheck(goalId: UUID)
-    case community(goalId: UUID)
+    /// `code`: opened from an invite link, so the join sheet starts with it.
+    case community(goalId: UUID, code: String? = nil)
     case alliance(goalId: UUID, allianceId: UUID)
     case allianceChat(UUID)
     case gameNight(allianceId: UUID)
@@ -82,9 +83,27 @@ private extension View {
             case .addGoal: AddGoalScreen().toolbar(.hidden, for: .tabBar)
             case .study: StudyModeView().toolbar(.hidden, for: .tabBar)
             case .journalEntry(let goalId, _): JournalFromToday(goalId: goalId)
+            case .community(let goalId, let code): CommunityScreen(goalId: goalId, code: code)
+            case .allianceChat(let id): AllianceChatScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
+            case .invitePreview(let code): InviteRedirect(code: code)
             case .studyMode, .gameNight: PlaceholderScreen(title: String(describing: route)).toolbar(.hidden, for: .tabBar)
             default: PlaceholderScreen(title: String(describing: route))
             }
+        }
+    }
+}
+
+/// Invite links carry only the code: open the join sheet inside Community for the first active goal.
+private struct InviteRedirect: View {
+    let code: String
+    @Environment(AppRouter.self) private var router
+    @Environment(GoalStore.self) private var goals
+    @Environment(Toaster.self) private var toaster
+    var body: some View {
+        Theme.bg.task {
+            router.today.removeLast()
+            if let g = goals.goals.first { router.today.append(Route.community(goalId: g.id, code: code)) }
+            else { toaster.show(String(localized: "Add a goal first, then join with this code.")) }
         }
     }
 }

@@ -37,6 +37,7 @@ struct ProfileView: View {
     @State private var renaming = false
     @State private var coachName = ""
     @AppStorage("coachReadsJournal") private var coachReadsJournal = false
+    @Environment(SocialStore.self) private var social
     @Environment(GoalStore.self) private var goals
     enum Sheet: String, Identifiable { case delete, logOut; var id: String { rawValue } }
 
@@ -72,6 +73,9 @@ struct ProfileView: View {
                     }
                 }
                 .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)
+            }
+            SettingsSection(title: "Privacy") {
+                SettingsValue(label: "Community sharing", value: social.share.settingsLabel) { social.cycleShare(userId: session.user?.id, goals: goals) }
             }
             if session.user?.photoUrl != nil {
                 SettingsSection(title: "Photo") { SettingsLink(label: "Remove photo and its images", danger: true, action: removePhoto) }

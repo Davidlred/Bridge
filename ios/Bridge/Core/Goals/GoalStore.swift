@@ -95,13 +95,13 @@ final class GoalStore {
         Task { await NotificationScheduler.shared.reschedule() }
     }
 
-    func createGoal(id: UUID, label: String, statement: String, deadline: String, routine: String?, feasibility: Feasibility?, tasks: [NewTask]) {
+    func createGoal(id: UUID, label: String, statement: String, deadline: String, routine: String?, feasibility: Feasibility?, category: String? = nil, tasks: [NewTask]) {
         let start = LocalDay.today()
         let colour = goals.count % 3
         let g = GoalEntity(id: id, label: label.trimmingCharacters(in: .whitespaces), statement: statement.trimmingCharacters(in: .whitespaces), startDate: start, deadline: deadline, colorIndex: colour)
-        g.routine = routine; g.feasibilityJSON = try? feasibility.map { try JSONEncoder().encode($0) }
+        g.routine = routine; g.feasibilityJSON = try? feasibility.map { try JSONEncoder().encode($0) }; g.category = category
         ctx.insert(g)
-        var patch: [String: Any] = ["label": g.label, "statement": g.statement, "startDate": start, "deadline": deadline, "colorIndex": colour, "routine": routine ?? NSNull()]
+        var patch: [String: Any] = ["label": g.label, "statement": g.statement, "startDate": start, "deadline": deadline, "colorIndex": colour, "routine": routine ?? NSNull(), "category": category ?? NSNull()]
         if let feasibility, let f = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(feasibility)) { patch["feasibility"] = f }
         enqueue("goal", id, "upsert", patch)
         for (i, t) in tasks.filter({ !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }).enumerated() {
@@ -183,6 +183,10 @@ final class GoalStore {
 
     /// Synced user settings (e.g. coachReadsJournal).
     func saveSetting(userId: UUID, _ key: String, _ value: Bool) {
+        enqueue("settings", userId, "upsert", [key: value])
+        commit()
+    }
+    func saveSetting(userId: UUID, _ key: String, _ value: String) {
         enqueue("settings", userId, "upsert", [key: value])
         commit()
     }

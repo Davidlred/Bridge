@@ -31,6 +31,7 @@ struct OnboardingDraft: Codable, Equatable {
     var label = ""
     var tasks: [DraftTask] = []
     var feasibility: Feasibility?
+    var category: String?
     var genStartedAt: Date?
     /// The image request itself failed (offline, daily limit), so no image rows exist to report it.
     var imagesError = false
@@ -132,7 +133,7 @@ final class OnboardingModel {
                 let plan = try await APIClient.shared.plan(goal: d.goal.trimmingCharacters(in: .whitespaces), deadline: d.deadline!, today: LocalDay.today(), routine: d.routine.trimmingCharacters(in: .whitespaces), existingGoals: others)
                 if let q = plan.needsClarification { draft.plan = .clarify; draft.clarification = q; return }
                 draft.label = draft.label.isEmpty ? (plan.label.isEmpty ? GoalText.autoLabel(d.goal) : plan.label) : draft.label
-                draft.feasibility = plan.feasibility
+                draft.feasibility = plan.feasibility; draft.category = plan.category
                 draft.tasks = plan.tasks.map { DraftTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: true) }
                 draft.plan = .done
                 advanceIfReady()
@@ -202,7 +203,7 @@ final class OnboardingModel {
         guard draft.label.trimmingCharacters(in: .whitespaces).count >= 2 else { labelError = String(localized: "Give the goal a short name."); return false }
         guard canStart, let deadline = draft.deadline else { return false }
         let d = draft
-        store.createGoal(id: d.goalId, label: d.label, statement: d.goal, deadline: deadline, routine: d.routine.isEmpty ? nil : d.routine, feasibility: d.feasibility,
+        store.createGoal(id: d.goalId, label: d.label, statement: d.goal, deadline: deadline, routine: d.routine.isEmpty ? nil : d.routine, feasibility: d.feasibility, category: d.category,
                          tasks: d.tasks.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }.map { NewTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: $0.ai) })
         UserDefaults.standard.removeObject(forKey: Self.key)
         if d.adding { toaster?.show(String(localized: "\(d.label.trimmingCharacters(in: .whitespaces)) added. \(otherGoals) goals running."), .ok) }

@@ -35,7 +35,7 @@ final class FoundationTests: XCTestCase {
 final class FoundationSnapshotTests: XCTestCase {
     private func verify(_ view: some View, named name: String, file: StaticString = #file, line: UInt = #line) {
         let session = SessionStore(); session.user = UserDTO(id: UUID(uuidString: "018b0000-0000-7000-8000-000000000001")!, email: "sharon@example.com", displayName: "Sharon", coachName: "Arc", createdAt: 1_760_000_000_000)
-        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus())
+        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore())
         let variants: [(String, UITraitCollection)] = [
             ("light", .init(userInterfaceStyle: .light)), ("dark", .init(userInterfaceStyle: .dark)),
             ("xxxl", .init(traitsFrom: [.init(userInterfaceStyle: .light), .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)])),
@@ -43,7 +43,8 @@ final class FoundationSnapshotTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         // CI passes the folder explicitly: the compiled source path isn't writable from the simulator.
         let dir = env["SNAPSHOT_DIR"]
-        withSnapshotTesting(record: env["SNAPSHOT_RECORD"] == "1" ? .all : .never) {
+        // New screens record their first reference (and fail once, so CI publishes it to commit).
+        withSnapshotTesting(record: env["SNAPSHOT_RECORD"] == "1" ? .all : .missing) {
             for (variant, traits) in variants {
                 if let failure = verifySnapshot(of: UIHostingController(rootView: root), as: .image(on: .iPhone13, precision: 0.99, perceptualPrecision: 0.98, traits: traits),
                                                 named: "\(name)-\(variant)", snapshotDirectory: dir, testName: "FoundationSnapshotTests") {
@@ -64,4 +65,45 @@ final class FoundationSnapshotTests: XCTestCase {
     func testReauth() { verify(ReauthSheet(), named: "reauth") }
     func testStudy() { verify(StudyModeView(), named: "study") }
     func testOfflineBanner() { verify(OfflineBanner(queued: 3), named: "offline") }
+
+    // MARK: Milestone 4
+    private let now = Date(timeIntervalSince1970: 1_760_348_460)         // 2026-10-13 09:41 UTC
+    private var ms: Double { now.timeIntervalSince1970 * 1000 }
+    private let goal = GoalState(id: UUID(uuidString: "018b0000-0000-7000-8000-0000000000a1")!, label: "Half marathon", statement: "Run a half marathon in under 2 hours.",
+                                 startDate: "2026-09-20", deadline: "2027-01-10", colorIndex: 0, routine: nil, realityNote: nil, feasibility: nil, tasks: [],
+                                 progress: GoalProgress(day: 24, total: 113, doneToday: 2, tasksToday: 4, fraction: 0.208, streak: 9, drift: 6), images: [:])
+    private var posts: [PostDTO] { [
+        PostDTO(id: "p1", userId: "u1", name: "Jonas", kind: "streak", value: 30, createdAt: ms - 7_200_000, reactions: .init(respect: 12, keepGoing: 4, inspired: 6)),
+        PostDTO(id: "p2", userId: "u2", name: "Priya", kind: "day_complete", createdAt: ms - 14_400_000, reactions: .init(respect: 8, keepGoing: 11, inspired: 2), reacted: ["keepGoing"]),
+        PostDTO(id: "p3", mine: true, name: "Sharon", kind: "milestone", value: 25, createdAt: ms - 93_600_000, reactions: .init(respect: 5, keepGoing: 2, inspired: 7)),
+    ] }
+    private var calc: AllianceDTO {
+        AllianceDTO(id: "a1", name: "Calc Prep 12B", planMode: "shared", inviteCode: "CALC-2026", startDate: "2026-09-28", role: "member", goalId: "g", streak: 9,
+                    members: ["Ms Okafor", "Jide", "Funmi", "Sharon", "Lola", "Bayo"].enumerated().map { MemberDTO(userId: "u\($0.offset)", name: $0.element, role: $0.offset == 0 ? "owner" : "member", away: $0.offset == 4) },
+                    memberCount: 6, shared: SharedPlanDTO(lead: "Ms", goal: "Score 75% or higher on the Grade 12 math final.", deadline: "2026-12-04"),
+                    feed: [AllianceFeedDTO(name: "Jide", what: "completed", title: "Work 10 past-paper questions", at: ms - 10_800_000), AllianceFeedDTO(name: "Lola", what: "joined", at: ms - 108_000_000)])
+    }
+    private func community(_ ui: CommunityUI) -> some View { CommunityContent(ui: ui, actions: CommunityActions(), today: now, now: now) }
+    func testCommunityLocked() { verify(community(CommunityUI(goal: goal, community: CommunityDTO(unlocked: false, streak: 4), loading: false)), named: "community-locked") }
+    func testCommunityPreview() { verify(community(CommunityUI(goal: goal, community: CommunityDTO(unlocked: false, streak: 4), loading: false, previewing: true, tab: .alliance)), named: "community-preview") }
+    func testCommunityFeed() { verify(community(CommunityUI(goal: goal, community: CommunityDTO(unlocked: true, streak: 9, posts: posts), loading: false)), named: "community-feed") }
+    func testAllianceNone() { verify(community(CommunityUI(goal: goal, community: CommunityDTO(unlocked: true, streak: 9), loading: false, tab: .alliance)), named: "alliance-none") }
+    func testAllianceShared() { verify(community(CommunityUI(goal: goal, community: CommunityDTO(unlocked: true, streak: 9), loading: false, tab: .alliance, alliances: [calc])), named: "alliance-shared") }
+    func testAllianceChat() {
+        let lines = [ChatLine(id: "c1", serverId: "s1", name: "Jide", body: "Did anyone get question 7? The integral looks wrong.", mine: false, createdAt: now.addingTimeInterval(-3000), status: "sent"),
+                     ChatLine(id: "c2", serverId: "s2", name: "Sharon", body: "It's by parts twice. Check the sign on the second step.", mine: true, createdAt: now.addingTimeInterval(-2400), status: "sent"),
+                     ChatLine(id: "c4", serverId: nil, name: nil, body: "On my way to the library", mine: true, createdAt: now.addingTimeInterval(-60), status: "queued"),
+                     ChatLine(id: "c5", serverId: nil, name: nil, body: "See you there", mine: true, createdAt: now, status: "failed")]
+        verify(AllianceChatContent(alliance: calc, lines: lines, input: .constant(""), now: now), named: "alliance-chat")
+    }
+    func testCreateAlliance() {
+        let m = CommunityModel(); m.name = "Dawn Runners"; m.shared = true
+        verify(CreateAllianceSheet(model: m, goal: goal, onCreate: {}).background(Theme.bg), named: "alliance-create")
+    }
+    func testJoinPreview() {
+        let m = CommunityModel(); m.code = "CALC-2026"
+        m.preview = InvitePreviewDTO(id: "a1", name: "Calc Prep 12B", planMode: "shared", lead: "Ms", members: 11, cap: 15, spotsLeft: 4, goal: "Score 75% or higher on the Grade 12 math final.", label: "Math final",
+                                     deadline: "2026-12-04", tasks: [PreviewTaskDTO(title: "Work 10 past-paper questions", priority: "High", timeOfDay: "After school")], pace: PaceDTO(groupDay: 16, groupTotal: 68, yourTotal: 53))
+        verify(JoinAllianceSheet(model: m, onJoin: {}).background(Theme.bg), named: "alliance-join-preview")
+    }
 }

@@ -20,6 +20,7 @@ final class TodayModel {
     }
 
     @ObservationIgnored weak var store: GoalStore?
+    @ObservationIgnored weak var social: SocialStore?
 
     func refreshImages(_ id: UUID) async {
         guard let dtos = try? await APIClient.shared.images(goalId: id) else { return }
@@ -29,6 +30,7 @@ final class TodayModel {
     func toggle(_ task: PlanTask, in goal: GoalState) {
         let done = !task.done
         store?.setDone(task.id, done)
+        if done { Task { await social?.announce(goalId: goal.id, store: store) } }      // share progress, if the user allows it
         guard done, let g = store?.goals.first(where: { $0.id == goal.id }), g.progress.allDone else { return }
         // All of a goal's tasks done for the first time today: celebrate once per goal per day.
         let key = "celebrated.\(g.id.uuidString).\(LocalDay.today())"
@@ -81,6 +83,7 @@ struct TodayView: View {
     @Environment(GoalStore.self) private var store
     @Environment(AppRouter.self) private var router
     @Environment(Toaster.self) private var toaster
+    @Environment(SocialStore.self) private var social
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = TodayModel()
     @State private var sheet: TodaySheet?
@@ -102,7 +105,7 @@ struct TodayView: View {
         }
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { model.store = store }
+        .onAppear { model.store = store; model.social = social }
         .task(id: scenePhase) { if scenePhase == .active { store.reload(); notificationsOff = !(await NotificationScheduler.shared.authorized()) } }
         .sheet(item: $sheet) { s in sheetView(s).presentationDetents([.large]).presentationDragIndicator(.visible).presentationBackground(Theme.s1) }
         .fullScreenCover(item: Binding(get: { model.celebrate.flatMap { id in goals.first { $0.id == id } } }, set: { if $0 == nil { model.celebrate = nil } })) { g in
@@ -213,7 +216,7 @@ struct TodayView: View {
             }
             .padding(.top, 16)
         }
-        // Today | Reality Check. (Community joins this control in milestone 4.)
+        // Today | Reality Check | Community. Community opens its own screen inside the goal.
         HStack(spacing: 4) {
             ForEach([(GoalView.today, "Today"), (GoalView.reality, "Reality Check")] as [(GoalView, LocalizedStringKey)], id: \.0) { v, label in
                 let on = model.view == v
@@ -222,6 +225,9 @@ struct TodayView: View {
                         .background(!on ? Color.clear : v == .today ? Theme.acc : Theme.ink, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .accessibilityAddTraits(on ? [.isSelected] : [])
+            }
+            Button { router.today.append(Route.community(goalId: g.id)) } label: {
+                Label("Community", systemImage: "person.2.fill").font(BFont.body(14, .semibold)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, minHeight: 40)
             }
         }
         .padding(4).background(Theme.s0, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 1))

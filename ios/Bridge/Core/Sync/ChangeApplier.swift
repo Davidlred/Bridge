@@ -17,6 +17,7 @@ enum ChangeApplier {
             row.label = g.label; row.statement = g.statement; row.startDate = g.startDate; row.deadline = g.deadline
             row.status = g.status; row.sourceAllianceId = g.sourceAllianceId; row.colorIndex = g.colorIndex ?? 0; row.updatedAt = date(g.updatedAt) ?? .now
             row.routine = g.routine; row.realityNote = g.realityNote; row.feasibilityJSON = try g.feasibility.map { try JSONEncoder().encode($0) }
+            row.category = g.category
         }
         for t in page.tasks {
             // A task can arrive after its goal was deleted on another device; skip it.
@@ -58,6 +59,7 @@ enum ChangeApplier {
             row.suggestionJSON = try c.suggestion.map { try JSONEncoder().encode($0) }
         }
         if let on = page.settings?.coachReadsJournal { UserDefaults.standard.set(on, forKey: "coachReadsJournal") }
+        if let share = page.settings?.share { UserDefaults.standard.set(share, forKey: "communityShare") }
         for c in page.completions where try completion(c.taskId, c.localDate, ctx) == nil {
             ctx.insert(CompletionEntity(taskId: c.taskId, localDate: c.localDate, completedAt: date(c.completedAt) ?? .now))
         }
