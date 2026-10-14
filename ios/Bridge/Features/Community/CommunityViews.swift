@@ -33,16 +33,24 @@ struct CommunityActions {
 @MainActor @Observable
 final class CommunityModel {
     enum Sheet: Identifiable { case create, join; var id: Int { self == .create ? 0 : 1 } }
-    var loading = true, feedError = false, previewing = false
+    // One property per line: @Observable can't track multi-variable declarations.
+    var loading = true
+    var feedError = false
+    var previewing = false
     var tab = CommunityTab.feed
     var selectedId: String?
     var sheet: Sheet?
     var postMenu: PostDTO?
     var leaving: AllianceDTO?
     // Create
-    var name = "", shared = false, createError: String?, busy = false
+    var name = ""
+    var shared = false
+    var createError: String?
+    var busy = false
     // Join
-    var code = "", joinError: String?, preview: InvitePreviewDTO?
+    var code = ""
+    var joinError: String?
+    var preview: InvitePreviewDTO?
 
     func reset(_ s: Sheet) { name = ""; shared = false; createError = nil; code = ""; joinError = nil; preview = nil; busy = false; sheet = s }
 }
