@@ -78,4 +78,17 @@ Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, com
 
 Storage: set `S3_BUCKET` (+ `S3_ENDPOINT`, credentials) in production, e.g. Fly Tigris. Without it files go to `STORAGE_DIR` on local disk.
 
-Next to build: Game Night engine, rankings and Hall of Fame (milestone 5); RevenueCat webhook, E2E DMs, account export (milestone 6). Chat moderation and pushes run in the API process; move them to the worker queue with the image jobs.
+## API (milestone 5)
+| Route | Notes |
+|---|---|
+| `GET /v1/alliances/:id/game` | Game card: `unlocked` (every active member finished today's tasks for the alliance goal; away members excluded), `finished`/`eligible`, `waiting` (first names, never tasks), `needsPlayers` (< 4 eligible → practice only), `rankedToday`, open lobby. |
+| `POST /v1/alliances/:id/game` | Opens the lobby (or returns the open one). Ranked only when unlocked with 4+ eligible and no ranked game yet today. |
+| WebSocket frames | `game:join`, `game:ready`, `game:begin`, `game:act {plank}`, `game:vote {target}`, `game:leave`. Server sends `game:state` (never roles before the result) and `game:role` to each player alone. Starts when 4+ are all ready, or at 60s with 3+. 15s round, 20s vote, ties eject nobody, 10s grace before absent, a missing Drifter loses. |
+| `POST /v1/alliances/:id/games/:gameId/share` | Posts the result to the alliance chat once. |
+| `POST /v1/alliances/:id/game/nudge` | One push per waiting member per day. |
+| `GET /v1/alliances/:id/rating` · `GET /v1/alliances/:id/rankings` | Weekly score (productivity, efficiency, fun; formula in `src/social/rankings.ts`), tier, rank on the board for the same goal category and size band (2–5, 6–15, 16+). |
+| `GET /v1/me/badges` | Hall of Fame: earned badges (kept once earned), progress toward streak and journal badges, `public` from `settings.badgesPublic`. |
+
+Game state lives in the API process. With more than one machine, route each alliance's game to one machine or move the state to Redis (results are already in Postgres).
+
+Next to build: RevenueCat webhook and paywall, E2E DMs, account export (milestone 6). Chat moderation and pushes run in the API process; move them to the worker queue with the image jobs.

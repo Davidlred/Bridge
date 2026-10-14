@@ -320,6 +320,21 @@ export async function gameRoutes(app: FastifyInstance) {
     return { game: view(g) };
   });
 
+  /** "Share to alliance chat": one line about the result, posted once per game. */
+  app.post<{ Params: { id: string; gameId: string } }>('/v1/alliances/:id/games/:gameId/share', { onRequest: auth }, async (req, reply) => {
+    await member(req.params.id, req.userId);
+    if (!z.string().uuid().safeParse(req.params.gameId).success) throw new HttpError(404, 'not_found');
+    const [s] = await sql`select s.builders_won, u.display_name from game_sessions s left join users u on u.id = s.drifter_id
+                          where s.id = ${req.params.gameId} and s.alliance_id = ${req.params.id} and s.ended_at is not null`;
+    if (!s) throw new HttpError(404, 'not_found');
+    const name = firstName(s.display_name ?? '');
+    const body = s.builders_won ? `Game night: the Builders caught ${name}.` : `Game night: ${name} drifted away undetected.`;
+    const [m] = await sql`insert into alliance_messages (id, alliance_id, user_id, kind, body, client_id, moderation) values (${uuidv7()}, ${req.params.id}, null, 'game', ${body}, ${req.params.gameId}, 'allow')
+                          on conflict (alliance_id, client_id) where client_id is not null do nothing returning id, created_at`;
+    if (m) bus.publish(`alliance:${req.params.id}`, { type: 'message', message: { id: m.id, clientId: req.params.gameId, userId: null, name: null, mine: false, kind: 'game', body, createdAt: (m.created_at as Date).getTime() } });
+    return reply.code(m ? 201 : 200).send({ body });
+  });
+
   /** "Nudge": one push per waiting member per day, naming the alliance, never the tasks. */
   app.post<{ Params: { id: string } }>('/v1/alliances/:id/game/nudge', { onRequest: auth, config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req, reply) => {
     await member(req.params.id, req.userId);

@@ -135,6 +135,11 @@ run('game night', () => {
     const [row] = await sql`select ranked, builders_won, drifter_id from game_sessions where id = ${lobby.id}`;
     expect(row).toMatchObject({ ranked: true, builders_won: true, drifter_id: drifterId });
     expect((await sql`select count(*)::int as n from game_players where game_id = ${lobby.id}`)[0]!.n).toBe(4);
+    // Sharing the result posts one line to the alliance chat, once
+    expect((await call(ps[1]!, 'POST', `/v1/alliances/${a.id}/games/${lobby.id}/share`)).statusCode).toBe(201);
+    expect((await call(ps[2]!, 'POST', `/v1/alliances/${a.id}/games/${lobby.id}/share`)).statusCode).toBe(200);
+    const chat = (await call(ps[0]!, 'GET', `/v1/alliances/${a.id}/messages`)).json().messages;
+    expect(chat.map((m: { kind: string; body: string }) => [m.kind, m.body])).toEqual([['game', `Game night: the Builders caught ${ps[d]!.name}.`]]);
     // Replays the same day are practice
     await new Promise(res => setTimeout(res, 150));
     const again = (await call(ps[0]!, 'POST', `/v1/alliances/${a.id}/game`)).json().game;
