@@ -37,6 +37,8 @@ data class BridgeColors(
     val pHi: Color, val pHiTint: Color, val pMd: Color, val pMdTint: Color, val pLo: Color, val pLoTint: Color,
     val goalCards: List<Color>, val goalInk: Color, val goalTrack: Color,
     val mascotBody: Color, val mascotInk: Color, val mascotCheek: Color,
+    /** Avatar circles and the four feature tiles (Community preview). */
+    val av: Color, val tiles: List<Color>,
     val isDark: Boolean,
 )
 
@@ -51,6 +53,7 @@ val LightColors = BridgeColors(
     pHi = Color(0xFFB9452E), pHiTint = Color(0xFFFBE3DB), pMd = Color(0xFF8F6410), pMdTint = Color(0xFFF7EBCD), pLo = Color(0xFF3F7262), pLoTint = Color(0xFFDFEEE7),
     goalCards = listOf(Color(0xFFFCE7D9), Color(0xFFE4F2D9), Color(0xFFDFECF6)), goalInk = Color(0xFF23262B), goalTrack = Color(0xFF23262B).copy(alpha = .12f),
     mascotBody = Color(0xFFF5BE98), mascotInk = Color(0xFF23262B), mascotCheek = Color(0xFFE07A62),
+    av = Color(0xFFFCE7D9), tiles = listOf(Color(0xFFFCE7D9), Color(0xFFE4F2D9), Color(0xFFDFECF6), Color(0xFFFBF0CF)),
     isDark = false,
 )
 
@@ -65,6 +68,7 @@ val DarkColors = BridgeColors(
     pHi = Color(0xFFF2937A), pHiTint = Color(0xFFF2937A).copy(alpha = .16f), pMd = Color(0xFFE9BC5C), pMdTint = Color(0xFFE9BC5C).copy(alpha = .15f), pLo = Color(0xFF8DBFAE), pLoTint = Color(0xFF8DBFAE).copy(alpha = .15f),
     goalCards = listOf(Color(0xFF7E3A20), Color(0xFF24564F), Color(0xFF5A4A1C)), goalInk = Color.White, goalTrack = Color.White.copy(alpha = .25f),
     mascotBody = Color(0xFFE8875A), mascotInk = Color(0xFF1A0C06), mascotCheek = Color(0xFFB83A22),
+    av = Color(0xFF1F1F1F), tiles = List(4) { Color(0xFF151515) },
     isDark = true,
 )
 

@@ -67,6 +67,8 @@ import app.thebridge.feature.auth.SignUpScreen
 import app.thebridge.feature.auth.SplashScreen
 import app.thebridge.feature.auth.WelcomeScreen
 import app.thebridge.feature.coach.CoachRoute
+import app.thebridge.feature.community.AllianceChatRoute
+import app.thebridge.feature.community.CommunityRoute
 import app.thebridge.feature.coach.StudyRoute
 import app.thebridge.feature.journal.JournalRoute
 import app.thebridge.feature.shell.DeleteAccountSheet
@@ -99,7 +101,8 @@ import java.time.ZoneId
 @Serializable object Journal
 @Serializable object Profile
 @Serializable data class GoalDetail(val goalId: String)
-@Serializable data class Community(val goalId: String)
+/** [code]: opened from an invite link, so the join sheet starts with it. */
+@Serializable data class Community(val goalId: String, val code: String? = null)
 @Serializable data class AllianceRoute(val goalId: String, val allianceId: String)
 @Serializable data class AllianceChat(val allianceId: String)
 @Serializable data class GameNight(val allianceId: String)
@@ -222,10 +225,11 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val reduce = LocalReduceMotion.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     // Hide the bar on full-screen flows
-    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true
+    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true
     val name = user?.displayName.orEmpty()
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
     val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
+    val share by shell.share.collectAsStateWithLifecycle(app.thebridge.data.ShareLevel.Streaks)
     // One coach ViewModel for the tab and Study Mode, so they share the conversation.
     val coachVm = app.thebridge.feature.coach.rememberCoachViewModel()
     val toTab: (Any) -> Unit = { graph -> nav.navigate(graph) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
@@ -240,17 +244,22 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
             popExitTransition = { if (reduce) fadeOut(tween(Motion.fade)) else slideOutHorizontally(tween(Motion.push, easing = PushEasing)) { it / 6 } + fadeOut(tween(Motion.fade)) },
         ) {
             navigation<TodayGraph>(startDestination = Today) {
-                composable<Today> { TodayRoute(onAddGoal = { nav.navigate(AddGoal) }, onOpenJournal = { goalId -> nav.navigate(JournalFromToday(goalId)) }) }
+                composable<Today> { TodayRoute(onAddGoal = { nav.navigate(AddGoal) }, onOpenJournal = { goalId -> nav.navigate(JournalFromToday(goalId)) }, onOpenCommunity = { goalId -> nav.navigate(Community(goalId)) }) }
                 composable<JournalFromToday> { JournalRoute(goalId = it.toRoute<JournalFromToday>().goalId, onBack = { nav.popBackStack() }) }
                 composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
-                composable<Community> { /* CommunityScreen(goalId) — Feed / Alliance */ }
+                composable<Community> { CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }) }
                 composable<AllianceRoute> { }
-                composable<AllianceChat> { }
+                composable<AllianceChat> { AllianceChatRoute(onBack = { nav.popBackStack() }) }
                 composable<GameNight> { }
                 composable<InvitePreview>(deepLinks = listOf(navDeepLink<InvitePreview>(basePath = "https://thebridge.app/join"))) {
                     val code = it.toRoute<InvitePreview>().code.uppercase()
-                    /* InvitePreviewScreen(code) */
+                    // The link carries only the code: open the join sheet inside Community for the first goal.
+                    LaunchedEffect(code) {
+                        val goalId = shell.firstGoalId()
+                        nav.navigate(if (goalId != null) Community(goalId, code) else Today) { popUpTo<InvitePreview> { inclusive = true } }
+                        if (goalId == null) shell.needGoalFirst()
+                    }
                 }
             }
             navigation<CoachGraph>(startDestination = Coach) {
@@ -270,6 +279,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         reminders = reminders, onDaily = shell::cycleDaily, onRisk = shell::cycleRisk,
                         hasPhoto = user?.photoUrl != null, onRemovePhoto = shell::removePhoto,
                         coachName = user?.coachName ?: "Arc", onRenameCoach = shell::renameCoach, coachReadsJournal = coachReadsJournal, onCoachReadsJournal = shell::setCoachReadsJournal,
+                        share = share, onShare = shell::cycleShare,
                     )
                 }
                 composable<HallOfFame> { }

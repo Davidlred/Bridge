@@ -41,9 +41,11 @@ class ShellViewModel @Inject constructor(
     private val goals: app.thebridge.data.GoalRepository,
     private val store: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
     private val api2: ApiClient,
+    private val social: app.thebridge.data.SocialRepository,
 ) : ViewModel() {
     private companion object { val COACH_READS_JOURNAL = androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal") }
     val reminders = reminderScheduler.settings
+    val share = social.share
     val coachReadsJournal = store.data.map { it[COACH_READS_JOURNAL] == true }
     val phase = session.phase
     val user = session.user
@@ -59,12 +61,15 @@ class ShellViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { session.bootstrap() }
+        // Signed in: register this install (push token once Firebase is set up, and the home time zone).
+        viewModelScope.launch { phase.collect { if (it == app.thebridge.data.session.SessionPhase.Ready) social.registerDevice() } }
         // Network regained: push what was queued and say so.
         viewModelScope.launch {
             online.drop(1).collect { isOnline ->
                 if (!isOnline) return@collect
                 val n = queued.value
                 SyncWorker.kick(ctx)
+                launch { social.flushQueued() }                         // alliance chat written offline
                 toaster.show(if (n > 0) UiText.Plural(R.plurals.back_online_synced, n) else UiText.Res(R.string.back_online), ToastKind.Ok)
             }
         }
@@ -76,6 +81,13 @@ class ShellViewModel @Inject constructor(
     }
 
     fun clearDeleteError() { _deleteError.value = null }
+
+    /** Profile → Privacy: Nothing → Streaks only → Streaks & milestones. */
+    fun cycleShare() = viewModelScope.launch { social.setShare(share.first().next()) }
+
+    /** For invite links: they open Community inside the user's first active goal. */
+    suspend fun firstGoalId(): String? = goals.activeGoals().first().firstOrNull()?.goal?.id
+    fun needGoalFirst() = toaster.show(UiText.Res(R.string.join_need_goal), ToastKind.Info)
 
     // Reminder times cycle through a few sensible choices, as in the prototype; "off" is the last stop.
     private fun next(current: java.time.LocalTime?, options: List<Int>): java.time.LocalTime? {

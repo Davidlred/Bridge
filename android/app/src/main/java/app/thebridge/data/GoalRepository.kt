@@ -49,7 +49,7 @@ data class GoalState(
 }
 
 data class NewTask(val title: String, val priority: String = "Medium", val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val ai: Boolean = false)
-data class NewGoal(val id: String, val label: String, val statement: String, val deadline: LocalDate, val routine: String?, val feasibility: Feasibility?, val tasks: List<NewTask>)
+data class NewGoal(val id: String, val label: String, val statement: String, val deadline: LocalDate, val routine: String?, val feasibility: Feasibility?, val tasks: List<NewTask>, val category: String? = null)
 
 /**
  * Goals, tasks and completions. Every write puts the row and its outbox record in one transaction,
@@ -98,6 +98,7 @@ class GoalRepository @Inject constructor(
     }.getOrDefault(start)
 
     suspend fun activeCount(): Int = db.goals().activeCount()
+    suspend fun goalOf(taskId: String): String? = db.tasks().get(taskId)?.goalId
     /** The routine from the most recent goal, offered again when adding another goal. */
     suspend fun lastRoutine(): String? = db.goals().latest()?.routine
 
@@ -113,12 +114,12 @@ class GoalRepository @Inject constructor(
         val start = today()
         val colour = db.goals().activeCount() % 3
         val goal = GoalEntity(g.id, g.label.trim(), g.statement.trim(), start.toString(), g.deadline.toString(), colorIndex = colour, routine = g.routine,
-            feasibility = g.feasibility?.let { json.encodeToString(Feasibility.serializer(), it) })
+            feasibility = g.feasibility?.let { json.encodeToString(Feasibility.serializer(), it) }, category = g.category)
         write { enqueue ->
             db.goals().upsert(goal)
             enqueue("goal", g.id, "upsert", buildJsonObject {
                 put("label", goal.label); put("statement", goal.statement); put("startDate", goal.startDate); put("deadline", goal.deadline)
-                put("colorIndex", colour); put("routine", g.routine)
+                put("colorIndex", colour); put("routine", g.routine); put("category", g.category)
                 if (g.feasibility != null) put("feasibility", json.encodeToJsonElement(Feasibility.serializer(), g.feasibility))
             })
             g.tasks.filter { it.title.isNotBlank() }.forEachIndexed { i, t ->
@@ -177,6 +178,9 @@ class GoalRepository @Inject constructor(
 
     /** Synced user settings (e.g. coachReadsJournal). [userId] is the settings row id on the server. */
     suspend fun saveSetting(userId: String, key: String, value: Boolean) {
+        write { enqueue -> enqueue("settings", userId, "upsert", buildJsonObject { put(key, value) }) }
+    }
+    suspend fun saveSetting(userId: String, key: String, value: String) {
         write { enqueue -> enqueue("settings", userId, "upsert", buildJsonObject { put(key, value) }) }
     }
 

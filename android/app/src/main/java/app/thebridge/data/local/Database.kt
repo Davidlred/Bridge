@@ -21,6 +21,7 @@ data class GoalEntity(
     val routine: String? = null,       // onboarding step 2, shown in Reality Check
     val realityNote: String? = null,   // "Why I started"
     val feasibility: String? = null,   // JSON {verdict, reason, suggestedDeadline}
+    val category: String? = null,      // from the plan; groups Community by kind of goal
 )
 
 /** Future Self / If nothing changes. The URL is a signed link; the image itself is cached on disk by a stable key. */
@@ -104,6 +105,45 @@ interface ChatDao {
     @Query("DELETE FROM chat WHERE id = :id") suspend fun delete(id: String)
 }
 
+/** Server responses kept for offline reading: the Community feed per goal and the user's alliances. */
+@Entity(tableName = "social_cache")
+data class SocialCacheEntity(@PrimaryKey val cacheKey: String, val json: String, val updatedAt: Long = System.currentTimeMillis())
+
+/**
+ * Alliance chat. [id] is the client id (the server dedupes by it). Messages written offline stay "queued" and
+ * send when the connection is back; [status] is sent | queued | failed.
+ */
+@Entity(tableName = "alliance_messages", indices = [Index("allianceId")])
+data class AllianceMessageEntity(
+    @PrimaryKey val id: String,
+    val allianceId: String,
+    val serverId: String? = null,
+    val userId: String? = null,
+    val name: String? = null,
+    val body: String,
+    val mine: Boolean,
+    val createdAt: Long = System.currentTimeMillis(),
+    val status: String = "sent",
+)
+
+@Dao
+interface SocialDao {
+    @Query("SELECT * FROM social_cache WHERE cacheKey = :key") fun cached(key: String): Flow<SocialCacheEntity?>
+    @Upsert suspend fun cache(e: SocialCacheEntity)
+    @Query("SELECT * FROM alliance_messages WHERE allianceId = :allianceId ORDER BY createdAt") fun messages(allianceId: String): Flow<List<AllianceMessageEntity>>
+    @Query("SELECT * FROM alliance_messages WHERE status = 'queued' ORDER BY createdAt") suspend fun queued(): List<AllianceMessageEntity>
+    @Upsert suspend fun upsert(m: AllianceMessageEntity)
+    @Upsert suspend fun upsert(m: List<AllianceMessageEntity>)
+    @Query("DELETE FROM alliance_messages WHERE serverId = :serverId") suspend fun removeByServerId(serverId: String)
+    @Query("DELETE FROM alliance_messages WHERE id = :id") suspend fun remove(id: String)
+    /** Server copies replace the cache for one alliance; unsent messages are kept. */
+    @Transaction
+    suspend fun replace(allianceId: String, rows: List<AllianceMessageEntity>) {
+        clearSent(allianceId); upsert(rows)
+    }
+    @Query("DELETE FROM alliance_messages WHERE allianceId = :allianceId AND status = 'sent'") suspend fun clearSent(allianceId: String)
+}
+
 @Entity(tableName = "outbox")
 data class OutboxEntity(
     @PrimaryKey val id: String,    // idempotency key
@@ -179,9 +219,10 @@ interface PullDao {
 }
 
 @Database(
-    entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class],
-    version = 3, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
+        SocialCacheEntity::class, AllianceMessageEntity::class],
+    version = 4, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao
@@ -190,6 +231,7 @@ abstract class BridgeDb : RoomDatabase() {
     abstract fun pull(): PullDao
     abstract fun journal(): JournalDao
     abstract fun chat(): ChatDao
+    abstract fun social(): SocialDao
 }
 
 object LocalDay {

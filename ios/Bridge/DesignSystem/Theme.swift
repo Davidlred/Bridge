@@ -34,6 +34,9 @@ enum Theme {
     static let warn   = Color(light: 0xB8741C, dark: 0xE9A23B)
     static let warnTint = Color(light: 0xFCF1E2, dark: 0xE9A23B, darkAlpha: 0.1)
 
+    /// Avatar circles and the four feature tiles (Community preview).
+    static let av = Color(light: 0xFCE7D9, dark: 0x1F1F1F)
+    static let tiles: [Color] = [Color(light: 0xFCE7D9, dark: 0x151515), Color(light: 0xE4F2D9, dark: 0x151515), Color(light: 0xDFECF6, dark: 0x151515), Color(light: 0xFBF0CF, dark: 0x151515)]
     static let goalCards: [Color] = [Color(light: 0xFCE7D9, dark: 0x7E3A20), Color(light: 0xE4F2D9, dark: 0x24564F), Color(light: 0xDFECF6, dark: 0x5A4A1C)]
     static let goalInk = Color(light: 0x23262B, dark: 0xFFFFFF)
     static let goalTrack = Color(light: 0x23262B, dark: 0xFFFFFF, lightAlpha: 0.12, darkAlpha: 0.25)

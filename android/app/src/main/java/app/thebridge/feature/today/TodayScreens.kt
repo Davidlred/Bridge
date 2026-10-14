@@ -110,6 +110,7 @@ data class TodayActions(
     val addGoal: () -> Unit = {}, val openTask: (PlanTask) -> Unit = {}, val newTask: () -> Unit = {}, val editGoal: (GoalState) -> Unit = {},
     val openJournal: (String) -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
     val recheck: (String) -> Unit = {}, val retryImages: (GoalState) -> Unit = {}, val openNotificationSettings: (() -> Unit)? = null,
+    val openCommunity: (String) -> Unit = {},
 )
 
 @Composable
@@ -248,7 +249,7 @@ private fun Detail(ui: TodayUi, g: GoalState, actions: TodayActions) {
             }
         }
     }
-    Segments(ui.view, actions.showView)
+    Segments(ui.view, actions.showView) { actions.openCommunity(g.goal.id) }
     AnimatedContent(ui.view, label = "view", transitionSpec = { fadeIn(tween(Motion.fade)) togetherWith fadeOut(tween(Motion.fade)) }) { v ->
         if (v == GoalView.Today) TodayView(ui, g, actions) else RealityView(ui, g, actions)
     }
@@ -262,20 +263,38 @@ private fun EditGoalButton(onClick: () -> Unit) {
     }
 }
 
-/** Today | Reality Check. (Community joins this control in milestone 4.) */
+/**
+ * Today | Reality Check | Community. Community opens its own screen inside the goal.
+ * At very large text the three don't fit side by side, so Community moves to its own row.
+ */
 @Composable
-private fun Segments(view: GoalView, onChange: (GoalView) -> Unit) {
+private fun Segments(view: GoalView, onChange: (GoalView) -> Unit, onCommunity: () -> Unit) {
     val c = LocalBridgeColors.current
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp).background(c.s0, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        listOf(GoalView.Today to R.string.seg_today, GoalView.Reality to R.string.seg_reality).forEach { (v, label) ->
-            val on = v == view
-            val bg = when { !on -> Color.Transparent; v == GoalView.Today -> c.acc; else -> c.ink }
-            val fg = when { !on -> c.mut; v == GoalView.Today -> c.onAcc; else -> c.bg }
-            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(bg, RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(v) }
-                .semantics { stateDescription = if (on) "selected" else "" }, contentAlignment = Alignment.Center) {
-                Text(stringResource(label), style = BType.body(14, FontWeight.SemiBold), color = fg)
+    val large = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp).background(c.s0, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(GoalView.Today to R.string.seg_today, GoalView.Reality to R.string.seg_reality).forEach { (v, label) ->
+                val on = v == view
+                val bg = when { !on -> Color.Transparent; v == GoalView.Today -> c.acc; else -> c.ink }
+                val fg = when { !on -> c.mut; v == GoalView.Today -> c.onAcc; else -> c.bg }
+                Box(Modifier.weight(1f).heightIn(min = 40.dp).background(bg, RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(v) }
+                    .semantics { stateDescription = if (on) "selected" else "" }, contentAlignment = Alignment.Center) {
+                    Text(stringResource(label), style = BType.body(14, FontWeight.SemiBold, 1.2f), color = fg, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 4.dp))
+                }
             }
+            if (!large) CommunitySegment(Modifier.weight(1f), onCommunity)
         }
+        if (large) CommunitySegment(Modifier.fillMaxWidth(), onCommunity)
+    }
+}
+
+@Composable
+private fun CommunitySegment(modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Row(modifier.heightIn(min = 40.dp).clickable(role = Role.Button, onClick = onClick), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
+        Icon(painterResource(R.drawable.ic_groups), null, tint = c.mut, modifier = Modifier.size(17.dp))
+        Text(stringResource(R.string.seg_community), style = BType.body(14, FontWeight.SemiBold, 1.2f), color = c.mut, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 4.dp))
     }
 }
 

@@ -103,7 +103,7 @@ class RemoteSyncApi @Inject constructor(
         dao.removeGoals(page.removed.goals)                              // cascades to that goal's tasks
         dao.goals(page.goals.map {
             GoalEntity(it.id, it.label, it.statement, it.startDate, it.deadline, it.status, it.sourceAllianceId, it.colorIndex, it.updatedAt, it.routine, it.realityNote,
-                it.feasibility?.let { f -> api.json.encodeToString(app.thebridge.data.remote.Feasibility.serializer(), f) })
+                it.feasibility?.let { f -> api.json.encodeToString(app.thebridge.data.remote.Feasibility.serializer(), f) }, it.category)
         })
         // A task or completion can arrive after its parent was deleted on another device; skip instead of breaking the foreign key.
         val goals = dao.knownGoals(page.tasks.map { it.goalId }.distinct()).toSet()
@@ -120,6 +120,9 @@ class RemoteSyncApi @Inject constructor(
                 it.suggestion?.let { s -> api.json.encodeToString(app.thebridge.data.remote.SuggestionDto.serializer(), s) }, it.suggestionState, it.createdAt)
         })
         // Synced settings that the app shows locally
+        page.settings?.get("share")?.let { v ->
+            (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { s -> store.edit { it[androidx.datastore.preferences.core.stringPreferencesKey("community_share")] = s } }
+        }
         page.settings?.get("coachReadsJournal")?.let { v ->
             val on = (v as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
             store.edit { it[androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal")] = on }

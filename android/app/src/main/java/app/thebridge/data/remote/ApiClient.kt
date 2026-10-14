@@ -45,7 +45,7 @@ class StreamInterrupted : Exception()
 
 @Serializable data class Feasibility(val verdict: String, val reason: String, val suggestedDeadline: String? = null)
 @Serializable data class PlanTaskDto(val title: String, val priority: String, val timeOfDay: String, val minutes: Int, val rationale: String)
-@Serializable data class PlanDto(val needsClarification: String? = null, val label: String, val goal: String, val feasibility: Feasibility, val tasks: List<PlanTaskDto>)
+@Serializable data class PlanDto(val needsClarification: String? = null, val label: String, val goal: String, val category: String? = null, val feasibility: Feasibility, val tasks: List<PlanTaskDto>)
 @Serializable private data class PlanResponse(val plan: PlanDto)
 @Serializable private data class RealityResponse(val feasibility: Feasibility)
 @Serializable data class GoalImageDto(val kind: String, val status: String, val url: String? = null, val withFace: Boolean = false)
@@ -55,7 +55,7 @@ class StreamInterrupted : Exception()
 
 @Serializable data class MutationDto(val id: String, val entity: String, val entityId: String, val op: String, val patch: JsonElement, val clientTs: Long)
 @Serializable data class PushResponse(val accepted: List<String> = emptyList(), val rejected: Map<String, String> = emptyMap())
-@Serializable data class GoalDto(val id: String, val label: String, val statement: String, val startDate: String, val deadline: String, val status: String, val sourceAllianceId: String? = null, val colorIndex: Int = 0, val updatedAt: Long = 0, val routine: String? = null, val realityNote: String? = null, val feasibility: Feasibility? = null)
+@Serializable data class GoalDto(val id: String, val label: String, val statement: String, val startDate: String, val deadline: String, val status: String, val sourceAllianceId: String? = null, val colorIndex: Int = 0, val updatedAt: Long = 0, val routine: String? = null, val realityNote: String? = null, val feasibility: Feasibility? = null, val category: String? = null)
 @Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0)
 @Serializable data class CompletionDto(val taskId: String, val localDate: String, val completedAt: Long = 0)
 @Serializable data class CompletionKey(val taskId: String, val localDate: String)
@@ -64,6 +64,31 @@ class StreamInterrupted : Exception()
 @Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList(), val chat: List<ChatDto> = emptyList(), val removedChat: List<String> = emptyList())
 @Serializable data class ChatDto(val id: String, val conversation: String, val role: String, val text: String, val suggestion: SuggestionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
 @Serializable data class SuggestionDto(val title: String, val rationale: String = "", val priority: String = "Medium", val timeOfDay: String? = null)
+
+// --- Social (milestone 4). Names are first names only; the server never sends other people's goal text or tasks. ---
+@Serializable data class ReactionCounts(val respect: Int = 0, val keepGoing: Int = 0, val inspired: Int = 0)
+@Serializable data class PostDto(val id: String, val userId: String? = null, val mine: Boolean = false, val name: String, val kind: String, val value: Int? = null, val createdAt: Long = 0, val reactions: ReactionCounts = ReactionCounts(), val reacted: List<String> = emptyList())
+@Serializable data class CommunityDto(val unlocked: Boolean, val streak: Int = 0, val needed: Int = 7, val widened: Boolean = false, val posts: List<PostDto> = emptyList())
+@Serializable data class MemberDto(val userId: String, val name: String, val role: String, val away: Boolean = false, val me: Boolean = false)
+@Serializable data class DoneCount(val done: Int = 0, val total: Int = 0)
+@Serializable data class SharedPlanDto(val lead: String, val goal: String, val deadline: String, val me: DoneCount = DoneCount(), val group: DoneCount = DoneCount(), val isLead: Boolean = false)
+@Serializable data class AllianceFeedDto(val name: String? = null, val what: String, val title: String? = null, val at: Long = 0)
+@Serializable data class AllianceDto(
+    val id: String, val name: String, val planMode: String, val inviteCode: String, val cap: Int = 15, val startDate: String, val role: String? = null, val goalId: String? = null,
+    val streak: Int = 0, val members: List<MemberDto> = emptyList(), val memberCount: Int = 0, val shared: SharedPlanDto? = null, val feed: List<AllianceFeedDto> = emptyList(),
+) { val isShared: Boolean get() = planMode == "shared" }
+@Serializable data class PreviewTaskDto(val title: String, val priority: String = "Medium", val timeOfDay: String? = null)
+@Serializable data class PaceDto(val groupDay: Int, val groupTotal: Int, val yourTotal: Int)
+@Serializable data class InvitePreviewDto(
+    val id: String, val name: String, val planMode: String, val lead: String, val members: Int, val cap: Int, val spotsLeft: Int,
+    val goal: String? = null, val label: String? = null, val deadline: String? = null, val tasks: List<PreviewTaskDto> = emptyList(), val pace: PaceDto? = null,
+)
+@Serializable data class AllianceMessageDto(val id: String, val clientId: String? = null, val userId: String? = null, val name: String? = null, val mine: Boolean = false, val body: String, val createdAt: Long = 0)
+@Serializable private data class AllianceResponse(val alliance: AllianceDto)
+@Serializable private data class AlliancesResponse(val alliances: List<AllianceDto>)
+@Serializable private data class PreviewResponse(val preview: InvitePreviewDto)
+@Serializable private data class MessagesResponse(val messages: List<AllianceMessageDto>)
+@Serializable private data class MessageResponse(val message: AllianceMessageDto)
 
 /** Events of one coach reply. */
 sealed interface CoachEvent {
@@ -78,7 +103,9 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     private val refreshLock = Mutex()
     /** Coach replies can stream for a while; no read timeout between tokens beyond a minute. */
     private val streamHttp = http.newBuilder().readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
-    private val _upgradeRequired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** The realtime socket stays open while a social screen is showing; pings keep proxies from closing it. */
+    private val socketHttp = http.newBuilder().readTimeout(0, java.util.concurrent.TimeUnit.SECONDS).pingInterval(25, java.util.concurrent.TimeUnit.SECONDS).build()
+    private val _upgradeRequired =MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** Emits when the server answers 426: show the blocking "Update The Bridge" screen. */
     val upgradeRequired = _upgradeRequired.asSharedFlow()
 
@@ -160,6 +187,44 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun uploadPhoto(jpeg: ByteArray): String =
         json.decodeFromString<PhotoResponse>(call("PUT", "/v1/me/photo", null, authed = true, raw = jpeg.toRequestBody(JPEG), extraHeaders = mapOf("X-Photo-Consent" to "1"))).photoUrl
     suspend fun deletePhoto() { call("DELETE", "/v1/me/photo", null, authed = true) }
+
+    // --- Community and alliances ---
+    suspend fun community(goalId: String): CommunityDto = json.decodeFromString(call("GET", "/v1/community?goalId=$goalId", null, authed = true))
+    /** Progress to share. The server checks it against its own completions and the user's sharing setting. */
+    suspend fun announce(goalId: String, kind: String, value: Int?) {
+        call("POST", "/v1/community/posts", buildJsonObject { put("goalId", goalId); put("kind", kind); if (value != null) put("value", value) }, authed = true)
+    }
+    suspend fun react(postId: String, kind: String, on: Boolean) { call(if (on) "PUT" else "DELETE", "/v1/community/posts/$postId/reactions/$kind", null, authed = true) }
+    suspend fun report(targetKind: String, targetId: String, reason: String) {
+        call("POST", "/v1/reports", buildJsonObject { put("targetKind", targetKind); put("targetId", targetId); put("reason", reason) }, authed = true)
+    }
+    suspend fun block(userId: String) { call("PUT", "/v1/blocks/$userId", null, authed = true) }
+
+    suspend fun alliances(): List<AllianceDto> = json.decodeFromString<AlliancesResponse>(call("GET", "/v1/alliances", null, authed = true)).alliances
+    suspend fun createAlliance(name: String, planMode: String, goalId: String): AllianceDto =
+        json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances", buildJsonObject { put("name", name); put("planMode", planMode); put("goalId", goalId) }, authed = true)).alliance
+    suspend fun previewAlliance(code: String): InvitePreviewDto = json.decodeFromString<PreviewResponse>(call("GET", "/v1/alliances/preview/$code", null, authed = true)).preview
+    suspend fun joinAlliance(code: String, goalId: String?): AllianceDto =
+        json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances/join", buildJsonObject { put("code", code); if (goalId != null) put("goalId", goalId) }, authed = true)).alliance
+    suspend fun leaveAlliance(id: String) { call("POST", "/v1/alliances/$id/leave", null, authed = true) }
+    suspend fun applyPlanNow(id: String) { call("POST", "/v1/alliances/$id/apply-now", null, authed = true) }
+    suspend fun allianceMessages(id: String): List<AllianceMessageDto> = json.decodeFromString<MessagesResponse>(call("GET", "/v1/alliances/$id/messages", null, authed = true)).messages
+    suspend fun sendAllianceMessage(id: String, clientId: String, body: String): AllianceMessageDto =
+        json.decodeFromString<MessageResponse>(call("POST", "/v1/alliances/$id/messages", buildJsonObject { put("clientId", clientId); put("body", body) }, authed = true)).message
+
+    /** This install, for push and the user's home time zone. [pushToken] is null until Firebase is configured. */
+    suspend fun registerDevice(id: String, pushToken: String?) {
+        call("PUT", "/v1/devices", buildJsonObject {
+            put("id", id); put("platform", "android"); put("pushToken", pushToken); put("appVersion", BuildConfig.VERSION_NAME)
+            put("locale", java.util.Locale.getDefault().toLanguageTag()); put("timezone", tz)
+        }, authed = true)
+    }
+
+    /** Current access token for the realtime socket's first frame (never put in the URL). */
+    fun accessToken(): String? = vault.read()?.access
+    /** Opens the realtime socket; the caller sends the auth frame. */
+    fun openSocket(listener: okhttp3.WebSocketListener): okhttp3.WebSocket =
+        socketHttp.newWebSocket(Request.Builder().url(BuildConfig.API_BASE.replaceFirst("http", "ws") + "/v1/rt").header("X-Platform", "android").header("X-App-Version", BuildConfig.VERSION_NAME).build(), listener)
 
     suspend fun push(mutations: List<MutationDto>): PushResponse =
         json.decodeFromString(call("POST", "/v1/sync/push", buildJsonObject { put("mutations", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(MutationDto.serializer()), mutations)) }, authed = true))

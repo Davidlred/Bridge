@@ -52,6 +52,30 @@ import app.thebridge.feature.today.TodayScreen
 import app.thebridge.feature.today.TodayUi
 import app.thebridge.feature.shell.UpgradeScreen
 import app.thebridge.ui.components.UiText
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+import app.thebridge.data.local.AllianceMessageEntity
+import app.thebridge.data.remote.AllianceDto
+import app.thebridge.data.remote.AllianceFeedDto
+import app.thebridge.data.remote.CommunityDto
+import app.thebridge.data.remote.DoneCount
+import app.thebridge.data.remote.InvitePreviewDto
+import app.thebridge.data.remote.MemberDto
+import app.thebridge.data.remote.PaceDto
+import app.thebridge.data.remote.PostDto
+import app.thebridge.data.remote.PreviewTaskDto
+import app.thebridge.data.remote.ReactionCounts
+import app.thebridge.data.remote.SharedPlanDto
+import app.thebridge.feature.community.AllianceChatScreen
+import app.thebridge.feature.community.AllianceChatUi
+import app.thebridge.feature.community.ChatActions
+import app.thebridge.feature.community.CommunityActions
+import app.thebridge.feature.community.CommunityScreen
+import app.thebridge.feature.community.CommunitySheet
+import app.thebridge.feature.community.CommunityTab
+import app.thebridge.feature.community.CommunityUi
+import app.thebridge.feature.community.CreateAllianceContent
+import app.thebridge.feature.community.JoinAllianceContent
 import app.thebridge.ui.theme.BridgeTheme
 import app.thebridge.ui.theme.LocalBridgeColors
 import org.junit.Rule
@@ -158,6 +182,47 @@ class ScreenshotTest {
         ReviewStep(ob(OnboardingDraft(goalId = "g", step = Step.Review, goal = "Run a half marathon in under 2 hours.", deadline = "2027-02-09", label = "Half marathon", plan = PlanState.Done,
             feasibility = Feasibility("realistic", "Seventeen weeks is enough with three runs a week.", null),
             tasks = listOf(DraftTask("a", "Easy run — 5 km", "High", ai = true), DraftTask("b", "Mobility — 10 min", ai = true), DraftTask("c", "In bed by 10:30 PM", ai = true)))), {}, {}, { _, _ -> }, {}, {}, {})
+    }
+    // --- Milestone 4 ---
+    private val now = java.time.LocalDateTime.of(2026, 10, 13, 9, 41).atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+    private val hour = 3_600_000L
+    private val posts = listOf(
+        PostDto("p1", "u1", name = "Jonas", kind = "streak", value = 30, createdAt = now - 2 * hour, reactions = ReactionCounts(12, 4, 6)),
+        PostDto("p2", "u2", name = "Priya", kind = "day_complete", createdAt = now - 4 * hour, reactions = ReactionCounts(8, 11, 2), reacted = listOf("keepGoing")),
+        PostDto("p3", "me", mine = true, name = "Sharon", kind = "milestone", value = 25, createdAt = now - 26 * hour, reactions = ReactionCounts(5, 2, 7)),
+    )
+    private val members = listOf("Ms Okafor", "Jide", "Funmi", "Sharon", "Lola", "Bayo").mapIndexed { i, n -> MemberDto("u$i", n, if (i == 0) "owner" else "member", away = i == 4, me = n == "Sharon") }
+    private val calc = AllianceDto("a1", "Calc Prep 12B", "shared", "CALC-2026", 15, "2026-09-28", "member", "g1", 9, members, 6,
+        SharedPlanDto("Ms", "Score 75% or higher on the Grade 12 math final.", "2026-12-04", DoneCount(1, 3), DoneCount(9, 18)),
+        listOf(AllianceFeedDto("Jide", "completed", "Work 10 past-paper questions", now - 3 * hour), AllianceFeedDto("Lola", "joined", null, now - 30 * hour)))
+    private val dawn = AllianceDto("a2", "Dawn Runners", "own", "DAWN-4821", 15, "2026-09-01", "owner", "g1", 14, members.take(4), 4)
+    private val locked = CommunityUi(goal = marathon, community = CommunityDto(unlocked = false, streak = 4), loading = false)
+    private val open = CommunityUi(goal = marathon, community = CommunityDto(unlocked = true, streak = 9, posts = posts), loading = false)
+    @Test fun communityLocked() = snap("community-locked") { CommunityScreen(locked, CommunityActions(), day, now) }
+    @Test fun communityPreview() = snap("community-preview") { CommunityScreen(locked.copy(previewing = true), CommunityActions(), day, now) }
+    @Test fun communityPreviewAlliance() = snap("community-preview-alliance") { CommunityScreen(locked.copy(previewing = true, tab = CommunityTab.Alliance), CommunityActions(), day, now) }
+    @Test fun communityFeed() = snap("community-feed") { CommunityScreen(open, CommunityActions(), day, now) }
+    @Test fun communityFeedError() = snap("community-feed-error") { CommunityScreen(open.copy(community = null, feedError = true), CommunityActions(), day, now) }
+    @Test fun allianceNone() = snap("alliance-none") { CommunityScreen(open.copy(tab = CommunityTab.Alliance), CommunityActions(), day, now) }
+    @Test fun allianceShared() = snap("alliance-shared") { CommunityScreen(open.copy(tab = CommunityTab.Alliance, alliances = listOf(calc, dawn)), CommunityActions(), day, now) }
+    @Test fun allianceCreate() = snap("alliance-create") {
+        Box(Modifier.padding(24.dp)) { CreateAllianceContent(CommunitySheet.Create("Dawn Runners", shared = true), marathon, {}, {}, {}) }
+    }
+    @Test fun allianceJoinPreview() = snap("alliance-join-preview") {
+        Box(Modifier.padding(24.dp)) {
+            JoinAllianceContent(CommunitySheet.Join("CALC-2026", preview = InvitePreviewDto("a1", "Calc Prep 12B", "shared", "Ms", 11, 15, 4, "Score 75% or higher on the Grade 12 math final.", "Math final", "2026-12-04",
+                listOf(PreviewTaskDto("Work 10 past-paper questions", "High", "After school"), PreviewTaskDto("Review one section of the formula sheet", "Medium", "7:30 PM")), PaceDto(16, 68, 53))), {}, {}, {})
+        }
+    }
+    @Test fun allianceJoinError() = snap("alliance-join-error") { Box(Modifier.padding(24.dp)) { JoinAllianceContent(CommunitySheet.Join("DAWN-48", error = UiText.Res(R.string.join_bad_format)), {}, {}, {}) } }
+    @Test fun allianceChat() = snap("alliance-chat") {
+        AllianceChatScreen(AllianceChatUi(calc, listOf(
+            AllianceMessageEntity("c1", "a1", "s1", "u1", "Jide", "Did anyone get question 7? The integral looks wrong.", false, now - 50 * 60_000),
+            AllianceMessageEntity("c2", "a1", "s2", "me", "Sharon", "It's by parts twice. Check the sign on the second step.", true, now - 40 * 60_000),
+            AllianceMessageEntity("c3", "a1", "s3", "u0", "Ms", "Good. Tomorrow's past paper is up after school.", false, now - 20 * 60_000),
+            AllianceMessageEntity("c4", "a1", null, null, null, "On my way to the library", true, now - 60_000, "queued"),
+            AllianceMessageEntity("c5", "a1", null, null, null, "See you there", true, now, "failed"),
+        ), "Same"), ChatActions(), now)
     }
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }

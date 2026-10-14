@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 
 /** Today tab: wires [TodayScreen] and its sheets to the ViewModel. */
 @Composable
-fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, vm: TodayViewModel = hiltViewModel()) {
+fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, onOpenCommunity: (goalId: String) -> Unit = {}, vm: TodayViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }        // "task:<id>" | "add" | "goal:<id>" | "limit"
@@ -51,7 +51,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, v
         openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },
         openJournal = onOpenJournal, onNote = vm::onRealityNote, useDate = { id, d -> vm.useSuggestedDate(id, d) }, recheck = vm::recheck,
-        retryImages = { vm.retryImages(it) },
+        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity,
         openNotificationSettings = if (notificationsOn || ui.goals.isEmpty()) null else { {
             ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
         } },

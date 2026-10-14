@@ -59,6 +59,7 @@ class TodayViewModel @Inject constructor(
     val store: DataStore<Preferences>,
     private val toaster: Toaster,
     session: SessionManager,
+    private val social: app.thebridge.data.SocialRepository,
 ) : ViewModel() {
     private val open = MutableStateFlow(saved.get<String>("open"))
     private val view = MutableStateFlow(GoalView.Today)
@@ -80,7 +81,10 @@ class TodayViewModel @Inject constructor(
 
     fun toggle(taskId: String, done: Boolean) = viewModelScope.launch {
         repo.setDone(taskId, done)
-        if (done) checkCelebrate()
+        if (done) {
+            launch { repo.goalOf(taskId)?.let { social.announce(it) } }      // share progress, if the user allows it
+            checkCelebrate()
+        }
     }
 
     /** All of a goal's tasks done for the first time today: celebrate once per goal per day. */

@@ -69,6 +69,7 @@ data class OnboardingDraft(
     val label: String = "",
     val tasks: List<DraftTask> = emptyList(),
     val feasibility: Feasibility? = null,
+    val category: String? = null,
     val genStartedAt: Long = 0,
     /** The image request itself failed (offline, daily limit), so no image rows exist to report it. */
     val imagesError: Boolean = false,
@@ -201,7 +202,7 @@ class OnboardingViewModel @Inject constructor(
                 val plan = ai.plan(d.goal.trim(), d.deadline!!, LocalDay.today(), d.routine.trim(), extra.value.second)
                 if (plan.needsClarification != null) { edit { it.copy(plan = PlanState.Clarify, clarification = plan.needsClarification) }; return@launch }
                 edit {
-                    it.copy(plan = PlanState.Done, label = it.label.ifBlank { plan.label.ifBlank { GoalText.autoLabel(it.goal) } }, feasibility = plan.feasibility,
+                    it.copy(plan = PlanState.Done, label = it.label.ifBlank { plan.label.ifBlank { GoalText.autoLabel(it.goal) } }, feasibility = plan.feasibility, category = plan.category,
                         tasks = plan.tasks.map { t -> DraftTask(title = t.title, priority = t.priority, timeOfDay = t.timeOfDay, minutes = t.minutes, rationale = t.rationale, ai = true) })
                 }
             } catch (e: ApiException) {
@@ -270,7 +271,7 @@ class OnboardingViewModel @Inject constructor(
         val d = s.draft
         viewModelScope.launch {
             goals.createGoal(NewGoal(
-                id = d.goalId, label = d.label, statement = d.goal, deadline = s.deadline!!, routine = d.routine.trim().ifBlank { null }, feasibility = d.feasibility,
+                id = d.goalId, label = d.label, statement = d.goal, deadline = s.deadline!!, routine = d.routine.trim().ifBlank { null }, feasibility = d.feasibility, category = d.category,
                 tasks = d.tasks.filter { it.title.isNotBlank() }.map { NewTask(it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, ai = it.ai) },
             ))
             store.edit { it.remove(KEY) }

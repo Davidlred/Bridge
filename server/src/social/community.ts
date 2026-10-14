@@ -47,7 +47,7 @@ export async function communityRoutes(app: FastifyInstance) {
     return {
       unlocked, streak, category, widened,
       posts: rows.map(p => ({
-        id: p.id, mine: p.user_id === req.userId, name: firstName(p.display_name), kind: p.kind, value: p.value, label: p.label,
+        id: p.id, userId: p.user_id, mine: p.user_id === req.userId, name: firstName(p.display_name), kind: p.kind, value: p.value, label: p.label,
         createdAt: (p.created_at as Date).getTime(), reactions: { respect: p.respect, keepGoing: p.keep_going, inspired: p.inspired },
         reacted: (p.mine as string[]).map(k => (k === 'keep_going' ? 'keepGoing' : k)),
       })),
