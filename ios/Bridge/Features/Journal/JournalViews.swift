@@ -1,6 +1,6 @@
 import SwiftUI
 
-let moodLabels: [LocalizedStringKey] = ["Drained", "Low", "Steady", "Good", "Strong"]
+@MainActor let moodLabels: [LocalizedStringKey] = ["Drained", "Low", "Steady", "Good", "Strong"]
 
 enum SaveState { case idle, saving, saved, savedOffline }
 

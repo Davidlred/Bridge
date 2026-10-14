@@ -25,7 +25,13 @@ app/src/main/java/app/thebridge/
   nav/AppNav.kt                   session phases → splash / auth flow / tabs, type-safe routes, bottom bar
   feature/auth/                   Welcome, Sign up, Log in, AuthViewModel (email, Google, Apple)
   feature/shell/                  tab roots, profile + account actions, offline banner, session-expired + delete sheets
-  feature/coach/CoachMascot.kt    animated coach (Idle/Listening/Thinking/Talking/Happy)
+  feature/onboarding/             goal → routine → photo (consent) → generating → plan review; drafts survive process death
+  feature/today/                  goal cards, bridge arc, streak / days left / drift, tasks, Reality Check, sheets, celebration
+  feature/coach/                  streaming coach chat, mascot states, Study Mode, CoachMascot.kt
+  feature/journal/                mood + reflection with autosave, history, conflict resolution
+  domain/Progress.kt              progress, streak, drift, deadline rules (unit-tested; same cases as iOS)
+  data/GoalRepository.kt, AiRepository.kt, JournalRepository.kt, CoachRepository.kt
+  data/reminders/Reminders.kt     local reminders (daily, task times, streak at risk), re-armed after boot and time-zone changes
   data/remote/ApiClient.kt        all HTTP, token refresh (single flight), error codes
   data/session/                   SessionManager (phases, sign-in/out, delete), Keystore token vault
   data/local/Database.kt          Room entities, DAOs, outbox-in-transaction, local-day rule

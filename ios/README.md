@@ -23,7 +23,8 @@ Bridge/
   Core/Sync/SyncEngine.swift     outbox push / change pull
 ```
 Also: `Core/Networking/APIClient.swift` (HTTP, token refresh, Keychain), `Core/Sync/ChangeApplier.swift`, `Features/Auth/` (Welcome, Sign up, Log in, re-auth sheet, AuthModel), `Features/Shell/ShellViews.swift` (tab roots, profile, delete account, offline banner).
-Still to write: goal onboarding, `GoalDetailView`, coach chat, journal, `CommunityView`, `StudyModeView`, `GameNightView`. Build each from the matching screen in `design/The Bridge v4.dc.html`.
+Milestones 2–3: `Core/Domain/Progress.swift`, `Core/Goals/` (GoalStore, reminders), `Features/Onboarding`, `Features/Today`, `Features/Coach` (chat + Study Mode), `Features/Journal`.
+Still to write: Community, alliances, Game Night, DMs, paywall (milestones 4–6).
 
 ## Conventions
 - One `@Observable` model per feature, injected via `.environment`. Views stay dumb.

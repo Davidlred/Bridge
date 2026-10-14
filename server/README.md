@@ -42,6 +42,15 @@ Deploy: `fly launch --no-deploy`, `fly secrets set …` (every key in `.env.exam
 
 Goals also sync `routine`, `realityNote` ("Why I started") and `feasibility`. Deleting a goal deletes its images; deleting the account deletes the photo and all images at once (the rest of the account after 30 days).
 
+## API (milestone 3)
+| Route | Notes |
+|---|---|
+| `POST /v1/coach/messages` | Server-Sent Events: `token` {text}… then `suggestion` {title, rationale, priority, timeOfDay}? then `done` (or `error`). Context: goals, today's tasks, streak, last 20 messages; the journal only if `settings.coachReadsJournal` is true. 30/day. Self-harm messages get a supportive reply with resources instead of the model. |
+| `PATCH /v1/me` | `{coachName?, displayName?}`. Empty or offensive coach names become "Arc". |
+| sync entity `journal` | `{goalId, localDate, mood, body, baseVersion, resolve?}`. Bodies are encrypted at rest with a per-user key wrapped by `JOURNAL_KEK`. A stale `baseVersion` (or a second entry for the same day) keeps both versions: the incoming one is current, the other is returned with `conflictOf` until the client sends `resolve: true`. |
+
+Coach conversations are stored on the device, not the server.
+
 Images are generated in the API process after the request returns. That is fine for one machine; move it to the worker queue (BullMQ) before running several.
 
 Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, completions are a set (an uncomplete only wins if newer), 3 active goals without `plus` (`goal_limit`), shared-plan tasks are read-only (`shared_task_readonly`), the goal deadline is only ever what the client sent.
