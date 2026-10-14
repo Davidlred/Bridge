@@ -57,7 +57,7 @@ final class CoachModel {
         try? ctx.save(); reload()
         let goals: [[String: Any]] = store.goals.prefix(3).map { g in
             ["id": g.id.uuidString.lowercased(), "label": g.label, "statement": g.statement, "deadline": g.deadline, "day": g.progress.day, "total": g.progress.total, "streak": g.progress.streak,
-             "tasks": g.tasks.prefix(20).map { ["title": $0.title, "done": $0.done, "priority": $0.priority, "timeOfDay": $0.timeOfDay ?? NSNull()] }]
+             "tasks": g.tasks.prefix(20).map { t -> [String: Any] in ["title": t.title, "done": t.done, "priority": t.priority, "timeOfDay": t.timeOfDay as Any? ?? NSNull()] }]
         }
         let body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
                                    "focusGoalId": focus?.id.uuidString.lowercased() ?? NSNull()]
