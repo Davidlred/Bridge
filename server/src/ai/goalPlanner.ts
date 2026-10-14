@@ -15,7 +15,8 @@ Rules:
 - Health, money or legal goals: general guidance only; add "check with a professional" to a rationale where relevant.
 - If the goal is harmful (self-harm, disordered eating, illegal activity), set needsClarification to a supportive sentence and return no tasks.
 - label: 1 to 3 words naming the goal (e.g. "Half marathon").
-Output ONLY a JSON object with keys: needsClarification, label, goal, feasibility {verdict, reason, suggestedDeadline}, tasks [{title, priority, timeOfDay, minutes, rationale}]. No prose, no code fences.`;
+- category: one of fitness, study, language, career, money, creative, health, habits, other.
+Output ONLY a JSON object with keys: needsClarification, label, goal, category, feasibility {verdict, reason, suggestedDeadline}, tasks [{title, priority, timeOfDay, minutes, rationale}]. No prose, no code fences.`;
 
 function extractJSON(raw: string): unknown {
   const s = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();

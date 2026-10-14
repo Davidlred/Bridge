@@ -49,7 +49,23 @@ Goals also sync `routine`, `realityNote` ("Why I started") and `feasibility`. De
 | `PATCH /v1/me` | `{coachName?, displayName?}`. Empty or offensive coach names become "Arc". |
 | sync entity `journal` | `{goalId, localDate, mood, body, baseVersion, resolve?}`. Bodies are encrypted at rest with a per-user key wrapped by `JOURNAL_KEK`. A stale `baseVersion` (or a second entry for the same day) keeps both versions: the incoming one is current, the other is returned with `conflictOf` until the client sends `resolve: true`. |
 
-Coach conversations are stored on the device, not the server.
+Coach conversations sync across devices (sync entity `chat`, encrypted like the journal). The coach route stores both the message and the reply, including a partial reply when the stream is interrupted.
+
+## API (milestone 4)
+| Route | Notes |
+|---|---|
+| `GET /v1/community?goalId&before` | Feed for the goal's category. Locked until a 7-day streak on that goal (computed here from completions, never trusted from the device); stays open after. A quiet category widens to everyone (`widened: true`). First names only. |
+| `POST /v1/community/posts` | `{goalId, kind: streak\|milestone\|day_complete, value?}`. Respects `settings.share` (`nothing`, `streaks` = default, `all`): 204 when not shared. Streak claims above the real streak get `streak_mismatch`. One post per streak value / milestone / day. |
+| `PUT\|DELETE /v1/community/posts/:id/reactions/:kind` | `respect`, `keepGoing`, `inspired`. |
+| `POST /v1/reports` · `PUT\|DELETE /v1/blocks/:userId` | Reported items disappear for the reporter at once and for everyone after 3 reporters. Blocks hide both ways (feed, members, chat). |
+| `POST /v1/alliances` | `{name, planMode: own\|shared, goalId}`. Needs Community open on that goal. Invite code `DAWN-4821`. Cap 15 (50 with the owner's `alliance_plus`). |
+| `GET /v1/alliances` · `GET /v1/alliances/:id` | Members, `away` (no completion in 3 days), collective streak (days every active member who had joined did something), shared-plan progress, activity feed (only shared-plan task titles are named). |
+| `GET /v1/alliances/preview/:code` · `POST /v1/alliances/join` | Errors: `invalid_code`, `already_member`, `alliance_full`, `plan_ended` (410), `goal_limit`, `goal_required` (own plan needs one of your goals). Joining a shared plan creates the goal (same deadline) and its read-only tasks; late joiners start at day 1. |
+| `POST /v1/alliances/:id/leave` | A leaving lead hands over to the longest-standing member; leaving members keep the goal as a personal one. |
+| `POST /v1/alliances/:id/apply-now` | Lead only. The lead's task edits otherwise reach members on their next local morning; this applies them now to tasks not yet ticked today. |
+| `GET\|POST /v1/alliances/:id/messages` | Alliance chat (not end-to-end encrypted, `notEncrypted: true`). Idempotent by `clientId`. Slurs are refused (`message_blocked`); a fast model moderates just after posting and hides what it flags. `@name` mentions push, at most 3 a day per person. |
+| `GET /v1/rt` (WebSocket) | First frame `{type:"auth", token}` (close 4401 if bad). Then `{type:"message", allianceId, message}` events for the user's alliances; send `{type:"subscribe"}` after joining one. Redis pub/sub carries events between machines. |
+| `PUT /v1/devices` | `{id, platform, pushToken?, timezone?}`. Push goes through FCM v1 / APNs when their keys are set; otherwise it's skipped. |
 
 Images are generated in the API process after the request returns. That is fine for one machine; move it to the worker queue (BullMQ) before running several.
 
@@ -62,4 +78,4 @@ Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, com
 
 Storage: set `S3_BUCKET` (+ `S3_ENDPOINT`, credentials) in production, e.g. Fly Tigris. Without it files go to `STORAGE_DIR` on local disk.
 
-Next to build: journal sync (per-user encryption key), coach SSE route, alliances create/join/leave + shared-plan versioning, WebSocket realtime + game engine, RevenueCat webhook, moderation + push workers, account export.
+Next to build: Game Night engine, rankings and Hall of Fame (milestone 5); RevenueCat webhook, E2E DMs, account export (milestone 6). Chat moderation and pushes run in the API process; move them to the worker queue with the image jobs.

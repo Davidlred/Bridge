@@ -47,6 +47,7 @@ export const Plan = z.object({
   needsClarification: z.string().max(200).nullable(),
   label: z.string().min(1).max(24),
   goal: z.string().min(8).max(200),
+  category: z.enum(['fitness', 'study', 'language', 'career', 'money', 'creative', 'health', 'habits', 'other']).catch('other').default('other'),
   feasibility: Feasibility,
   tasks: z.array(PlanTask).max(6),
 });

@@ -9,6 +9,7 @@ import { auth, issueSession, revokeAllSessions, rotateSession } from './tokens.j
 import { verifyIdToken, type Identity } from './oidc.js';
 import { signedUrl, storage, userPrefix } from '../storage.js';
 import { deletePhotoAndFaceImages } from '../goals/routes.js';
+import { leave } from '../social/alliances.js';
 
 const ARGON = { type: argon2.argon2id, memoryCost: 64 * 1024, timeCost: 3 } as const;
 const MAX_FAILED_LOGINS = 5;
@@ -74,7 +75,7 @@ input{box-sizing:border-box;width:100%;height:52px;border-radius:14px;border:1px
 @media(prefers-color-scheme:dark){body{background:#0C0C0C;color:#F2F2F2}p{color:#8C8C8C}input{background:#151515;color:#F2F2F2;border-color:rgba(255,255,255,.12)}button{background:#E8643A;color:#1A0C06}}</style><main><h1>${title}</h1>${body}</main></html>`;
 
 export async function authRoutes(app: FastifyInstance) {
-  const strict = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
+  const strict = { config: { rateLimit: { max: env.NODE_ENV === 'test' ? 1000 : 20, timeWindow: '1 minute' } } };
 
   app.post('/v1/auth/email/signup', strict, async req => {
     const b = parse(SignUp, req.body);
@@ -149,6 +150,8 @@ export async function authRoutes(app: FastifyInstance) {
     await deletePhotoAndFaceImages(req.userId);
     await sql`delete from journal_entries where user_id = ${req.userId}`;
     await sql`delete from coach_messages where user_id = ${req.userId}`;
+    // Alliances: leads hand over to the longest-standing member; members' shared goals become personal ones.
+    for (const m of await sql`select alliance_id from alliance_members where user_id = ${req.userId} and status <> 'left'`) await sql.begin(tx => leave(tx, m.alliance_id, req.userId));
     await sql`update users set journal_dek = null where id = ${req.userId}`;
     await sql`delete from goal_images where user_id = ${req.userId}`;
     await storage.deletePrefix(userPrefix(req.userId)).catch(e => req.log.error({ err: e.message }, 'storage_delete_failed'));

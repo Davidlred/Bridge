@@ -7,6 +7,7 @@ import { deleteGoalImages } from '../goals/routes.js';
 import { Feasibility } from '../ai/planSchema.js';
 import { decryptText, encryptText, journalKey } from '../crypto.js';
 import { uuidv7 } from '../util.js';
+import { applySharedPlans, leadTasksChanged } from '../social/alliances.js';
 
 export const FREE_GOAL_LIMIT = 3;
 const PULL_PAGE = 1000;
@@ -105,6 +106,13 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
 }
 
 async function applyTask(tx: Tx, userId: string, m: Mutation) {
+  await applyTaskChange(tx, userId, m);
+  // The lead of a shared-plan alliance edited the plan: members get it the next local morning.
+  const [t] = await tx`select goal_id from tasks where id = ${m.entityId}`;
+  if (t) await leadTasksChanged(tx, t.goal_id);
+}
+
+async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
   const [row] = await tx`select user_id, origin, deleted_at from tasks where id = ${m.entityId} for update`;
   if (row && row.user_id !== userId) reject('forbidden');
   // Shared-plan tasks belong to the alliance lead; members can complete them but never change them.
@@ -263,6 +271,8 @@ export async function syncRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { since?: string } }>('/v1/sync', { onRequest: auth }, async req => {
     const since = z.coerce.number().int().nonnegative().catch(0).parse(req.query.since);
+    // Shared-plan updates take effect on the member's local morning; bring them in before reading changes.
+    await applySharedPlans(req.userId);
     const rows = await sql`select server_seq, entity, entity_id, key, op from changes where user_id = ${req.userId} and server_seq > ${since} order by server_seq limit ${PULL_PAGE}`;
     // Keep only the latest change per row; current state is read from the tables.
     const latest = new Map<string, (typeof rows)[number]>();

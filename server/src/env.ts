@@ -28,6 +28,12 @@ const Env = z.object({
   // Wraps each user's journal key (32 bytes, base64). Defaults to a value derived from the JWT key; set it explicitly in production
   // and never change it without re-wrapping the keys, or existing journals become unreadable.
   JOURNAL_KEK: z.string().optional(),
+  // Push notifications. Without these, pushes are skipped (events still show in the app).
+  FCM_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  APNS_KEY_P8: z.string().optional(),
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_BUNDLE_ID: z.string().default('app.thebridge.Bridge'),
   // Signs short-lived media links. Defaults to a value derived from the JWT key.
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 });
