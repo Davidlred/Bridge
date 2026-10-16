@@ -21,3 +21,7 @@ xcuserdata/
 
 # Server dev media storage
 server/.data/
+
+# Firebase config for push: each developer drops their own copy in android/app/ (the repo is public)
+android/app/google-services.json
+ios/Bridge/GoogleService-Info.plist
