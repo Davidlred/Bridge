@@ -215,7 +215,8 @@ struct HallOfFameContent: View {
                         }
                     }
                     .tint(Theme.okFill).disabled(badges == nil).padding(.horizontal, 16).frame(minHeight: 60).card(16)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 18) {
+                    // Top-aligned: tiles with a progress bar are taller, and badges in a row should line up.
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3), spacing: 18) {
                         ForEach(Self.defs.indices, id: \.self) { i in tile(Self.defs[i], byKey[Self.defs[i].key]) }
                     }
                 }
