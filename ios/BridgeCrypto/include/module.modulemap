@@ -1,0 +1,4 @@
+module bridge_cryptoFFI {
+    header "bridge_cryptoFFI.h"
+    export *
+}
