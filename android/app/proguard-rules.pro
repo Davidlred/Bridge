@@ -9,3 +9,8 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+# Encrypted DMs: UniFFI bindings call the Rust library through JNA, which uses reflection
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keep class uniffi.bridge_crypto.** { *; }
+-dontwarn java.awt.**

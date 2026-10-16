@@ -20,6 +20,8 @@ android {
         targetSdk = 35       // bump to the Play-required level at submission time
         versionCode = 1
         versionName = "1.0.0"
+        // The ABIs the Rust crypto library is built for (JNA also ships older ones we don't need).
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         buildConfigField("String", "API_BASE", "\"https://api.thebridge.app\"")
         // OAuth *web* client id from Google Cloud (the same value goes in the server's GOOGLE_CLIENT_IDS). Empty = Google sign-in reports unavailable.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${prop("bridge.googleWebClientId", "")}\"")
@@ -38,7 +40,25 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
+    // Olm for encrypted DMs: libbridge_crypto.so, built from ../crypto by the task below.
+    sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("rustJniLibs"))
 }
+
+// Builds the Rust crypto library (vodozemac) for each Android ABI when the crate changes. Needs rustup with the
+// Android targets, cargo-ndk and the NDK (see crypto/build-android.sh). Kotlin bindings are generated into
+// src/main/java/uniffi and committed.
+val buildCrypto by tasks.registering(Exec::class) {
+    val crate = rootProject.file("../crypto")
+    inputs.dir(crate.resolve("src")); inputs.file(crate.resolve("Cargo.toml")); inputs.file(crate.resolve("Cargo.lock"))
+    outputs.dir(layout.buildDirectory.dir("rustJniLibs"))
+    val ndk = android.sdkDirectory.resolve("ndk").listFiles()?.filter { it.isDirectory }?.maxByOrNull { it.name }
+    if (ndk != null) environment("ANDROID_NDK_HOME", ndk.absolutePath)
+    // On Windows use Git Bash (a plain "bash" may be WSL, which can't see this toolchain).
+    val gitBash = File("C:/Program Files/Git/bin/bash.exe")
+    workingDir = crate
+    commandLine(if (gitBash.exists()) gitBash.absolutePath else "bash", "build-android.sh", "../android/app/build/rustJniLibs")
+}
+tasks.named("preBuild") { dependsOn(buildCrypto) }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
@@ -58,6 +78,7 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.work.runtime)
+    implementation("${libs.jna.get()}@aar")              // UniFFI bindings call the Rust library through JNA
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation)

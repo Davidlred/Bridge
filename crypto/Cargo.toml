@@ -1,0 +1,28 @@
+[package]
+name = "bridge_crypto"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Olm (vodozemac) for The Bridge's encrypted direct messages, with UniFFI bindings for Kotlin and Swift."
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "bridge_crypto"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+vodozemac = "0.9"
+uniffi = { version = "0.28", features = ["cli"] }
+thiserror = "1"
+sha2 = "0.10"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
