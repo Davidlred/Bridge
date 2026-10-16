@@ -131,6 +131,50 @@ import SwiftData
     }
 }
 
+/// This install's Olm account (identity and one-time keys) as an encrypted pickle. One row.
+@Model final class OlmAccountRow {
+    @Attribute(.unique) var id: Int
+    var pickle: String
+    var registered: Bool
+    init(pickle: String, registered: Bool) { self.id = 0; self.pickle = pickle; self.registered = registered }
+}
+
+/// One Olm session per device we talk to (the other person's devices and our own other devices).
+@Model final class OlmSessionRow {
+    @Attribute(.unique) var deviceId: String
+    var peerUserId: String
+    var curve25519: String
+    var ed25519: String
+    var pickle: String
+    var updatedAt: Date
+    init(deviceId: String, peerUserId: String, curve25519: String, ed25519: String, pickle: String) {
+        self.deviceId = deviceId; self.peerUserId = peerUserId; self.curve25519 = curve25519; self.ed25519 = ed25519; self.pickle = pickle; self.updatedAt = .now
+    }
+}
+
+/// Decrypted direct messages, kept only on this device. `id` is the sender's client id.
+@Model final class DmMessageRow {
+    @Attribute(.unique) var id: String
+    var peerUserId: String
+    var mine: Bool
+    var body: String
+    var createdAt: Date
+    var status: String             // sent | queued | failed | no_devices | undecryptable
+    var read: Bool
+    init(id: String, peerUserId: String, mine: Bool, body: String, createdAt: Date = .now, status: String = "sent", read: Bool = false) {
+        self.id = id; self.peerUserId = peerUserId; self.mine = mine; self.body = body; self.createdAt = createdAt; self.status = status; self.read = read
+    }
+}
+
+/// The other person: name, and their device keys when we last verified the safety number.
+@Model final class DmPeerRow {
+    @Attribute(.unique) var userId: String
+    var name: String
+    var verifiedKeys: String?
+    var currentKeys: String?
+    init(userId: String, name: String) { self.userId = userId; self.name = name }
+}
+
 /// Every local mutation writes one of these in the same transaction.
 @Model final class OutboxEntity {
     @Attribute(.unique) var id: UUID   // idempotency key on the server
@@ -146,7 +190,8 @@ import SwiftData
 }
 
 enum Persistence {
-    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self, ChatMessageEntity.self, SocialCacheEntity.self, AllianceMessageEntity.self]
+    static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self, ChatMessageEntity.self, SocialCacheEntity.self, AllianceMessageEntity.self,
+                                                        OlmAccountRow.self, OlmSessionRow.self, DmMessageRow.self, DmPeerRow.self]
     static let container: ModelContainer = {
         do { return try ModelContainer(for: Schema(models)) } catch { fatalError("Could not open the local database: \(error)") }
     }()
@@ -157,6 +202,8 @@ enum Persistence {
         try ctx.delete(model: OutboxEntity.self); try ctx.delete(model: CompletionEntity.self); try ctx.delete(model: JournalEntity.self)
         try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self); try ctx.delete(model: GoalImageEntity.self); try ctx.delete(model: ChatMessageEntity.self)
         try ctx.delete(model: SocialCacheEntity.self); try ctx.delete(model: AllianceMessageEntity.self)
+        try ctx.delete(model: OlmAccountRow.self); try ctx.delete(model: OlmSessionRow.self); try ctx.delete(model: DmMessageRow.self); try ctx.delete(model: DmPeerRow.self)
+        OlmPickleKey.reset()
         try ctx.save()
         UserDefaults.standard.removeObject(forKey: "syncCursor")
     }

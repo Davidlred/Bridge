@@ -35,7 +35,7 @@ final class FoundationTests: XCTestCase {
 final class FoundationSnapshotTests: XCTestCase {
     private func verify(_ view: some View, named name: String, file: StaticString = #file, line: UInt = #line) {
         let session = SessionStore(); session.user = UserDTO(id: UUID(uuidString: "018b0000-0000-7000-8000-000000000001")!, email: "sharon@example.com", displayName: "Sharon", coachName: "Arc", createdAt: 1_760_000_000_000)
-        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore())
+        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore()).environment(DmStore())
         let variants: [(String, UITraitCollection)] = [
             ("light", .init(userInterfaceStyle: .light)), ("dark", .init(userInterfaceStyle: .dark)),
             ("xxxl", .init(traitsFrom: [.init(userInterfaceStyle: .light), .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)])),
@@ -127,6 +127,25 @@ final class FoundationSnapshotTests: XCTestCase {
         verify(HallOfFameContent(badges: BadgesDTO(public: true, badges: [BadgeDTO(key: "first", earned: true), BadgeDTO(key: "s7", earned: true), BadgeDTO(key: "s21", earned: false, progress: 9, goal: 21),
             BadgeDTO(key: "arch", earned: true), BadgeDTO(key: "s30", earned: false, progress: 9, goal: 30), BadgeDTO(key: "week", earned: false),
             BadgeDTO(key: "ref", earned: false, progress: 12, goal: 30), BadgeDTO(key: "ally", earned: true), BadgeDTO(key: "goal", earned: false)])), named: "hall")
+    }
+    // MARK: Encrypted DMs
+    private var dmRows: [DmMessageRow] { [
+        DmMessageRow(id: "d1", peerUserId: "u1", mine: false, body: "Saw your 30-day streak. How do you keep the mornings going?", createdAt: now.addingTimeInterval(-3000)),
+        DmMessageRow(id: "d2", peerUserId: "u1", mine: true, body: "Clothes out the night before, and the alarm across the room.", createdAt: now.addingTimeInterval(-2700)),
+        DmMessageRow(id: "d3", peerUserId: "u1", mine: false, body: "Trying that tomorrow.", createdAt: now.addingTimeInterval(-1800)),
+        DmMessageRow(id: "d4", peerUserId: "u1", mine: true, body: "Tell me how it goes", createdAt: now.addingTimeInterval(-60), status: "queued"),
+        DmMessageRow(id: "d5", peerUserId: "u1", mine: true, body: "Good luck!", createdAt: now, status: "failed"),
+    ] }
+    func testDmInbox() {
+        _ = Persistence.container
+        let rows = dmRows
+        verify(DmInboxContent(rows: [DmRowData(contact: DmContactDTO(userId: "u1", name: "Jide", ready: true), last: rows[2], unread: true, verified: true),
+                                     DmRowData(contact: DmContactDTO(userId: "u2", name: "Funmi", ready: true), last: rows[1], unread: false, verified: false),
+                                     DmRowData(contact: DmContactDTO(userId: "u3", name: "Bayo"), last: nil, unread: false, verified: false)], loaded: true, now: now), named: "dm-inbox")
+    }
+    func testDmThread() { _ = Persistence.container; verify(DmThreadContent(name: "Jide", messages: dmRows, verification: .changed, input: .constant(""), now: now), named: "dm-thread") }
+    func testDmSafety() {
+        verify(SafetySheet(name: "Jide", numbers: [["05211", "84720", "39021", "77310", "10442", "93017", "28150", "64093", "11827", "50306", "72291", "40968"]], onVerify: {}, onDismiss: {}).background(Theme.bg), named: "dm-safety")
     }
     func testCreateAlliance() {
         let m = CommunityModel(); m.name = "Dawn Runners"; m.shared = true

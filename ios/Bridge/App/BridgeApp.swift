@@ -11,6 +11,7 @@ struct BridgeApp: App {
     @State private var goals = GoalStore()
     @State private var coach = CoachModel()
     @State private var social = SocialStore()
+    @State private var dms = DmStore()
     @AppStorage("themeOverride") private var themeOverride: String = "system"
     @Environment(\.scenePhase) private var scenePhase
 
@@ -24,6 +25,7 @@ struct BridgeApp: App {
                 .environment(goals)
                 .environment(coach)
                 .environment(social)
+                .environment(dms)
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }

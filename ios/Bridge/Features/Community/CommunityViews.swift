@@ -30,7 +30,7 @@ struct CommunityActions {
     var showTab: (CommunityTab) -> Void = { _ in }, react: (PostDTO, Reaction) -> Void = { _, _ in }, postMenu: (PostDTO) -> Void = { _ in }
     var create: () -> Void = {}, join: () -> Void = {}, select: (String) -> Void = { _ in }, sampleInvite: () -> Void = {}
     var openChat: (AllianceDTO) -> Void = { _ in }, leave: (AllianceDTO) -> Void = { _ in }, applyNow: (AllianceDTO) -> Void = { _ in }
-    var playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
+    var openDms: () -> Void = {}, playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
 }
 
 /// Sheet and form state for the Community screen.
@@ -93,7 +93,8 @@ struct CommunityScreen: View {
             leave: { model.leaving = $0 }, applyNow: applyNow,
             playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
             nudge: nudge,
-            openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } }
+            openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } },
+            openDms: { router.today.append(Route.messages) }
         ))
         .toolbar(.hidden, for: .navigationBar)
         .task {
@@ -243,6 +244,13 @@ struct CommunityContent: View {
                         Text("People working toward the same goal · \(label)").font(BFont.body(13)).foregroundStyle(Theme.mut)
                     }
                     Spacer(minLength: 0)
+                    if !ui.locked && !ui.previewing {
+                        Button(action: actions.openDms) {
+                            Image(systemName: "lock.fill").font(.system(size: 18)).foregroundStyle(Theme.ink).frame(width: 44, height: 44)
+                                .background(Theme.s1, in: Circle()).overlay(Circle().strokeBorder(Theme.line, lineWidth: 1))
+                        }
+                        .accessibilityLabel(Text("Encrypted messages"))
+                    }
                     if !ui.locked { shareChip }
                 }
                 if ui.locked { locked } else {

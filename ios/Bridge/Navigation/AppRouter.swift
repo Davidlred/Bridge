@@ -90,6 +90,8 @@ private extension View {
             case .gameNight(let id): GameNightScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .allianceRankings(let id): RankingsScreen(allianceId: id.uuidString.lowercased())
             case .hallOfFame: HallOfFameScreen()
+            case .messages: DmInboxScreen()
+            case .dmThread(let id): DmThreadScreen(peer: id.uuidString.lowercased())
             case .studyMode: PlaceholderScreen(title: String(describing: route)).toolbar(.hidden, for: .tabBar)
             default: PlaceholderScreen(title: String(describing: route))
             }

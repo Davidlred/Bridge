@@ -95,6 +95,12 @@ struct InvitePreviewDTO: Codable, Equatable, Sendable {
 struct AllianceMessageDTO: Codable, Equatable, Sendable { let id: String; var clientId: String?; var userId: String?; var name: String?; var mine = false; let body: String; var createdAt: Double = 0 }
 private struct AllianceEnvelope: Decodable { let alliance: AllianceDTO }
 
+// MARK: Encrypted DMs. The server relays public keys and ciphertext only.
+struct DmContactDTO: Codable, Equatable, Sendable { let userId: String; let name: String; var ready = false }
+struct DeviceKeysDTO: Codable, Equatable, Sendable { let deviceId: String; let curve25519: String; let ed25519: String }
+struct ClaimedKeyDTO: Codable, Sendable { let deviceId: String; let keyId: String; let key: String; var fallback = false }
+struct EnvelopeDTO: Codable, Sendable { let id: String; let from: String; let fromDevice: String; var senderKey: String?; let clientId: String; let type: Int; let body: String; let peer: String; var createdAt: Double = 0 }
+
 // MARK: Game Night, rankings, Hall of Fame (milestone 5). Roles only appear in the result.
 struct GamePlayerDTO: Codable, Equatable, Sendable {
     let userId: String; let name: String; var ready = false; var absent = false; var voted = false; var role: String?; var actions: Int?; var funPoints: Int?
@@ -272,6 +278,43 @@ actor APIClient {
         struct R: Decodable { let message: AllianceMessageDTO }
         return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(id)/messages", ["clientId": clientId.uuidString.lowercased(), "body": body], authed: true)).message
     }
+    // MARK: Encrypted DMs
+    func registerE2eDevice(curve25519: String, ed25519: String) async throws {
+        _ = try await raw("PUT", "/v1/e2e/devices/\(DeviceID.value)", ["curve25519": curve25519, "ed25519": ed25519], authed: true)
+    }
+    /// Publishes one-time keys (and a fallback key); returns how many unused one-time keys the server holds.
+    func publishKeys(_ keys: [(String, String)], fallback: (String, String)?) async throws -> Int {
+        struct R: Decodable { let oneTimeKeys: Int }
+        var body: [String: Any] = ["oneTimeKeys": keys.map { ["id": $0.0, "key": $0.1] }]
+        if let f = fallback { body["fallback"] = ["id": f.0, "key": f.1] }
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/e2e/devices/\(DeviceID.value)/keys", body, authed: true)).oneTimeKeys
+    }
+    func dmContacts() async throws -> [DmContactDTO] {
+        struct R: Decodable { let contacts: [DmContactDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/e2e/contacts", nil, authed: true)).contacts
+    }
+    func userDevices(_ userId: String) async throws -> [DeviceKeysDTO] {
+        struct R: Decodable { let devices: [DeviceKeysDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/e2e/users/\(userId)/devices", nil, authed: true)).devices
+    }
+    func claimKeys(_ deviceIds: [String]) async throws -> [ClaimedKeyDTO] {
+        struct R: Decodable { let keys: [ClaimedKeyDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/e2e/claim", ["deviceIds": deviceIds], authed: true)).keys
+    }
+    func sendDm(to: String, clientId: String, envelopes: [(deviceId: String, type: Int, body: String)]) async throws {
+        _ = try await raw("POST", "/v1/e2e/messages", ["to": to, "fromDevice": DeviceID.value, "clientId": clientId,
+                                                       "envelopes": envelopes.map { ["deviceId": $0.deviceId, "type": $0.type, "body": $0.body] }], authed: true)
+    }
+    func inbox() async throws -> [EnvelopeDTO] {
+        struct R: Decodable { let envelopes: [EnvelopeDTO] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/e2e/inbox?deviceId=\(DeviceID.value)", nil, authed: true)).envelopes
+    }
+    func ackInbox(_ ids: [String]) async throws { _ = try await raw("POST", "/v1/e2e/inbox/ack", ["deviceId": DeviceID.value, "ids": ids], authed: true) }
+    /// Report a person. For DMs, `messages` are what the reporter's device decrypted (the server can't read DMs).
+    func reportUser(_ userId: String, reason: String, messages: [String]) async throws {
+        _ = try await raw("POST", "/v1/reports", ["targetKind": "user", "targetId": userId, "reason": reason, "evidence": ["messages": messages.map { String($0.prefix(2000)) }]], authed: true)
+    }
+
     // MARK: Game Night, rankings, Hall of Fame
     func gameStatus(_ allianceId: String) async throws -> GameStatusDTO { try JSONDecoder().decode(GameStatusDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/game", nil, authed: true)) }
     func openGame(_ allianceId: String) async throws -> GameDTO {

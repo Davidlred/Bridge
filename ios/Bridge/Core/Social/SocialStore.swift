@@ -252,6 +252,8 @@ final class RealtimeClient {
     var gameListener: (([String: Any]) -> Void)?
     /** Called each time the server accepts the auth frame (first connect and every reconnect), so screens can re-join. */
     var onReady: (() -> Void)?
+    /// "Something is waiting in your encrypted inbox" (the event carries no content).
+    var onDm: (() -> Void)?
     private(set) var connected = false
 
     init(store: SocialStore) { self.store = store }
@@ -297,6 +299,8 @@ final class RealtimeClient {
                 if let id = obj["id"] as? String { store?.hidden(serverId: id) }             // removed by moderation
             case "ready":
                 connected = true; onReady?()
+            case "dm":
+                onDm?()
             case let type? where type.hasPrefix("game:"):
                 gameListener?(obj)
             default: break
