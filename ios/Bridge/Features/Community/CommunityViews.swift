@@ -91,10 +91,10 @@ struct CommunityScreen: View {
             sampleInvite: { toaster.show(String(localized: "Sample alliance. Invites unlock with Community.")) },
             openChat: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceChat(id)) } },
             leave: { model.leaving = $0 }, applyNow: applyNow,
+            openDms: { router.today.append(Route.messages) },
             playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
             nudge: nudge,
-            openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } },
-            openDms: { router.today.append(Route.messages) }
+            openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } }
         ))
         .toolbar(.hidden, for: .navigationBar)
         .task {
