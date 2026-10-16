@@ -74,7 +74,7 @@ struct AllianceChatContent: View {
                             .font(BFont.body(12)).foregroundStyle(Theme.mut).padding(.horizontal, 12).padding(.vertical, 9)
                             .frame(maxWidth: .infinity, alignment: .leading).background(Theme.s0, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         if lines.isEmpty { Text("Say hello. Messages from members show up here.").font(BFont.body(13)).foregroundStyle(Theme.mut).padding(.top, 8) }
-                        ForEach(lines) { line in (line.mine ? AnyView(mine(line)) : AnyView(theirs(line))).id(line.id) }
+                        ForEach(lines) { line in (line.mine ? AnyView(mine(line)) : line.system ? AnyView(systemLine(line)) : AnyView(theirs(line))).id(line.id) }
                     }
                     .padding(16)
                 }
@@ -84,6 +84,11 @@ struct AllianceChatContent: View {
             composer
         }
         .background(Theme.bg)
+    }
+
+    private func systemLine(_ m: ChatLine) -> some View {
+        Label(m.body, systemImage: "checkmark.circle.fill").font(BFont.body(12, .medium)).foregroundStyle(Theme.ok)
+            .padding(.horizontal, 12).frame(minHeight: 28).background(Theme.okTint, in: Capsule()).frame(maxWidth: .infinity)
     }
 
     private func theirs(_ m: ChatLine) -> some View {

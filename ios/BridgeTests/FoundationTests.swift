@@ -96,6 +96,38 @@ final class FoundationSnapshotTests: XCTestCase {
                      ChatLine(id: "c5", serverId: nil, name: nil, body: "See you there", mine: true, createdAt: now, status: "failed")]
         verify(AllianceChatContent(alliance: calc, lines: lines, input: .constant(""), now: now), named: "alliance-chat")
     }
+    // MARK: Milestone 5
+    private func gameModel(_ phase: String, role: String = "builder", result: Bool = false) -> GameModel {
+        let m = GameModel(); m.me = "me"; m.role = role; m.revealed = true; m.mine = 2
+        let names = [("me", "Sharon"), ("u1", "Jide"), ("u2", "Funmi"), ("u3", "Bayo")]
+        m.game = GameDTO(id: "g1", allianceId: "a1", ranked: true, phase: phase, endsAt: ms + 9_000,
+                         players: names.map { GamePlayerDTO(userId: $0.0, name: $0.1, ready: true, role: result ? ($0.0 == "u2" ? "drifter" : "builder") : nil, actions: result ? 2 : nil, funPoints: result ? ($0.0 == "u2" ? 6 : 12) : nil) },
+                         planks: ["cracked", "ok", "ok", "ok", "cracked", "ok", "cracked", "ok"], integrity: 63,
+                         clues: [ClueDTO(who: "u1", text: "Jide repaired plank 2."), ClueDTO(who: "u2", text: "Plank 1 loosened. Funmi was nearby.")],
+                         drifterId: result ? "u2" : nil, ejectedId: result ? "u2" : nil, buildersWon: result ? true : nil, tally: result ? ["u2": 3, "u1": 1] : nil, mvpId: result ? "me" : nil)
+        return m
+    }
+    func testGameRole() { verify(GameNightContent(model: gameModel("role", role: "drifter"), now: now), named: "game-role") }
+    func testGameRound() { verify(GameNightContent(model: gameModel("round"), now: now), named: "game-round") }
+    func testGameVote() { let m = gameModel("vote"); m.choice = "u2"; verify(GameNightContent(model: m, now: now), named: "game-vote") }
+    func testGameResult() { verify(GameNightContent(model: gameModel("result", result: true), now: now), named: "game-result") }
+    func testAllianceGame() {
+        var ui = CommunityUI(goal: goal, community: CommunityDTO(unlocked: true, streak: 9), loading: false, tab: .alliance, alliances: [calc])
+        ui.games = ["a1": GameStatusDTO(unlocked: false, eligible: 4, finished: 3, waiting: ["Bayo"])]
+        ui.ratings = ["a1": RatingDTO(overall: 82, tier: "silver", rank: 4, of: 31, band: "2-5", productivity: 86, efficiency: 78, funScore: 64)]
+        verify(community(ui), named: "alliance-game")
+    }
+    func testRankings() {
+        verify(RankingsContent(board: BoardDTO(category: "fitness", band: "2-5", rank: 4, of: 31, rows: [
+            BoardRowDTO(rank: 1, name: "Iron Mornings", score: 94, tier: "gold", members: 5), BoardRowDTO(rank: 2, name: "Quiet Hustle", score: 88, tier: "gold", members: 4),
+            BoardRowDTO(rank: 3, name: "Page a Day", score: 84, tier: "silver", members: 3), BoardRowDTO(rank: 4, name: "Dawn Runners", score: 82, tier: "silver", members: 4, mine: true),
+            BoardRowDTO(rank: 5, name: "Slow Savers", score: 71, tier: "bronze", members: 5)]), failed: false), named: "rankings")
+    }
+    func testHallOfFame() {
+        verify(HallOfFameContent(badges: BadgesDTO(public: true, badges: [BadgeDTO(key: "first", earned: true), BadgeDTO(key: "s7", earned: true), BadgeDTO(key: "s21", earned: false, progress: 9, goal: 21),
+            BadgeDTO(key: "arch", earned: true), BadgeDTO(key: "s30", earned: false, progress: 9, goal: 30), BadgeDTO(key: "week", earned: false),
+            BadgeDTO(key: "ref", earned: false, progress: 12, goal: 30), BadgeDTO(key: "ally", earned: true), BadgeDTO(key: "goal", earned: false)])), named: "hall")
+    }
     func testCreateAlliance() {
         let m = CommunityModel(); m.name = "Dawn Runners"; m.shared = true
         verify(CreateAllianceSheet(model: m, goal: goal, onCreate: {}).background(Theme.bg), named: "alliance-create")

@@ -14,6 +14,9 @@ struct CommunityUI {
     /// This goal's alliances.
     var alliances: [AllianceDTO] = []
     var selectedId: String?
+    /// Game card and rating per alliance (online only; absent while loading or offline).
+    var games: [String: GameStatusDTO] = [:]
+    var ratings: [String: RatingDTO] = [:]
 
     /// Before the first response, the device's own streak decides (the server confirms it).
     var unlocked: Bool { community?.unlocked ?? ((goal?.progress.streak ?? 0) >= 7) }
@@ -27,6 +30,7 @@ struct CommunityActions {
     var showTab: (CommunityTab) -> Void = { _ in }, react: (PostDTO, Reaction) -> Void = { _, _ in }, postMenu: (PostDTO) -> Void = { _ in }
     var create: () -> Void = {}, join: () -> Void = {}, select: (String) -> Void = { _ in }, sampleInvite: () -> Void = {}
     var openChat: (AllianceDTO) -> Void = { _ in }, leave: (AllianceDTO) -> Void = { _ in }, applyNow: (AllianceDTO) -> Void = { _ in }
+    var playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
 }
 
 /// Sheet and form state for the Community screen.
@@ -51,6 +55,9 @@ final class CommunityModel {
     var code = ""
     var joinError: String?
     var preview: InvitePreviewDTO?
+    // Game card and rating
+    var games: [String: GameStatusDTO] = [:]
+    var ratings: [String: RatingDTO] = [:]
 
     func reset(_ s: Sheet) { name = ""; shared = false; createError = nil; code = ""; joinError = nil; preview = nil; busy = false; sheet = s }
 }
@@ -71,7 +78,7 @@ struct CommunityScreen: View {
     private var ui: CommunityUI {
         CommunityUI(goal: goals.goals.first { $0.id == goalId }, community: social.community(goalId), loading: model.loading && social.community(goalId) == nil,
                     feedError: model.feedError, previewing: model.previewing, tab: model.tab, share: social.share,
-                    alliances: social.alliances.filter { $0.goalId == goalId.uuidString.lowercased() }, selectedId: model.selectedId)
+                    alliances: social.alliances.filter { $0.goalId == goalId.uuidString.lowercased() }, selectedId: model.selectedId, games: model.games, ratings: model.ratings)
     }
 
     var body: some View {
@@ -80,10 +87,13 @@ struct CommunityScreen: View {
             startPreview: { model.previewing = true; model.tab = .feed }, endPreview: { model.previewing = false },
             showTab: { t in withAnimation(.easeOut(duration: 0.2)) { model.tab = t } },
             react: { p, r in react(p, r) }, postMenu: { model.postMenu = $0 },
-            create: { if !gated() { model.reset(.create) } }, join: { if !gated() { model.reset(.join) } }, select: { model.selectedId = $0 },
+            create: { if !gated() { model.reset(.create) } }, join: { if !gated() { model.reset(.join) } }, select: { model.selectedId = $0; Task { await loadGame() } },
             sampleInvite: { toaster.show(String(localized: "Sample alliance. Invites unlock with Community.")) },
             openChat: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceChat(id)) } },
-            leave: { model.leaving = $0 }, applyNow: applyNow
+            leave: { model.leaving = $0 }, applyNow: applyNow,
+            playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
+            nudge: nudge,
+            openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } }
         ))
         .toolbar(.hidden, for: .navigationBar)
         .task {
@@ -114,8 +124,22 @@ struct CommunityScreen: View {
 
     private func refresh() async {
         model.feedError = false
-        do { try await social.refreshCommunity(goalId); try? await social.refreshAlliances(); model.loading = false }
+        do { try await social.refreshCommunity(goalId); try? await social.refreshAlliances(); model.loading = false; await loadGame() }
         catch { model.loading = false; model.feedError = true }
+    }
+
+    /// Game card and rating for the alliance on screen.
+    private func loadGame() async {
+        guard let a = ui.selected else { return }
+        if let s = try? await social.gameStatus(a.id) { model.games[a.id] = s }
+        if let r = try? await social.rating(a.id) { model.ratings[a.id] = r }
+    }
+
+    private func nudge(_ a: AllianceDTO) {
+        Task {
+            do { let n = try await social.nudge(a.id); toaster.show(n > 0 ? String(localized: "Nudged. They'll get one reminder today.") : String(localized: "Everyone waiting has already been nudged today."), .ok) }
+            catch { toaster.show(offlineOr(error), .warn) }
+        }
     }
 
     private func offlineOr(_ e: Error) -> String { (e as? APIError) == .offline ? String(localized: "You're offline. Try again when you reconnect.") : String(localized: "Something went wrong. Try again.") }
@@ -409,6 +433,10 @@ private struct AllianceSection: View {
                 if !ui.alliances.isEmpty { chips(ally) }
                 if sample { Text("SAMPLE ALLIANCE · HOW YOURS WILL WORK").bridgeLabel(10, color: Theme.accInk) }
                 AllianceCard(a: ally, ui: ui, actions: actions, sample: sample, today: today)
+                if !sample {
+                    GameCard(status: ui.games[ally.id], goalLabel: label, onPlay: { actions.playGame(ally) }, onNudge: { actions.nudge(ally) })
+                    if let r = ui.ratings[ally.id] { RatingCard(rating: r) { actions.openBoard(ally) } }
+                }
                 if sample { tiles }
                 Text("SHARED FEED").bridgeLabel(11).padding(.top, 4).accessibilityAddTraits(.isHeader)
                 if ally.feed.isEmpty { Text("Completions from members show up here.").font(BFont.body(13)).foregroundStyle(Theme.mut) }

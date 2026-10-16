@@ -20,6 +20,8 @@ enum Reaction: String, CaseIterable, Sendable { case respect, keepGoing, inspire
 /// Alliance chat message as the views see it (a value copy of the stored row).
 struct ChatLine: Identifiable, Equatable, Sendable {
     let id: String; let serverId: String?; let name: String?; let body: String; let mine: Bool; let createdAt: Date; let status: String
+    /// No author and not ours: a system line, e.g. a shared game result.
+    var system = false
 }
 
 /**
@@ -156,7 +158,7 @@ final class SocialStore {
     // MARK: Alliance chat
     func lines(_ allianceId: String) -> [ChatLine] {
         let rows = (try? ctx.fetch(FetchDescriptor<AllianceMessageEntity>(predicate: #Predicate { $0.allianceId == allianceId }, sortBy: [SortDescriptor(\.createdAt)]))) ?? []
-        return rows.map { ChatLine(id: $0.id, serverId: $0.serverId, name: $0.name, body: $0.body, mine: $0.mine, createdAt: $0.createdAt, status: $0.status) }
+        return rows.map { ChatLine(id: $0.id, serverId: $0.serverId, name: $0.name, body: $0.body, mine: $0.mine, createdAt: $0.createdAt, status: $0.status, system: !$0.mine && $0.userId == nil && $0.serverId != nil) }
     }
 
     private func row(_ id: String) -> AllianceMessageEntity? { try? ctx.fetch(FetchDescriptor<AllianceMessageEntity>(predicate: #Predicate { $0.id == id })).first }
@@ -222,6 +224,15 @@ final class SocialStore {
         discard(line.id)
     }
 
+    // MARK: Game Night, rankings, Hall of Fame
+    func gameStatus(_ allianceId: String) async throws -> GameStatusDTO { try await api.gameStatus(allianceId) }
+    func openGame(_ allianceId: String) async throws -> GameDTO { try await api.openGame(allianceId) }
+    func nudge(_ allianceId: String) async throws -> Int { try await api.nudge(allianceId) }
+    func shareGame(_ allianceId: String, gameId: String) async throws { try await api.shareGame(allianceId, gameId: gameId) }
+    func rating(_ allianceId: String) async throws -> RatingDTO { try await api.rating(allianceId) }
+    func rankings(_ allianceId: String) async throws -> BoardDTO { try await api.rankings(allianceId) }
+    func badges() async throws -> BadgesDTO { try await api.badges() }
+
     /// Push registration for this install (no token until APNs is configured), plus the home time zone.
     func registerDevice() async { try? await api.registerDevice(pushToken: nil) }
 }
@@ -237,14 +248,24 @@ final class RealtimeClient {
     private var users = 0
     private var attempt = 0
     private var reconnect: Task<Void, Never>?
+    /** Game frames (`game:state`, `game:role`, `game:error`) for the Game Night screen. */
+    var gameListener: (([String: Any]) -> Void)?
+    /** Called each time the server accepts the auth frame (first connect and every reconnect), so screens can re-join. */
+    var onReady: (() -> Void)?
+    private(set) var connected = false
 
     init(store: SocialStore) { self.store = store }
+
+    func send(_ frame: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: frame) else { return }
+        task?.send(.string(String(decoding: data, as: UTF8.self))) { _ in }
+    }
 
     func acquire() { users += 1; if users == 1 { connect() } }
     func release() {
         users = max(0, users - 1)
         guard users == 0 else { return }
-        reconnect?.cancel(); task?.cancel(with: .normalClosure, reason: nil); task = nil
+        reconnect?.cancel(); task?.cancel(with: .normalClosure, reason: nil); task = nil; connected = false
     }
     /// After joining or creating an alliance, so its messages arrive too.
     func resubscribe() { task?.send(.string(#"{"type":"subscribe"}"#)) { _ in } }
@@ -274,12 +295,16 @@ final class RealtimeClient {
                 store?.received(m, allianceId)
             case "hidden":
                 if let id = obj["id"] as? String { store?.hidden(serverId: id) }             // removed by moderation
+            case "ready":
+                connected = true; onReady?()
+            case let type? where type.hasPrefix("game:"):
+                gameListener?(obj)
             default: break
             }
         }
         // Closed: 4401 means the access token expired; refresh and try again with backoff while a screen still needs it.
         guard task === t, users > 0 else { return }
-        task = nil
+        task = nil; connected = false
         let expired = t.closeCode.rawValue == 4401
         reconnect = Task {
             if expired { _ = try? await APIClient.shared.me() }

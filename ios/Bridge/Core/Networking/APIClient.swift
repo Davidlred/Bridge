@@ -95,6 +95,39 @@ struct InvitePreviewDTO: Codable, Equatable, Sendable {
 struct AllianceMessageDTO: Codable, Equatable, Sendable { let id: String; var clientId: String?; var userId: String?; var name: String?; var mine = false; let body: String; var createdAt: Double = 0 }
 private struct AllianceEnvelope: Decodable { let alliance: AllianceDTO }
 
+// MARK: Game Night, rankings, Hall of Fame (milestone 5). Roles only appear in the result.
+struct GamePlayerDTO: Codable, Equatable, Sendable {
+    let userId: String; let name: String; var ready = false; var absent = false; var voted = false; var role: String?; var actions: Int?; var funPoints: Int?
+    enum CodingKeys: String, CodingKey { case userId, name, ready, absent, voted, role, actions, funPoints = "fun" }
+    init(userId: String, name: String, ready: Bool = false, absent: Bool = false, voted: Bool = false, role: String? = nil, actions: Int? = nil, funPoints: Int? = nil) {
+        self.userId = userId; self.name = name; self.ready = ready; self.absent = absent; self.voted = voted; self.role = role; self.actions = actions; self.funPoints = funPoints
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId); name = try c.decode(String.self, forKey: .name)
+        ready = try c.decodeIfPresent(Bool.self, forKey: .ready) ?? false; absent = try c.decodeIfPresent(Bool.self, forKey: .absent) ?? false
+        voted = try c.decodeIfPresent(Bool.self, forKey: .voted) ?? false; role = try c.decodeIfPresent(String.self, forKey: .role)
+        actions = try c.decodeIfPresent(Int.self, forKey: .actions); funPoints = try c.decodeIfPresent(Int.self, forKey: .funPoints)
+    }
+}
+struct ClueDTO: Codable, Equatable, Sendable { let who: String; let text: String }
+struct GameDTO: Codable, Equatable, Sendable {
+    let id: String; let allianceId: String; var ranked = false; let phase: String; var endsAt: Double = 0; var players: [GamePlayerDTO] = []
+    var planks: [String] = []; var integrity = 100; var clues: [ClueDTO] = []
+    var drifterId: String?; var ejectedId: String?; var buildersWon: Bool?; var tally: [String: Int]?; var mvpId: String?
+}
+struct GameStatusDTO: Codable, Equatable, Sendable {
+    var unlocked = false; var rankedToday = false; var eligible = 0; var finished = 0; var needsPlayers = false; var waiting: [String] = []; var meLeft: Int?
+}
+struct RatingDTO: Codable, Equatable, Sendable {
+    let overall: Int; let tier: String; let rank: Int; let of: Int; var band = ""; let productivity: Int; let efficiency: Int; let funScore: Int
+    enum CodingKeys: String, CodingKey { case overall, tier, rank, of, band, productivity, efficiency, funScore = "fun" }
+}
+struct BoardRowDTO: Codable, Equatable, Sendable { let rank: Int; let name: String; let score: Int; let tier: String; let members: Int; var mine = false }
+struct BoardDTO: Codable, Equatable, Sendable { var category = "other"; var band = ""; var rank = 0; var of = 0; var rows: [BoardRowDTO] = [] }
+struct BadgeDTO: Codable, Equatable, Sendable { let key: String; let earned: Bool; var earnedAt: Double?; var progress: Int?; var goal: Int? }
+struct BadgesDTO: Codable, Equatable, Sendable { var `public` = false; var badges: [BadgeDTO] = [] }
+
 /// All HTTP goes through here. Feature models call it; views never do.
 actor APIClient {
     static let shared = APIClient()
@@ -239,6 +272,23 @@ actor APIClient {
         struct R: Decodable { let message: AllianceMessageDTO }
         return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(id)/messages", ["clientId": clientId.uuidString.lowercased(), "body": body], authed: true)).message
     }
+    // MARK: Game Night, rankings, Hall of Fame
+    func gameStatus(_ allianceId: String) async throws -> GameStatusDTO { try JSONDecoder().decode(GameStatusDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/game", nil, authed: true)) }
+    func openGame(_ allianceId: String) async throws -> GameDTO {
+        struct R: Decodable { let game: GameDTO }
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/game", nil, authed: true)).game
+    }
+    func nudge(_ allianceId: String) async throws -> Int {
+        struct R: Decodable { let sent: Int }
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/game/nudge", nil, authed: true)).sent
+    }
+    func shareGame(_ allianceId: String, gameId: String) async throws { _ = try await raw("POST", "/v1/alliances/\(allianceId)/games/\(gameId)/share", nil, authed: true) }
+    func rating(_ allianceId: String) async throws -> RatingDTO { try JSONDecoder().decode(RatingDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/rating", nil, authed: true)) }
+    func rankings(_ allianceId: String) async throws -> BoardDTO { try JSONDecoder().decode(BoardDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/rankings", nil, authed: true)) }
+    /// The whole account as JSON ("Download my data"). Never logged or cached.
+    func exportData() async throws -> Data { try await raw("GET", "/v1/me/export", nil, authed: true) }
+    func badges() async throws -> BadgesDTO { try JSONDecoder().decode(BadgesDTO.self, from: try await raw("GET", "/v1/me/badges", nil, authed: true)) }
+
     /// This install, for push and the home time zone. `pushToken` is nil until APNs is configured.
     func registerDevice(pushToken: String?) async throws {
         _ = try await raw("PUT", "/v1/devices", ["id": DeviceID.value, "platform": "ios", "pushToken": pushToken ?? NSNull(), "timezone": timezone,

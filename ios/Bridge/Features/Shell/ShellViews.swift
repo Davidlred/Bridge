@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Tab roots for milestone 1: real chrome and empty states. Goal cards, chat and entries arrive with milestones 2 and 3.
 
@@ -38,6 +39,9 @@ struct ProfileView: View {
     @State private var coachName = ""
     @AppStorage("coachReadsJournal") private var coachReadsJournal = false
     @Environment(SocialStore.self) private var social
+    @Environment(AppRouter.self) private var router
+    @State private var export: JSONExport?
+    @State private var exporting = false
     @Environment(GoalStore.self) private var goals
     enum Sheet: String, Identifiable { case delete, logOut; var id: String { rawValue } }
 
@@ -54,6 +58,15 @@ struct ProfileView: View {
                     }
                     if let email = session.user?.email { Text(email).font(BFont.body(13)).foregroundStyle(Theme.mut) }
                 }
+            }
+            Button { router.profile.append(Route.hallOfFame) } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "medal.fill").font(.system(size: 24)).foregroundStyle(Theme.acc).accessibilityHidden(true)
+                    Text("Hall of Fame").font(BFont.display(16)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right").foregroundStyle(Theme.mut).accessibilityHidden(true)
+                }
+                .padding(16).background(Theme.s1, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.accLine, lineWidth: 1))
             }
             SettingsSection(title: "Notifications") {
                 SettingsValue(label: "Daily reminder", value: Self.clock(reminders.daily)) { reminders.daily = Self.next(reminders.daily, [7, 8, 9]); saveReminders() }
@@ -83,6 +96,8 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Account").bridgeLabel(10).accessibilityAddTraits(.isHeader)
                 VStack(spacing: 0) {
+                    SettingsLink(label: "Download my data", danger: false, action: downloadData)
+                    Divider().overlay(Theme.line)
                     SettingsLink(label: "Log out", danger: false) {
                         unsynced = Persistence.outboxCount()
                         if unsynced > 0 { sheet = .logOut } else { logOut() }
@@ -98,6 +113,11 @@ struct ProfileView: View {
             TextField("Arc", text: $coachName)
             Button("Save") { Task { _ = try? await APIClient.shared.updateMe(coachName: String(coachName.prefix(20))); await session.refreshUser() } }
             Button("Cancel", role: .cancel) {}
+        }
+        // "Download my data": the system Save dialog picks where the JSON goes.
+        .fileExporter(isPresented: $exporting, document: export, contentType: .json, defaultFilename: "the-bridge-export") { result in
+            if case .success = result { toaster.show(String(localized: "Your data is saved."), .ok) }
+            export = nil
         }
         .sheet(item: $sheet) { which in
             Group {
@@ -121,6 +141,14 @@ struct ProfileView: View {
         return d.formatted(date: .omitted, time: .shortened)
     }
     private func saveReminders() { reminders.save(); Task { await NotificationScheduler.shared.reschedule() } }
+
+    private func downloadData() {
+        Task {
+            do { export = JSONExport(data: try await APIClient.shared.exportData()); exporting = true }
+            catch APIError.offline { toaster.show(String(localized: "You're offline. Try again when you reconnect."), .warn) }
+            catch { toaster.show(String(localized: "Something went wrong. Try again."), .warn) }
+        }
+    }
 
     /// Deletes the photo and every image generated from it (server side), then refreshes the profile.
     private func removePhoto() {
@@ -286,4 +314,13 @@ struct UpgradeView: View {
         }
         .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.bg)
     }
+}
+
+/// The account export handed to the system Save dialog.
+struct JSONExport: FileDocument {
+    static let readableContentTypes: [UTType] = [.json]
+    let data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }

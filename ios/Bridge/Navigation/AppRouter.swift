@@ -11,6 +11,7 @@ enum Route: Hashable, Codable {
     case allianceChat(UUID)
     case gameNight(allianceId: UUID)
     case rankings(goalCategory: String)
+    case allianceRankings(UUID)
     case invitePreview(code: String)
     case studyMode(taskId: UUID)
     case journalEntry(goalId: UUID, localDate: String)
@@ -86,7 +87,10 @@ private extension View {
             case .community(let goalId, let code): CommunityScreen(goalId: goalId, code: code)
             case .allianceChat(let id): AllianceChatScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .invitePreview(let code): InviteRedirect(code: code)
-            case .studyMode, .gameNight: PlaceholderScreen(title: String(describing: route)).toolbar(.hidden, for: .tabBar)
+            case .gameNight(let id): GameNightScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
+            case .allianceRankings(let id): RankingsScreen(allianceId: id.uuidString.lowercased())
+            case .hallOfFame: HallOfFameScreen()
+            case .studyMode: PlaceholderScreen(title: String(describing: route)).toolbar(.hidden, for: .tabBar)
             default: PlaceholderScreen(title: String(describing: route))
             }
         }
