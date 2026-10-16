@@ -203,6 +203,12 @@ export async function authRoutes(app: FastifyInstance) {
     `<p>At least 8 characters. You'll be signed out on your other devices.</p><form id="f"><input id="p" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="New password" required><button>Save password</button></form><p id="m" role="status" style="margin-top:16px"></p>
 <script>f.onsubmit=async e=>{e.preventDefault();const r=await fetch('/v1/auth/password/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:${JSON.stringify(String(req.query.token ?? '')).replace(/</g, '\\u003c')},password:p.value})});m.textContent=r.ok?'Password saved. Open The Bridge and log in.':'This link has expired or was already used. Ask for a new one in the app.';if(r.ok)f.remove()}</script>`)));
 
+  /** Public page the stores link to (Google Play requires one): how to delete an account and what happens to the data. */
+  app.get('/delete-account', async (_req, reply) => reply.type('text/html').send(page('Delete your account',
+    `<p>In the app: <b>Profile → Account → Delete account</b>. You'll be asked to confirm.</p>
+<p>Your photo and the images made from it are deleted straight away. Your plan, journal, coach conversations, alliance memberships and encrypted message keys are removed, and the rest of the account within 30 days. Purchases are managed by the App Store or Google Play: cancel the subscription there too.</p>
+<p>Can't open the app? Email <a href="mailto:${env.SUPPORT_EMAIL}">${env.SUPPORT_EMAIL}</a> from the address on your account and we'll delete it for you.</p>`)));
+
   app.get<{ Querystring: { token?: string } }>('/verify', async (req, reply) => {
     const ok = await sql.begin(async tx => {
       const [t] = await useToken(tx, String(req.query.token ?? ''), 'verify');

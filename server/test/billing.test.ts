@@ -49,6 +49,13 @@ run('entitlements and export', () => {
     expect((await hook({ type: 'INITIAL_PURCHASE', app_user_id: '$RCAnonymousID:abc', entitlement_ids: ['plus'] })).json()).toMatchObject({ ignored: 'anonymous_user' });
   });
 
+  it('has a public page explaining how to delete an account', async () => {
+    const r = await app.inject({ method: 'GET', url: '/delete-account' });
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toContain('Profile → Account → Delete account');
+    expect(r.body).toContain('mailto:support@thebridge.app');
+  });
+
   it('moves purchases away from the old account on a transfer', async () => {
     const a = await signUp(), b = await signUp();
     await hook({ type: 'INITIAL_PURCHASE', app_user_id: a.user.id, entitlement_ids: ['alliance_plus'], expiration_at_ms: Date.now() + 864e5 });

@@ -34,6 +34,8 @@ const Env = z.object({
   APNS_KEY_ID: z.string().optional(),
   APNS_TEAM_ID: z.string().optional(),
   APNS_BUNDLE_ID: z.string().default('app.thebridge.Bridge'),
+  // Where people write when they can't open the app (shown on the public account-deletion page).
+  SUPPORT_EMAIL: z.string().email().default('support@thebridge.app'),
   // RevenueCat webhook: the Authorization header value set in the RevenueCat dashboard.
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
   // Signs short-lived media links. Defaults to a value derived from the JWT key.
