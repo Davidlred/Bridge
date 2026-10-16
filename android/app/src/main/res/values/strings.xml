@@ -760,4 +760,33 @@
     <string name="safety_not_now">Not now</string>
     <string name="safety_a11y">Safety number: %1$s</string>
     <string name="toast_verified">Safety number verified.</string>
+    <!-- Paywall (milestone 6). Prices always come from the store. -->
+    <string name="pw_alliance_kicker">ALLIANCE+</string>
+    <string name="pw_alliance_title">Grow past 15 members</string>
+    <string name="pw_alliance_f1">Up to 50 members per alliance</string>
+    <string name="pw_alliance_f2">Bigger game nights</string>
+    <string name="pw_alliance_f3">Seasonal leagues against other alliances</string>
+    <string name="pw_alliance_who">paid by the founder</string>
+    <string name="pw_alliance_stay">Stay at 15</string>
+    <string name="pw_plus_kicker">THE BRIDGE PLUS</string>
+    <string name="pw_plus_title">More than three goals</string>
+    <string name="pw_plus_f1">Run more goals side by side</string>
+    <string name="pw_plus_f2">Join more shared-plan alliances</string>
+    <string name="pw_plus_f3">Everything you have now stays the same</string>
+    <string name="pw_plus_stay">Not now</string>
+    <string name="pw_per_month">%1$s / month</string>
+    <string name="pw_per_year">%1$s / year</string>
+    <string name="pw_trial">Start %1$d-day free trial</string>
+    <string name="pw_buy">Subscribe</string>
+    <string name="pw_restore">Restore purchases</string>
+    <string name="pw_unavailable">Purchases aren\'t available in this build yet.</string>
+    <string name="pw_loading">Loading prices…</string>
+    <string name="pw_terms">Renews automatically until you cancel in your store account. Cancel at least 24 hours before renewal.</string>
+    <string name="toast_pw_done">You\'re all set. Thanks for supporting The Bridge.</string>
+    <string name="toast_pw_pending">Waiting for approval. It unlocks as soon as the store confirms.</string>
+    <string name="toast_pw_failed">The purchase didn\'t go through. You haven\'t been charged.</string>
+    <string name="toast_pw_restored">Purchases restored.</string>
+    <string name="toast_pw_nothing">No purchases to restore on this store account.</string>
+    <string name="limit_upgrade">Get more goals with Plus</string>
+    <string name="ally_plus_link">Need more than 15 members? Alliance+</string>
 </resources>

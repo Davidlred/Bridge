@@ -25,6 +25,8 @@ android {
         buildConfigField("String", "API_BASE", "\"https://api.thebridge.app\"")
         // OAuth *web* client id from Google Cloud (the same value goes in the server's GOOGLE_CLIENT_IDS). Empty = Google sign-in reports unavailable.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${prop("bridge.googleWebClientId", "")}\"")
+        // RevenueCat public SDK key (goog_…). Empty = the paywall shows, but purchases are switched off.
+        buildConfigField("String", "REVENUECAT_KEY", "\"${prop("bridge.revenuecatKey", "")}\"")
     }
     buildTypes {
         debug {

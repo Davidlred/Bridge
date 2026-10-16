@@ -18,6 +18,7 @@ class BridgeApp : Application(), Configuration.Provider {
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var session: SessionManager
     @Inject lateinit var reminders: ReminderScheduler
+    @Inject lateinit var billing: app.thebridge.data.BillingRepository
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
@@ -25,6 +26,7 @@ class BridgeApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         SyncWorker.schedulePeriodic(this)
+        billing.configure(this)
         reminders.createChannel()
         reminders.rescheduleAsync()
         // Sync whenever the app comes to the foreground.

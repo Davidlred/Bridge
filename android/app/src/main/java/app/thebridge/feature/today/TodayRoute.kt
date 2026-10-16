@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, onOpenCommunity: (goalId: String) -> Unit = {}, vm: TodayViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
+    val hasPlus by vm.hasPlus.collectAsStateWithLifecycle(false)
     val ctx = LocalContext.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }        // "task:<id>" | "add" | "goal:<id>" | "limit"
     var notificationsOn by rememberSaveable { mutableStateOf(true) }
@@ -46,7 +47,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         ask.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    val addGoal = { if (ui.atLimit) sheet = "limit" else onAddGoal() }
+    val addGoal = { if (ui.atLimit && !hasPlus) sheet = "limit" else onAddGoal() }
     TodayScreen(ui, TodayActions(
         openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },
@@ -61,7 +62,8 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
     val s = sheet
     when {
         s == null -> Unit
-        s == "limit" -> LimitSheet(onManage = { sheet = null; vm.openGoal(null) }, onDismiss = { sheet = null })
+        s == "limit" -> LimitSheet(onManage = { sheet = null; vm.openGoal(null) }, onUpgrade = { sheet = "plus" }, onDismiss = { sheet = null })
+        s == "plus" -> app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.Plus, onDismiss = { sheet = null })
         s == "add" && open != null -> TaskSheet(null, onSave = { t, n, p, w -> vm.addTask(open.goal.id, t, n, p, w); sheet = null }, onToggle = {}, onDelete = {}, onDismiss = { sheet = null })
         s.startsWith("task:") -> {
             val t = ui.goals.flatMap { it.tasks }.find { it.task.id == s.removePrefix("task:") }

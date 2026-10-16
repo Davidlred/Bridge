@@ -259,6 +259,10 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun rankings(allianceId: String): BoardDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rankings", null, authed = true))
     /** The whole account as JSON ("Download my data"). Never logged or cached. */
     suspend fun exportData(): String = call("GET", "/v1/me/export", null, authed = true)
+    /** Entitlements the server honours (from RevenueCat webhooks). */
+    suspend fun entitlements(): List<String> =
+        (json.decodeFromString<JsonObject>(call("GET", "/v1/me/entitlements", null, authed = true))["entitlements"] as? kotlinx.serialization.json.JsonArray)
+            ?.mapNotNull { (it as? JsonObject)?.get("id")?.jsonPrimitive?.content }.orEmpty()
     suspend fun badges(): BadgesDto = json.decodeFromString(call("GET", "/v1/me/badges", null, authed = true))
 
     suspend fun registerE2eDevice(deviceId: String, curve25519: String, ed25519: String) {

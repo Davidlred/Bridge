@@ -591,7 +591,7 @@ fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate)
 }
 
 @Composable
-fun LimitSheet(onManage: () -> Unit, onDismiss: () -> Unit) {
+fun LimitSheet(onManage: () -> Unit, onDismiss: () -> Unit, onUpgrade: (() -> Unit)? = null) {
     val c = LocalBridgeColors.current
     BridgeSheet(onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -599,6 +599,7 @@ fun LimitSheet(onManage: () -> Unit, onDismiss: () -> Unit) {
             SheetTitle(stringResource(R.string.limit_title))
             Text(stringResource(R.string.limit_body), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
             PrimaryButton(stringResource(R.string.limit_manage), onManage)
+            if (onUpgrade != null) SecondaryButton(stringResource(R.string.limit_upgrade), onUpgrade)
             SecondaryButton(stringResource(R.string.consent_decline), onDismiss)
         }
     }

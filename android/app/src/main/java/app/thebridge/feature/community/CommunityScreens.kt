@@ -78,7 +78,7 @@ data class CommunityActions(
     val showTab: (CommunityTab) -> Unit = {}, val react: (PostDto, Reaction) -> Unit = { _, _ -> }, val postMenu: (PostDto) -> Unit = {},
     val create: () -> Unit = {}, val join: () -> Unit = {}, val select: (String) -> Unit = {}, val invite: (AllianceDto) -> Unit = {}, val sampleInvite: () -> Unit = {},
     val openChat: (AllianceDto) -> Unit = {}, val options: (AllianceDto) -> Unit = {}, val applyNow: (AllianceDto) -> Unit = {},
-    val openDms: () -> Unit = {}, val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
+    val openDms: () -> Unit = {}, val alliancePlus: () -> Unit = {}, val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
 )
 
 @Composable
@@ -338,6 +338,13 @@ private fun Alliances(ui: CommunityUi, actions: CommunityActions, label: String,
         if (!sample) {
             GameCard(ally, ui.games[ally.id], label, { actions.playGame(ally) }, { actions.nudge(ally) })
             ui.ratings[ally.id]?.let { RatingCard(it) { actions.openBoard(ally) } }
+            // The founder can raise the cap to 50 (Alliance+ is paid by the founder).
+            if (ally.role == "owner" && ally.cap < 50) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).dashed(c.accLine, 14.dp)
+                .clickable(role = Role.Button, onClick = actions.alliancePlus).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(painterResource(R.drawable.ic_groups), null, tint = c.accInk, modifier = Modifier.size(19.dp))
+                Text(stringResource(R.string.ally_plus_link), style = BType.body(13, FontWeight.Medium), color = c.accInk, modifier = Modifier.weight(1f))
+                Icon(painterResource(R.drawable.ic_chevron_right), null, tint = c.accInk, modifier = Modifier.size(18.dp))
+            }
         }
         if (sample) SampleTiles()
         Text(stringResource(R.string.ally_feed), style = BType.label(11f, 0.14f), color = c.mut, modifier = Modifier.padding(top = 4.dp).semantics { heading() })

@@ -30,6 +30,7 @@ fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (St
     val ctx = LocalContext.current
     val shareText = @Composable { a: app.thebridge.data.remote.AllianceDto -> stringResource(R.string.ally_invite_share, a.name, "https://thebridge.app/join/${a.inviteCode}", a.inviteCode) }
     var inviteFor by remember { mutableStateOf<app.thebridge.data.remote.AllianceDto?>(null) }
+    var paywall by remember { mutableStateOf(false) }
     inviteFor?.let { a ->
         val text = shareText(a)
         // The system share sheet: the invite is a link with the code, nothing else about the goal.
@@ -42,8 +43,9 @@ fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (St
         back = onBack, retry = { vm.refresh() }, cycleShare = { vm.cycleShare() }, startPreview = vm::startPreview, endPreview = vm::endPreview, showTab = vm::showTab,
         react = { p, r -> vm.react(p, r) }, postMenu = vm::openPostMenu, create = vm::openCreate, join = vm::openJoin, select = vm::select,
         invite = { inviteFor = it }, sampleInvite = vm::sampleInvite, openChat = { onOpenChat(it.id) }, options = vm::askLeave, applyNow = { vm.applyNow(it) },
-        openDms = onDms, playGame = { onPlay(it.id) }, nudge = { vm.nudge(it) }, openBoard = { onBoard(it.id) },
+        openDms = onDms, alliancePlus = { paywall = true }, playGame = { onPlay(it.id) }, nudge = { vm.nudge(it) }, openBoard = { onBoard(it.id) },
     ))
+    if (paywall) app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.AlliancePlus, onDismiss = { paywall = false; vm.refresh() })
     when (val s = ui.sheet) {
         is CommunitySheet.Create -> CreateAllianceSheet(s, ui.goal, vm::onName, vm::onShared, vm::create, vm::closeSheet)
         is CommunitySheet.Join -> JoinAllianceSheet(s, vm::onCode, vm::join, vm::backToCode, vm::closeSheet)

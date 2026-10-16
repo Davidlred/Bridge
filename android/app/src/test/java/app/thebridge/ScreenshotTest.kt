@@ -100,6 +100,11 @@ import app.thebridge.feature.dm.SafetyContent
 import app.thebridge.feature.dm.ThreadActions
 import app.thebridge.feature.dm.ThreadScreen
 import app.thebridge.feature.dm.ThreadUi
+import app.thebridge.data.Offer
+import app.thebridge.data.Period
+import app.thebridge.data.Product
+import app.thebridge.feature.paywall.PaywallContent
+import app.thebridge.feature.paywall.PaywallUi
 import app.thebridge.ui.theme.BridgeTheme
 import app.thebridge.ui.theme.LocalBridgeColors
 import org.junit.Rule
@@ -293,6 +298,11 @@ class ScreenshotTest {
     @Test fun dmSafety() = snap("dm-safety") {
         Box(Modifier.padding(24.dp)) { SafetyContent("Jide", listOf(listOf("05211", "84720", "39021", "77310", "10442", "93017", "28150", "64093", "11827", "50306", "72291", "40968")), {}, {}) }
     }
+    // --- Paywall (prices come from the store; these are examples) ---
+    @Test fun paywallAlliancePlus() = snap("paywall-alliance") {
+        Box(Modifier.padding(24.dp)) { PaywallContent(PaywallUi(Product.AlliancePlus, loading = false, offers = listOf(Offer("m", "$3.99", Period.Month, 7)), selected = "m"), {}, {}, {}, {}) }
+    }
+    @Test fun paywallPlusUnavailable() = snap("paywall-plus-off") { Box(Modifier.padding(24.dp)) { PaywallContent(PaywallUi(Product.Plus, available = false, loading = false), {}, {}, {}, {}) } }
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}, onHall = {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }
     @Test fun upgrade() = snap("upgrade") { UpgradeScreen {} }

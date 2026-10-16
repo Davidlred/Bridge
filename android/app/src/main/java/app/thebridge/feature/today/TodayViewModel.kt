@@ -60,7 +60,10 @@ class TodayViewModel @Inject constructor(
     private val toaster: Toaster,
     session: SessionManager,
     private val social: app.thebridge.data.SocialRepository,
+    billing: app.thebridge.data.BillingRepository,
 ) : ViewModel() {
+    /** Plus lifts the three-goal limit (the server enforces it too). */
+    val hasPlus = billing.active.map { "plus" in it }
     private val open = MutableStateFlow(saved.get<String>("open"))
     private val view = MutableStateFlow(GoalView.Today)
     private val celebrate = MutableStateFlow<String?>(null)
