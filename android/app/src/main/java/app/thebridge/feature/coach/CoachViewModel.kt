@@ -66,6 +66,7 @@ class CoachViewModel @Inject constructor(
     private val goalsRepo: GoalRepository,
     private val toaster: Toaster,
     session: SessionManager,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
     private val local = MutableStateFlow(CoachUi())
     private val showEarlier = MutableStateFlow(false)
@@ -94,6 +95,7 @@ class CoachViewModel @Inject constructor(
         val text = (if (study) s.studyInput else s.input).trim()
         if (text.isEmpty() || s.busy) return
         local.update { if (study) it.copy(studyInput = "", studyReply = null) else it.copy(input = "") }
+        analytics.track(app.thebridge.data.Event.CoachMessageSent, "study" to study)
         run(study) { onFirst -> coach.send(text, state.value.focus?.goal?.id, if (study) "study" else "chat", onFirstToken = onFirst) }
     }
 

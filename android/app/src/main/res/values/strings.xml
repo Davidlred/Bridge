@@ -789,4 +789,6 @@
     <string name="toast_pw_nothing">No purchases to restore on this store account.</string>
     <string name="limit_upgrade">Get more goals with Plus</string>
     <string name="ally_plus_link">Need more than 15 members? Alliance+</string>
+    <string name="settings_analytics">Share anonymous usage data</string>
+    <string name="settings_analytics_sub">Counts like tasks done and features used. Never your goals, tasks, journal or messages.</string>
 </resources>

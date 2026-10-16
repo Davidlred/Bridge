@@ -72,6 +72,7 @@ class CommunityViewModel @Inject constructor(
     goals: GoalRepository,
     network: NetworkMonitor,
     private val toaster: Toaster,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
     private val route = saved.toRoute<Community>()
     val goalId = route.goalId
@@ -177,6 +178,7 @@ class CommunityViewModel @Inject constructor(
             try {
                 val a = social.create(s.name, if (s.shared) "shared" else "own", goalId)
                 local.update { it.copy(sheet = null, tab = CommunityTab.Alliance, selectedId = a.id) }
+                analytics.track(app.thebridge.data.Event.AllianceCreated, "mode" to a.planMode)
                 toaster.show(UiText.Res(if (s.shared) R.string.toast_created_shared else R.string.toast_created), ToastKind.Ok)
             } catch (e: Exception) {
                 val err = when ((e as? ApiException)?.code) { "name_not_allowed" -> UiText.Res(R.string.create_name_blocked); else -> offlineOr(e) }
@@ -203,6 +205,7 @@ class CommunityViewModel @Inject constructor(
                     if (p.planMode == "shared") { editSheet<CommunitySheet.Join> { it.copy(busy = false, preview = p) }; return@launch }
                 }
                 val a = social.join(code, goalId.takeIf { s.preview == null })
+                analytics.track(app.thebridge.data.Event.AllianceJoined, "mode" to a.planMode, "late_days" to ((s.preview?.pace?.groupDay ?: 1) - 1))
                 local.update { it.copy(sheet = null, tab = CommunityTab.Alliance, selectedId = a.id) }
                 toaster.show(if (a.isShared) UiText.Res(R.string.toast_joined_shared, listOf(a.name, s.preview?.label ?: a.name)) else UiText.Res(R.string.toast_joined, listOf(a.name)), ToastKind.Ok)
             } catch (e: Exception) {

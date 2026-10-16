@@ -102,6 +102,7 @@ class OnboardingViewModel @Inject constructor(
     private val session: SessionManager,
     private val toaster: Toaster,
     db: BridgeDb,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
     private val draft = MutableStateFlow<OnboardingDraft?>(null)
     private val extra = MutableStateFlow(Triple(0, 0, false))     // other tasks, other goals, busy
@@ -159,12 +160,12 @@ class OnboardingViewModel @Inject constructor(
     fun onGoal(v: String) = edit { it.copy(goal = v.take(GoalText.MAX_LENGTH)) }
     fun useExampleGoal(text: String) = edit { it.copy(goal = text) }
     fun onDeadline(d: LocalDate) = edit { it.copy(deadline = d.toString()) }
-    fun toRoutine() { if (state.value?.goalReady == true) edit { it.copy(step = Step.Routine) } }
+    fun toRoutine() { if (state.value?.goalReady == true) { edit { it.copy(step = Step.Routine) }; analytics.track(app.thebridge.data.Event.OnboardingStep, "step" to "routine") } }
 
     // --- Step 2 · Routine ---
     fun onRoutine(v: String) = edit { it.copy(routine = v.take(1000)) }
     fun useExampleRoutine(text: String) = edit { it.copy(routine = text) }
-    fun toPhoto() { if (state.value?.routineReady == true) edit { it.copy(step = Step.Photo) } }
+    fun toPhoto() { if (state.value?.routineReady == true) { edit { it.copy(step = Step.Photo) }; analytics.track(app.thebridge.data.Event.OnboardingStep, "step" to "photo") } }
 
     // --- Step 3 · Photo (the screen shows the consent sheet before calling this) ---
     fun uploadPhoto(uri: Uri) {
@@ -199,7 +200,9 @@ class OnboardingViewModel @Inject constructor(
         edit { it.copy(plan = PlanState.Running, clarification = null) }
         genJob = viewModelScope.launch {
             try {
+                val started = System.currentTimeMillis()
                 val plan = ai.plan(d.goal.trim(), d.deadline!!, LocalDay.today(), d.routine.trim(), extra.value.second)
+                analytics.track(app.thebridge.data.Event.PlanGenerated, "latency_ms" to (System.currentTimeMillis() - started), "tasks" to plan.tasks.size, "clarify" to (plan.needsClarification != null))
                 if (plan.needsClarification != null) { edit { it.copy(plan = PlanState.Clarify, clarification = plan.needsClarification) }; return@launch }
                 edit {
                     it.copy(plan = PlanState.Done, label = it.label.ifBlank { plan.label.ifBlank { GoalText.autoLabel(it.goal) } }, feasibility = plan.feasibility, category = plan.category,

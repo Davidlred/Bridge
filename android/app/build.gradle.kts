@@ -26,6 +26,8 @@ android {
         // OAuth *web* client id from Google Cloud (the same value goes in the server's GOOGLE_CLIENT_IDS). Empty = Google sign-in reports unavailable.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${prop("bridge.googleWebClientId", "")}\"")
         // RevenueCat public SDK key (goog_…). Empty = the paywall shows, but purchases are switched off.
+        // PostHog project key (phc_…). Empty = no analytics.
+        buildConfigField("String", "POSTHOG_KEY", "\"${prop("bridge.posthogKey", "")}\"")
         buildConfigField("String", "REVENUECAT_KEY", "\"${prop("bridge.revenuecatKey", "")}\"")
     }
     buildTypes {
@@ -94,6 +96,7 @@ dependencies {
     implementation(libs.credentials.play)
     implementation(libs.googleid)
     implementation(libs.revenuecat)
+    implementation(libs.posthog)
     implementation(libs.coil)
     implementation(libs.sqlcipher)
     implementation(libs.sqlite)

@@ -60,13 +60,14 @@ import javax.inject.Inject
 data class PaywallUi(val product: Product = Product.Plus, val available: Boolean = true, val loading: Boolean = true, val offers: List<Offer> = emptyList(), val selected: String? = null, val busy: Boolean = false)
 
 @HiltViewModel
-class PaywallViewModel @Inject constructor(private val billing: BillingRepository, private val toaster: Toaster) : ViewModel() {
+class PaywallViewModel @Inject constructor(private val billing: BillingRepository, private val toaster: Toaster, private val analytics: app.thebridge.data.Analytics) : ViewModel() {
     private val _state = MutableStateFlow(PaywallUi())
     val state = _state.asStateFlow()
 
     fun load(p: Product) {
         if (_state.value.product == p && !_state.value.loading) return
         _state.value = PaywallUi(product = p, available = billing.available)
+        analytics.track(app.thebridge.data.Event.PaywallViewed, "product" to p.entitlement)
         viewModelScope.launch {
             val offers = billing.offers(p)
             // Annual first when there is one (the better deal), as most paywalls do.
@@ -78,11 +79,12 @@ class PaywallViewModel @Inject constructor(private val billing: BillingRepositor
     fun buy(activity: Activity, onDone: () -> Unit) {
         val id = _state.value.selected ?: return
         _state.update { it.copy(busy = true) }
+        analytics.track(app.thebridge.data.Event.PurchaseStarted, "product" to _state.value.product.entitlement)
         viewModelScope.launch {
             val outcome = billing.purchase(activity, id)
             _state.update { it.copy(busy = false) }
             when (outcome) {
-                PurchaseOutcome.Done -> { toaster.show(UiText.Res(R.string.toast_pw_done), ToastKind.Ok); onDone() }
+                PurchaseOutcome.Done -> { analytics.track(app.thebridge.data.Event.PurchaseCompleted, "product" to _state.value.product.entitlement); toaster.show(UiText.Res(R.string.toast_pw_done), ToastKind.Ok); onDone() }
                 PurchaseOutcome.Pending -> { toaster.show(UiText.Res(R.string.toast_pw_pending)); onDone() }
                 PurchaseOutcome.Failed -> toaster.show(UiText.Res(R.string.toast_pw_failed), ToastKind.Warn)
                 PurchaseOutcome.Cancelled -> Unit

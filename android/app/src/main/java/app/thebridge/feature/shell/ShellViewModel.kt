@@ -43,7 +43,10 @@ class ShellViewModel @Inject constructor(
     private val api2: ApiClient,
     private val social: app.thebridge.data.SocialRepository,
     private val billing: app.thebridge.data.BillingRepository,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
+    val analyticsOn = analytics.enabled
+    fun setAnalytics(on: Boolean) = viewModelScope.launch { analytics.setEnabled(on) }
     private companion object { val COACH_READS_JOURNAL = androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal") }
     val reminders = reminderScheduler.settings
     val share = social.share
@@ -65,8 +68,8 @@ class ShellViewModel @Inject constructor(
         // Signed in: register this install (push token once Firebase is set up, and the home time zone).
         viewModelScope.launch {
             phase.collect {
-                if (it == app.thebridge.data.session.SessionPhase.Ready) { social.registerDevice(); session.user.value?.id?.let { id -> billing.identify(id) } }
-                if (it == app.thebridge.data.session.SessionPhase.SignedOut) billing.signedOut()
+                if (it == app.thebridge.data.session.SessionPhase.Ready) { social.registerDevice(); session.user.value?.id?.let { id -> billing.identify(id); analytics.identify(id) } }
+                if (it == app.thebridge.data.session.SessionPhase.SignedOut) { billing.signedOut(); analytics.reset() }
             }
         }
         // Network regained: push what was queued and say so.

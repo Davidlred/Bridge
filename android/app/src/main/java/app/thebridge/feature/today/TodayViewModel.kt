@@ -61,6 +61,7 @@ class TodayViewModel @Inject constructor(
     session: SessionManager,
     private val social: app.thebridge.data.SocialRepository,
     billing: app.thebridge.data.BillingRepository,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
     /** Plus lifts the three-goal limit (the server enforces it too). */
     val hasPlus = billing.active.map { "plus" in it }
@@ -85,6 +86,7 @@ class TodayViewModel @Inject constructor(
     fun toggle(taskId: String, done: Boolean) = viewModelScope.launch {
         repo.setDone(taskId, done)
         if (done) {
+            analytics.track(app.thebridge.data.Event.TaskCompleted)
             launch { repo.goalOf(taskId)?.let { social.announce(it) } }      // share progress, if the user allows it
             checkCelebrate()
         }
@@ -99,6 +101,7 @@ class TodayViewModel @Inject constructor(
         val shown = store.data.first()[CELEBRATED].orEmpty()
         if (key in shown) return
         store.edit { it[CELEBRATED] = (shown.filter { k -> k.substringAfter('|') >= LocalDate.parse(LocalDay.today()).minusDays(7).toString() } + key).toSet() }
+        analytics.track(app.thebridge.data.Event.DayCompleted, "tasks" to g.progress.tasksToday, "streak" to g.progress.streak)
         celebrate.value = g.goal.id
     }
     fun closeCelebrate() { celebrate.value = null }

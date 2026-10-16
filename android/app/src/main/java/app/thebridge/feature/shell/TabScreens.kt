@@ -83,6 +83,7 @@ fun ProfileScreen(
     hasPhoto: Boolean = false, onRemovePhoto: () -> Unit = {},
     coachName: String = "Arc", onRenameCoach: (String) -> Unit = {}, coachReadsJournal: Boolean = false, onCoachReadsJournal: (Boolean) -> Unit = {},
     share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null, onExport: () -> Unit = {},
+    analytics: Boolean = false, onAnalytics: (Boolean) -> Unit = {},
 ) {
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val c = LocalBridgeColors.current
@@ -117,6 +118,8 @@ fun ProfileScreen(
             SettingsValue(stringResource(R.string.settings_share), stringResource(when (share) {
                 app.thebridge.data.ShareLevel.Nothing -> R.string.settings_share_nothing; app.thebridge.data.ShareLevel.Streaks -> R.string.settings_share_streaks; app.thebridge.data.ShareLevel.All -> R.string.settings_share_all
             }), onShare)
+            HorizontalDivider(color = c.line)
+            SettingsToggle(stringResource(R.string.settings_analytics), stringResource(R.string.settings_analytics_sub), analytics, onAnalytics)
         }
         if (hasPhoto) SettingsSection(stringResource(R.string.settings_photo)) {
             SettingsLink(stringResource(R.string.settings_remove_photo), danger = true, onClick = onRemovePhoto)

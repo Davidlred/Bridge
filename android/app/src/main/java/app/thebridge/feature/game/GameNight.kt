@@ -108,6 +108,7 @@ class GameViewModel @Inject constructor(
     private val realtime: RealtimeClient,
     session: SessionManager,
     private val toaster: Toaster,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
     private val allianceId = saved.toRoute<GameNight>().allianceId
     private val _state = MutableStateFlow(GameUi(me = session.user.value?.id))
@@ -143,6 +144,8 @@ class GameViewModel @Inject constructor(
             "game:state" -> {
                 val g = runCatching { social.json.decodeFromJsonElement(GameDto.serializer(), e["game"]!!) }.getOrNull() ?: return
                 if (g.id != _state.value.game?.id) return
+                if (g.phase == "result" && _state.value.game?.phase != "result")
+                    analytics.track(app.thebridge.data.Event.GamePlayed, "ranked" to g.ranked, "players" to g.players.size, "won" to ((g.buildersWon == true) != (g.drifterId == _state.value.me)))
                 _state.update { it.copy(game = g) }
             }
             "game:role" -> if (e["gameId"]?.jsonPrimitive?.content == _state.value.game?.id) _state.update { it.copy(role = e["role"]?.jsonPrimitive?.content) }

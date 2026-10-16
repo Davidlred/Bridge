@@ -58,7 +58,9 @@ class JournalViewModel @Inject constructor(
     private val toaster: Toaster,
     private val network: NetworkMonitor,
     goals: GoalRepository,
+    private val analytics: app.thebridge.data.Analytics,
 ) : ViewModel() {
+    private var counted = mutableSetOf<String>()
     private val draft = MutableStateFlow(JournalUi(goalId = saved["goalId"]))
 
     val state: StateFlow<JournalUi> = combine(draft, goals.activeGoals(), journal.entries()) { d, gs, entries ->
@@ -95,6 +97,7 @@ class JournalViewModel @Inject constructor(
             delay(wait)
             val s = draft.value
             journal.save(s.goalId, s.today, s.mood, s.text)
+            if (counted.add("${s.goalId}|${s.today}")) analytics.track(app.thebridge.data.Event.JournalSaved, "mood" to (s.mood ?: 0))       // once per entry, not per keystroke
             draft.update { it.copy(save = if (network.online.value) SaveState.Saved else SaveState.SavedOffline, savedAt = System.currentTimeMillis()) }
         }
     }

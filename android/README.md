@@ -10,6 +10,7 @@ Open the `android/` folder in Android Studio, or build from a terminal:
 Debug builds call `http://10.0.2.2:8080` (the dev server on your machine, from the emulator). For a phone on the same Wi-Fi: `-Pbridge.apiBase=http://<your-ip>:8080`.
 Google sign-in needs the OAuth **web** client id: `-Pbridge.googleWebClientId=…` (or in `~/.gradle/gradle.properties`). Without it the button reports that Google sign-in is unavailable. Android offers Google and email sign-in only; Sign in with Apple is on iOS.
 
+Analytics need the PostHog project key: `-Pbridge.posthogKey=phc_…` (EU/UK users opt in; others can switch it off in Profile → Privacy). Events carry counts and codes only.
 Purchases need the RevenueCat public SDK key: `-Pbridge.revenuecatKey=goog_…`. Without it the paywall still shows but buying is switched off.
 Encrypted DMs use the Rust library in `../crypto`: Gradle builds it for each ABI, which needs rustup (targets aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android), `cargo install cargo-ndk --version 3.5.4` and the NDK.
 
