@@ -10,4 +10,5 @@ Object.assign(process.env, {
   JWT_ISSUER: 'https://api.test.thebridge.app',
   REPLICATE_API_TOKEN: 'test',
   MODEL_PLANNER: 'test/model', MODEL_COACH: 'test/model', MODEL_FAST: 'test/model', MODEL_IMAGE: 'test/model',
+  REVENUECAT_WEBHOOK_SECRET: 'rc-test-secret',
 });

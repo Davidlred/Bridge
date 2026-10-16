@@ -34,6 +34,8 @@ const Env = z.object({
   APNS_KEY_ID: z.string().optional(),
   APNS_TEAM_ID: z.string().optional(),
   APNS_BUNDLE_ID: z.string().default('app.thebridge.Bridge'),
+  // RevenueCat webhook: the Authorization header value set in the RevenueCat dashboard.
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
   // Signs short-lived media links. Defaults to a value derived from the JWT key.
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 });
