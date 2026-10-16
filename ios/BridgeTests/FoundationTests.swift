@@ -35,7 +35,7 @@ final class FoundationTests: XCTestCase {
 final class FoundationSnapshotTests: XCTestCase {
     private func verify(_ view: some View, named name: String, file: StaticString = #file, line: UInt = #line) {
         let session = SessionStore(); session.user = UserDTO(id: UUID(uuidString: "018b0000-0000-7000-8000-000000000001")!, email: "sharon@example.com", displayName: "Sharon", coachName: "Arc", createdAt: 1_760_000_000_000)
-        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore()).environment(DmStore())
+        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore()).environment(DmStore()).environment(BillingStore())
         let variants: [(String, UITraitCollection)] = [
             ("light", .init(userInterfaceStyle: .light)), ("dark", .init(userInterfaceStyle: .dark)),
             ("xxxl", .init(traitsFrom: [.init(userInterfaceStyle: .light), .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)])),
@@ -147,6 +147,10 @@ final class FoundationSnapshotTests: XCTestCase {
     func testDmSafety() {
         verify(SafetySheet(name: "Jide", numbers: [["05211", "84720", "39021", "77310", "10442", "93017", "28150", "64093", "11827", "50306", "72291", "40968"]], onVerify: {}, onDismiss: {}).background(Theme.bg), named: "dm-safety")
     }
+    func testPaywall() {
+        verify(PaywallContent(product: .alliancePlus, available: true, loading: false, offers: [PriceOffer(id: "m", price: "$3.99", period: .month, trialDays: 7)], selected: .constant("m")).background(Theme.bg), named: "paywall-alliance")
+    }
+    func testPaywallUnavailable() { verify(PaywallContent(product: .plus, available: false, loading: false, offers: [], selected: .constant(nil)).background(Theme.bg), named: "paywall-plus-off") }
     func testCreateAlliance() {
         let m = CommunityModel(); m.name = "Dawn Runners"; m.shared = true
         verify(CreateAllianceSheet(model: m, goal: goal, onCreate: {}).background(Theme.bg), named: "alliance-create")

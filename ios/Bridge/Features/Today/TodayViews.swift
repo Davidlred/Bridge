@@ -74,8 +74,8 @@ final class TodayModel {
 }
 
 enum TodaySheet: Identifiable, Equatable {
-    case task(UUID), add(UUID), goal(UUID), limit
-    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .limit: "l" } }
+    case task(UUID), add(UUID), goal(UUID), limit, plus
+    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .limit: "l"; case .plus: "p" } }
 }
 
 struct TodayView: View {
@@ -84,6 +84,7 @@ struct TodayView: View {
     @Environment(AppRouter.self) private var router
     @Environment(Toaster.self) private var toaster
     @Environment(SocialStore.self) private var social
+    @Environment(BillingStore.self) private var billing
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = TodayModel()
     @State private var sheet: TodaySheet?
@@ -114,7 +115,8 @@ struct TodayView: View {
         }
     }
 
-    private func addGoal() { if store.goals.count >= GoalStore.freeGoalLimit { sheet = .limit } else { router.today.append(Route.addGoal) } }
+    /// Plus lifts the three-goal limit (the server enforces it too).
+    private func addGoal() { if store.goals.count >= GoalStore.freeGoalLimit && !billing.active.contains("plus") { sheet = .limit } else { router.today.append(Route.addGoal) } }
 
     @ViewBuilder private func header(_ goals: [GoalState]) -> some View {
         let hour = Calendar.current.component(.hour, from: now)
@@ -320,7 +322,9 @@ struct TodayView: View {
     @ViewBuilder private func sheetView(_ s: TodaySheet) -> some View {
         switch s {
         case .limit:
-            LimitSheet(onManage: { sheet = nil; model.open(nil) }, onDismiss: { sheet = nil })
+            LimitSheet(onManage: { sheet = nil; model.open(nil) }, onDismiss: { sheet = nil }, onUpgrade: { sheet = .plus })
+        case .plus:
+            PaywallSheet(product: .plus) { sheet = nil }
         case .add(let goalId):
             TaskSheet(task: nil) { title, notes, priority, time in
                 store.addTask(goalId: goalId, title: title, notes: notes, priority: priority, time: time); sheet = nil
@@ -640,12 +644,14 @@ struct EditGoalSheet: View {
 struct LimitSheet: View {
     var onManage: () -> Void
     var onDismiss: () -> Void
+    var onUpgrade: (() -> Void)?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("3").font(BFont.display(22)).foregroundStyle(Theme.acc).frame(width: 48, height: 48).background(Theme.accTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text("Three goals at a time").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             Text("Each goal adds tasks to every day. Finish or archive one to make room for the next.").font(BFont.body(15)).foregroundStyle(Theme.ink2)
             Button("Manage my goals", action: onManage).buttonStyle(PrimaryButtonStyle())
+            if let onUpgrade { Button("Get more goals with Plus", action: onUpgrade).buttonStyle(SecondaryButtonStyle()) }
             Button("Not now", action: onDismiss).buttonStyle(SecondaryButtonStyle())
             Spacer()
         }

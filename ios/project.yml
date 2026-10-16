@@ -10,6 +10,8 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     DEVELOPMENT_TEAM: ""
     API_BASE_URL: https://api.thebridge.app
+    # RevenueCat public SDK key (appl_…). Empty = the paywall shows, but purchases are switched off.
+    REVENUECAT_KEY: ""
   configs:
     Debug:
       API_BASE_URL: http://localhost:8080
@@ -48,6 +50,7 @@ targets:
           - Geist.ttf
           - GeistMono.ttf
         APIBaseURL: $(API_BASE_URL)
+        RevenueCatKey: $(REVENUECAT_KEY)
         BGTaskSchedulerPermittedIdentifiers: [app.thebridge.sync]
         UIBackgroundModes: [fetch, remote-notification]
         ITSAppUsesNonExemptEncryption: true

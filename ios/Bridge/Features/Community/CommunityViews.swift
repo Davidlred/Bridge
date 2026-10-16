@@ -30,7 +30,7 @@ struct CommunityActions {
     var showTab: (CommunityTab) -> Void = { _ in }, react: (PostDTO, Reaction) -> Void = { _, _ in }, postMenu: (PostDTO) -> Void = { _ in }
     var create: () -> Void = {}, join: () -> Void = {}, select: (String) -> Void = { _ in }, sampleInvite: () -> Void = {}
     var openChat: (AllianceDTO) -> Void = { _ in }, leave: (AllianceDTO) -> Void = { _ in }, applyNow: (AllianceDTO) -> Void = { _ in }
-    var openDms: () -> Void = {}, playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
+    var openDms: () -> Void = {}, alliancePlus: () -> Void = {}, playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
 }
 
 /// Sheet and form state for the Community screen.
@@ -74,6 +74,7 @@ struct CommunityScreen: View {
     @Environment(SessionStore.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var model = CommunityModel()
+    @State private var paywall = false
 
     private var ui: CommunityUI {
         CommunityUI(goal: goals.goals.first { $0.id == goalId }, community: social.community(goalId), loading: model.loading && social.community(goalId) == nil,
@@ -92,6 +93,7 @@ struct CommunityScreen: View {
             openChat: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceChat(id)) } },
             leave: { model.leaving = $0 }, applyNow: applyNow,
             openDms: { router.today.append(Route.messages) },
+            alliancePlus: { paywall = true },
             playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
             nudge: nudge,
             openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } }
@@ -102,6 +104,10 @@ struct CommunityScreen: View {
             await refresh()
         }
         .onChange(of: network.online) { _, now in if now && model.feedError { Task { await refresh() } } }
+        .sheet(isPresented: $paywall) {
+            PaywallSheet(product: .alliancePlus) { paywall = false; Task { await refresh() } }
+                .presentationDetents([.large]).presentationDragIndicator(.visible).presentationBackground(Theme.bg)
+        }
         .sheet(item: $model.sheet) { s in
             Group {
                 if s == .create { CreateAllianceSheet(model: model, goal: ui.goal, onCreate: create) } else { JoinAllianceSheet(model: model, onJoin: join) }
@@ -444,6 +450,18 @@ private struct AllianceSection: View {
                 if !sample {
                     GameCard(status: ui.games[ally.id], goalLabel: label, onPlay: { actions.playGame(ally) }, onNudge: { actions.nudge(ally) })
                     if let r = ui.ratings[ally.id] { RatingCard(rating: r) { actions.openBoard(ally) } }
+                    // The founder can raise the cap to 50 (Alliance+ is paid by the founder).
+                    if ally.role == "owner" && ally.cap < 50 {
+                        Button(action: actions.alliancePlus) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "person.3.fill").accessibilityHidden(true)
+                                Text("Need more than 15 members? Alliance+").font(BFont.body(13, .medium)).frame(maxWidth: .infinity, alignment: .leading)
+                                Image(systemName: "chevron.right").accessibilityHidden(true)
+                            }
+                            .foregroundStyle(Theme.accInk).padding(.horizontal, 14).frame(minHeight: 48)
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.accLine, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                        }
+                    }
                 }
                 if sample { tiles }
                 Text("SHARED FEED").bridgeLabel(11).padding(.top, 4).accessibilityAddTraits(.isHeader)

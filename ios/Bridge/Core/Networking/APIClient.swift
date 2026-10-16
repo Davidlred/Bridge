@@ -330,6 +330,12 @@ actor APIClient {
     func rankings(_ allianceId: String) async throws -> BoardDTO { try JSONDecoder().decode(BoardDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/rankings", nil, authed: true)) }
     /// The whole account as JSON ("Download my data"). Never logged or cached.
     func exportData() async throws -> Data { try await raw("GET", "/v1/me/export", nil, authed: true) }
+    /// Entitlements the server honours (from RevenueCat webhooks).
+    func entitlements() async throws -> [String] {
+        struct E: Decodable { let id: String }
+        struct R: Decodable { let entitlements: [E] }
+        return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/me/entitlements", nil, authed: true)).entitlements.map(\.id)
+    }
     func badges() async throws -> BadgesDTO { try JSONDecoder().decode(BadgesDTO.self, from: try await raw("GET", "/v1/me/badges", nil, authed: true)) }
 
     /// This install, for push and the home time zone. `pushToken` is nil until APNs is configured.

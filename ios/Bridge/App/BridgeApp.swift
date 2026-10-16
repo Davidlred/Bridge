@@ -12,6 +12,7 @@ struct BridgeApp: App {
     @State private var coach = CoachModel()
     @State private var social = SocialStore()
     @State private var dms = DmStore()
+    @State private var billing = BillingStore()
     @AppStorage("themeOverride") private var themeOverride: String = "system"
     @Environment(\.scenePhase) private var scenePhase
 
@@ -26,6 +27,8 @@ struct BridgeApp: App {
                 .environment(coach)
                 .environment(social)
                 .environment(dms)
+                .environment(billing)
+                .task { billing.configure() }
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }
@@ -141,6 +144,7 @@ struct RootView: View {
     @Environment(NetworkStatus.self) private var network
     @Environment(Toaster.self) private var toaster
     @Environment(SocialStore.self) private var social
+    @Environment(BillingStore.self) private var billing
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var auth = AuthModel()
     @State private var mustUpgrade = false
@@ -174,7 +178,10 @@ struct RootView: View {
         .task { auth.attach(session: session, toaster: toaster); await session.bootstrap() }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in session.expired() }
         .onReceive(NotificationCenter.default.publisher(for: .upgradeRequired)) { _ in mustUpgrade = true }
-        .onChange(of: session.phase) { _, phase in if phase == .ready { Task { await social.registerDevice() } } }
+        .onChange(of: session.phase) { _, phase in
+            if phase == .ready { Task { await social.registerDevice(); if let id = session.user?.id { await billing.identify(id.uuidString.lowercased()) } } }
+            if phase == .signedOut { Task { await billing.signedOut() } }
+        }
         .onChange(of: network.online) { was, now in
             if now && !was {
                 Task { await social.flushQueued() }                // alliance chat written offline
