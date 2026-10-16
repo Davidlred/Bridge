@@ -78,6 +78,7 @@ data class CommunityActions(
     val showTab: (CommunityTab) -> Unit = {}, val react: (PostDto, Reaction) -> Unit = { _, _ -> }, val postMenu: (PostDto) -> Unit = {},
     val create: () -> Unit = {}, val join: () -> Unit = {}, val select: (String) -> Unit = {}, val invite: (AllianceDto) -> Unit = {}, val sampleInvite: () -> Unit = {},
     val openChat: (AllianceDto) -> Unit = {}, val options: (AllianceDto) -> Unit = {}, val applyNow: (AllianceDto) -> Unit = {},
+    val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
 )
 
 @Composable
@@ -330,6 +331,10 @@ private fun Alliances(ui: CommunityUi, actions: CommunityActions, label: String,
         }
         if (sample) Text(stringResource(R.string.ally_sample), style = BType.label(10f, 0.14f), color = c.accInk)
         AllianceCard(ally, ui, actions, sample, today)
+        if (!sample) {
+            GameCard(ally, ui.games[ally.id], label, { actions.playGame(ally) }, { actions.nudge(ally) })
+            ui.ratings[ally.id]?.let { RatingCard(it) { actions.openBoard(ally) } }
+        }
         if (sample) SampleTiles()
         Text(stringResource(R.string.ally_feed), style = BType.label(11f, 0.14f), color = c.mut, modifier = Modifier.padding(top = 4.dp).semantics { heading() })
         if (ally.feed.isEmpty()) Text(stringResource(R.string.ally_feed_empty), style = BType.body(13), color = c.mut)

@@ -37,6 +37,8 @@ enum Theme {
     /// Avatar circles and the four feature tiles (Community preview).
     static let av = Color(light: 0xFCE7D9, dark: 0x1F1F1F)
     static let tiles: [Color] = [Color(light: 0xFCE7D9, dark: 0x151515), Color(light: 0xE4F2D9, dark: 0x151515), Color(light: 0xDFECF6, dark: 0x151515), Color(light: 0xFBF0CF, dark: 0x151515)]
+    /// Bronze tier in alliance rankings (gold uses accInk, silver ink2).
+    static let bronze = Color(light: 0xC98B5A, dark: 0xC98B5A)
     static let goalCards: [Color] = [Color(light: 0xFCE7D9, dark: 0x7E3A20), Color(light: 0xE4F2D9, dark: 0x24564F), Color(light: 0xDFECF6, dark: 0x5A4A1C)]
     static let goalInk = Color(light: 0x23262B, dark: 0xFFFFFF)
     static let goalTrack = Color(light: 0x23262B, dark: 0xFFFFFF, lightAlpha: 0.12, darkAlpha: 0.25)

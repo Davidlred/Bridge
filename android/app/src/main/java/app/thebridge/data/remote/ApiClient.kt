@@ -90,6 +90,25 @@ class StreamInterrupted : Exception()
 @Serializable private data class MessagesResponse(val messages: List<AllianceMessageDto>)
 @Serializable private data class MessageResponse(val message: AllianceMessageDto)
 
+// --- Game Night, rankings, Hall of Fame (milestone 5). Roles only appear in the result. ---
+@Serializable data class GamePlayerDto(val userId: String, val name: String, val ready: Boolean = false, val absent: Boolean = false, val voted: Boolean = false,
+    val role: String? = null, val actions: Int = 0, @kotlinx.serialization.SerialName("fun") val funPoints: Int = 0)
+@Serializable data class ClueDto(val who: String, val text: String)
+@Serializable data class GameDto(
+    val id: String, val allianceId: String, val ranked: Boolean = false, val phase: String, val endsAt: Long = 0, val players: List<GamePlayerDto> = emptyList(),
+    val planks: List<String> = emptyList(), val integrity: Int = 100, val clues: List<ClueDto> = emptyList(),
+    val drifterId: String? = null, val ejectedId: String? = null, val buildersWon: Boolean? = null, val tally: Map<String, Int> = emptyMap(), val mvpId: String? = null,
+)
+@Serializable data class GameStatusDto(val unlocked: Boolean = false, val rankedToday: Boolean = false, val eligible: Int = 0, val finished: Int = 0, val needsPlayers: Boolean = false,
+    val waiting: List<String> = emptyList(), val meLeft: Int? = null, val game: GameDto? = null)
+@Serializable data class RatingDto(val overall: Int, val tier: String, val rank: Int, val of: Int, val band: String = "", val productivity: Int, val efficiency: Int, @kotlinx.serialization.SerialName("fun") val funScore: Int)
+@Serializable data class BoardRowDto(val rank: Int, val name: String, val score: Int, val tier: String, val members: Int, val mine: Boolean = false)
+@Serializable data class BoardDto(val category: String = "other", val band: String = "", val rank: Int = 0, val of: Int = 0, val rows: List<BoardRowDto> = emptyList())
+@Serializable data class BadgeDto(val key: String, val earned: Boolean, val earnedAt: Long? = null, val progress: Int? = null, val goal: Int? = null)
+@Serializable data class BadgesDto(val public: Boolean = false, val badges: List<BadgeDto> = emptyList())
+@Serializable private data class GameResponse(val game: GameDto)
+@Serializable private data class NudgeResponse(val sent: Int = 0)
+
 /** Events of one coach reply. */
 sealed interface CoachEvent {
     data class Token(val text: String) : CoachEvent
@@ -211,6 +230,15 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun allianceMessages(id: String): List<AllianceMessageDto> = json.decodeFromString<MessagesResponse>(call("GET", "/v1/alliances/$id/messages", null, authed = true)).messages
     suspend fun sendAllianceMessage(id: String, clientId: String, body: String): AllianceMessageDto =
         json.decodeFromString<MessageResponse>(call("POST", "/v1/alliances/$id/messages", buildJsonObject { put("clientId", clientId); put("body", body) }, authed = true)).message
+
+    // --- Game Night, rankings, Hall of Fame ---
+    suspend fun gameStatus(allianceId: String): GameStatusDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/game", null, authed = true))
+    suspend fun openGame(allianceId: String): GameDto = json.decodeFromString<GameResponse>(call("POST", "/v1/alliances/$allianceId/game", null, authed = true)).game
+    suspend fun nudge(allianceId: String): Int = json.decodeFromString<NudgeResponse>(call("POST", "/v1/alliances/$allianceId/game/nudge", null, authed = true)).sent
+    suspend fun shareGame(allianceId: String, gameId: String) { call("POST", "/v1/alliances/$allianceId/games/$gameId/share", null, authed = true) }
+    suspend fun rating(allianceId: String): RatingDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rating", null, authed = true))
+    suspend fun rankings(allianceId: String): BoardDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rankings", null, authed = true))
+    suspend fun badges(): BadgesDto = json.decodeFromString(call("GET", "/v1/me/badges", null, authed = true))
 
     /** This install, for push and the user's home time zone. [pushToken] is null until Firebase is configured. */
     suspend fun registerDevice(id: String, pushToken: String?) {

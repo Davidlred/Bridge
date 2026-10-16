@@ -82,7 +82,7 @@ fun ProfileScreen(
     reminders: ReminderSettings = ReminderSettings(), onDaily: () -> Unit = {}, onRisk: () -> Unit = {},
     hasPhoto: Boolean = false, onRemovePhoto: () -> Unit = {},
     coachName: String = "Arc", onRenameCoach: (String) -> Unit = {}, coachReadsJournal: Boolean = false, onCoachReadsJournal: (Boolean) -> Unit = {},
-    share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {},
+    share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null,
 ) {
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val c = LocalBridgeColors.current
@@ -96,6 +96,12 @@ fun ProfileScreen(
                 if (memberSince != null) Text(stringResource(R.string.profile_member_since, "${memberSince.month.getDisplayName(DateTextStyle.SHORT, Locale.getDefault())} ${memberSince.year}".uppercase()), style = BType.label(10f), color = c.mut)
                 if (email != null) Text(email, style = BType.body(13), color = c.mut)
             }
+        }
+        if (onHall != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.s1).border(1.dp, c.accLine, RoundedCornerShape(20.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onHall).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_shield), null, tint = c.acc, modifier = Modifier.size(26.dp))
+            Text(stringResource(R.string.hall_title), style = BType.display(16), color = c.ink, modifier = Modifier.weight(1f))
+            androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_chevron_right), null, tint = c.mut, modifier = Modifier.size(22.dp))
         }
         SettingsSection(stringResource(R.string.settings_notifications)) {
             SettingsValue(stringResource(R.string.settings_daily_reminder), reminders.daily?.let(::clock) ?: stringResource(R.string.settings_off), onDaily)

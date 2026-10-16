@@ -76,6 +76,20 @@ import app.thebridge.feature.community.CommunityTab
 import app.thebridge.feature.community.CommunityUi
 import app.thebridge.feature.community.CreateAllianceContent
 import app.thebridge.feature.community.JoinAllianceContent
+import app.thebridge.data.remote.BadgeDto
+import app.thebridge.data.remote.BadgesDto
+import app.thebridge.data.remote.BoardDto
+import app.thebridge.data.remote.BoardRowDto
+import app.thebridge.data.remote.ClueDto
+import app.thebridge.data.remote.GameDto
+import app.thebridge.data.remote.GamePlayerDto
+import app.thebridge.data.remote.GameStatusDto
+import app.thebridge.data.remote.RatingDto
+import app.thebridge.feature.community.HallOfFameScreen
+import app.thebridge.feature.community.RankingsScreen
+import app.thebridge.feature.game.GameActions
+import app.thebridge.feature.game.GameScreen
+import app.thebridge.feature.game.GameUi
 import app.thebridge.ui.theme.BridgeTheme
 import app.thebridge.ui.theme.LocalBridgeColors
 import org.junit.Rule
@@ -224,7 +238,33 @@ class ScreenshotTest {
             AllianceMessageEntity("c5", "a1", null, null, null, "See you there", true, now, "failed"),
         ), "Same"), ChatActions(), now)
     }
-    @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}) }
+    // --- Milestone 5 ---
+    private val gamePlayers = listOf("me" to "Sharon", "u1" to "Jide", "u2" to "Funmi", "u3" to "Bayo", "u4" to "Lola").map { (id, n) -> GamePlayerDto(id, n, ready = id != "u4") }
+    private fun game(phase: String, extra: GameDto.() -> GameDto = { this }) = GameDto("g1", "a1", ranked = true, phase = phase, endsAt = now + 9_000, players = gamePlayers,
+        planks = listOf("cracked", "ok", "ok", "ok", "cracked", "ok", "cracked", "ok"), integrity = 63,
+        clues = listOf(ClueDto("u1", "Jide repaired plank 2."), ClueDto("u2", "Plank 1 loosened. Funmi was nearby."))).extra()
+    private fun gameUi(g: GameDto, role: String? = "builder") = GameUi(me = "me", game = g, role = role, revealed = true, now = now, mine = 2)
+    @Test fun allianceGameAndRating() = snap("alliance-game") {
+        CommunityScreen(open.copy(tab = CommunityTab.Alliance, alliances = listOf(dawn), games = mapOf("a2" to GameStatusDto(unlocked = false, eligible = 4, finished = 3, waiting = listOf("Bayo"))),
+            ratings = mapOf("a2" to RatingDto(82, "silver", 4, 31, "2-5", 86, 78, 64))), CommunityActions(), day, now)
+    }
+    @Test fun gameLobby() = snap("game-lobby") { GameScreen(gameUi(game("lobby") { copy(planks = emptyList()) }, null), GameActions()) }
+    @Test fun gameRole() = snap("game-role") { GameScreen(gameUi(game("role"), "drifter"), GameActions()) }
+    @Test fun gameRound() = snap("game-round") { GameScreen(gameUi(game("round")), GameActions()) }
+    @Test fun gameVote() = snap("game-vote") { GameScreen(gameUi(game("vote")).copy(choice = "u2"), GameActions()) }
+    @Test fun gameResult() = snap("game-result") {
+        GameScreen(gameUi(game("result") { copy(drifterId = "u2", ejectedId = "u2", buildersWon = true, tally = mapOf("u2" to 3, "u1" to 1), mvpId = "me",
+            players = players.map { it.copy(role = if (it.userId == "u2") "drifter" else "builder", funPoints = if (it.userId == "u2") 6 else 12) }) }), GameActions())
+    }
+    @Test fun rankings() = snap("rankings") {
+        RankingsScreen(BoardDto("fitness", "2-5", 4, 31, listOf(BoardRowDto(1, "Iron Mornings", 94, "gold", 5), BoardRowDto(2, "Quiet Hustle", 88, "gold", 4),
+            BoardRowDto(3, "Page a Day", 84, "silver", 3), BoardRowDto(4, "Dawn Runners", 82, "silver", 4, mine = true), BoardRowDto(5, "Slow Savers", 71, "bronze", 5))), false, {}, {})
+    }
+    @Test fun hallOfFame() = snap("hall") {
+        HallOfFameScreen(BadgesDto(true, listOf(BadgeDto("first", true), BadgeDto("s7", true), BadgeDto("s21", false, progress = 9, goal = 21), BadgeDto("arch", true),
+            BadgeDto("s30", false, progress = 9, goal = 30), BadgeDto("week", false), BadgeDto("ref", false, progress = 12, goal = 30), BadgeDto("ally", true), BadgeDto("goal", false))), {}, {})
+    }
+    @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}, onHall = {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }
     @Test fun upgrade() = snap("upgrade") { UpgradeScreen {} }
 }

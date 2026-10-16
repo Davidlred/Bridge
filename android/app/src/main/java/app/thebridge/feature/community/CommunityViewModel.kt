@@ -54,6 +54,9 @@ data class CommunityUi(
     val alliances: List<AllianceDto> = emptyList(),
     val selectedId: String? = null,
     val sheet: CommunitySheet? = null,
+    /** Game card and rating per alliance (online only; absent while loading or offline). */
+    val games: Map<String, app.thebridge.data.remote.GameStatusDto> = emptyMap(),
+    val ratings: Map<String, app.thebridge.data.remote.RatingDto> = emptyMap(),
 ) {
     /** Before the first response, the device's own streak decides (the server confirms it). */
     val unlocked: Boolean get() = community?.unlocked ?: ((goal?.progress?.streak ?: 0) >= 7)
@@ -77,12 +80,13 @@ class CommunityViewModel @Inject constructor(
     private data class Local(
         val loading: Boolean = true, val feedError: Boolean = false, val previewing: Boolean = false, val tab: CommunityTab = CommunityTab.Feed,
         val selectedId: String? = null, val sheet: CommunitySheet? = null,
+        val games: Map<String, app.thebridge.data.remote.GameStatusDto> = emptyMap(), val ratings: Map<String, app.thebridge.data.remote.RatingDto> = emptyMap(),
     )
 
     val state: StateFlow<CommunityUi> = combine(goals.activeGoals(), social.community(goalId), social.alliances(), social.share, local) { gs, c, all, share, l ->
         CommunityUi(
             goal = gs.find { it.goal.id == goalId }, community = c, loading = l.loading && c == null, feedError = l.feedError, previewing = l.previewing,
-            tab = l.tab, share = share, alliances = all.filter { it.goalId == goalId }, selectedId = l.selectedId, sheet = l.sheet,
+            tab = l.tab, share = share, alliances = all.filter { it.goalId == goalId }, selectedId = l.selectedId, sheet = l.sheet, games = l.games, ratings = l.ratings,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CommunityUi())
 
@@ -99,6 +103,7 @@ class CommunityViewModel @Inject constructor(
             social.refreshCommunity(goalId)
             runCatching { social.refreshAlliances() }
             local.update { it.copy(loading = false) }
+            loadGame()
         } catch (e: Exception) {
             local.update { it.copy(loading = false, feedError = true) }
         }
@@ -107,7 +112,19 @@ class CommunityViewModel @Inject constructor(
     fun showTab(t: CommunityTab) = local.update { it.copy(tab = t) }
     fun startPreview() = local.update { it.copy(previewing = true, tab = CommunityTab.Feed) }
     fun endPreview() = local.update { it.copy(previewing = false) }
-    fun select(id: String) = local.update { it.copy(selectedId = id) }
+    fun select(id: String) { local.update { it.copy(selectedId = id) }; loadGame() }
+
+    /** Game card and rating for the alliance on screen. */
+    fun loadGame() = viewModelScope.launch {
+        val a = state.value.selected ?: social.alliances().first().firstOrNull { it.goalId == goalId } ?: return@launch
+        runCatching { social.gameStatus(a.id) }.onSuccess { s -> local.update { it.copy(games = it.games + (a.id to s)) } }
+        runCatching { social.rating(a.id) }.onSuccess { r -> local.update { it.copy(ratings = it.ratings + (a.id to r)) } }
+    }
+
+    fun nudge(a: AllianceDto) = viewModelScope.launch {
+        try { toaster.show(UiText.Res(if (social.nudge(a.id) > 0) R.string.toast_nudged else R.string.toast_nudged_none), ToastKind.Ok) }
+        catch (e: Exception) { toaster.show(offlineOr(e), ToastKind.Warn) }
+    }
 
     fun cycleShare() = viewModelScope.launch {
         social.setShare(state.value.share.next())

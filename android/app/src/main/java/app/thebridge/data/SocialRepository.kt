@@ -62,7 +62,7 @@ class SocialRepository @Inject constructor(
     private val goals: GoalRepository,
     private val store: DataStore<Preferences>,
 ) {
-    private val json get() = api.json
+    val json get() = api.json
     private val dao get() = db.social()
     private val allianceList = ListSerializer(AllianceDto.serializer())
 
@@ -192,6 +192,16 @@ class SocialRepository @Inject constructor(
         dao.remove(m.id)
     }
 
+    // --- Game Night, rankings, Hall of Fame ---
+    suspend fun gameStatus(allianceId: String) = api.gameStatus(allianceId)
+    suspend fun openGame(allianceId: String) = api.openGame(allianceId)
+    suspend fun nudge(allianceId: String) = api.nudge(allianceId)
+    suspend fun shareGame(allianceId: String, gameId: String) = api.shareGame(allianceId, gameId)
+    suspend fun rating(allianceId: String) = api.rating(allianceId)
+    suspend fun rankings(allianceId: String) = api.rankings(allianceId)
+    suspend fun badges() = api.badges()
+    suspend fun setBadgesPublic(on: Boolean) { session.user.value?.id?.let { goals.saveSetting(it, "badgesPublic", on) } }
+
     /** Push registration for this install (no token until Firebase is configured), plus the home time zone. */
     suspend fun registerDevice() { runCatching { api.registerDevice(session.deviceId(), null) } }
 
@@ -218,12 +228,20 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
     private var users = 0
     private var attempt = 0
     private var reconnect: Job? = null
+    private val _events = kotlinx.coroutines.flow.MutableSharedFlow<JsonObject>(extraBufferCapacity = 64)
+    /** Game frames (`game:state`, `game:role`, `game:error`) for the Game Night screen. */
+    val events: kotlinx.coroutines.flow.SharedFlow<JsonObject> = _events
+    private val _connected = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** True once the server has accepted the auth frame; a reconnect flips it back, so screens can re-join. */
+    val connected: kotlinx.coroutines.flow.StateFlow<Boolean> = _connected
+
+    fun send(frame: JsonObject): Boolean = socket?.send(frame.toString()) == true
 
     @Synchronized fun acquire() { if (++users == 1) connect() }
 
     @Synchronized fun release() {
         if (--users > 0) return
-        users = 0; reconnect?.cancel(); socket?.close(1000, null); socket = null
+        users = 0; reconnect?.cancel(); socket?.close(1000, null); socket = null; _connected.value = false
     }
 
     /** After joining or creating an alliance, so its messages arrive too. */
@@ -243,7 +261,7 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
     }
 
     @Synchronized private fun retry(refresh: Boolean) {
-        socket = null
+        socket = null; _connected.value = false
         if (users == 0) return
         reconnect?.cancel()
         reconnect = scope.launch {
@@ -262,6 +280,8 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
                 db.social().upsert(m.toEntity(allianceId))
             }
             "hidden" -> e["id"]?.jsonPrimitive?.content?.let { db.social().removeByServerId(it) }   // removed by moderation
+            "ready" -> _connected.value = true
+            else -> if (e["type"]?.jsonPrimitive?.content?.startsWith("game:") == true) _events.emit(e)
         }
     }
 }

@@ -149,7 +149,7 @@ fun AllianceChatScreen(ui: AllianceChatUi, actions: ChatActions, now: Long = Sys
                 }
             }
             if (ui.messages.isEmpty()) item { Text(stringResource(R.string.chat_empty), style = BType.body(13), color = c.mut, modifier = Modifier.padding(top = 8.dp)) }
-            items(ui.messages, key = { it.id }) { m -> if (m.mine) Mine(m, actions) else Theirs(m, now, actions) }
+            items(ui.messages, key = { it.id }) { m -> if (m.mine) Mine(m, actions) else if (m.userId == null) SystemLine(m) else Theirs(m, now, actions) }
         }
         Composer(ui.input, actions)
     }
@@ -168,6 +168,17 @@ private fun Theirs(m: AllianceMessageEntity, now: Long, actions: ChatActions) {
             Text(m.body, style = BType.body(15), color = c.ink, modifier = Modifier.clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 5.dp)).background(c.s1)
                 .border(1.dp, c.line, RoundedCornerShape(16.dp, 16.dp, 16.dp, 5.dp)).combinedClickable(onClickLabel = null, onLongClickLabel = options, onLongClick = { actions.report(m) }, onClick = {})
                 .padding(horizontal = 13.dp, vertical = 10.dp))
+        }
+    }
+}
+
+@Composable
+private fun SystemLine(m: AllianceMessageEntity) {
+    val c = LocalBridgeColors.current
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(Modifier.heightIn(min = 28.dp).background(c.okTint, RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(painterResource(R.drawable.ic_check_circle), null, tint = c.ok, modifier = Modifier.size(15.dp))
+            Text(m.body, style = BType.body(12, FontWeight.Medium), color = c.ok)
         }
     }
 }
