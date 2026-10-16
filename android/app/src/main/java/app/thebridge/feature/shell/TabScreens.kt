@@ -82,7 +82,7 @@ fun ProfileScreen(
     reminders: ReminderSettings = ReminderSettings(), onDaily: () -> Unit = {}, onRisk: () -> Unit = {},
     hasPhoto: Boolean = false, onRemovePhoto: () -> Unit = {},
     coachName: String = "Arc", onRenameCoach: (String) -> Unit = {}, coachReadsJournal: Boolean = false, onCoachReadsJournal: (Boolean) -> Unit = {},
-    share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null,
+    share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null, onExport: () -> Unit = {},
 ) {
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val c = LocalBridgeColors.current
@@ -124,6 +124,8 @@ fun ProfileScreen(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.settings_account).uppercase(), style = BType.label(10f), color = c.mut, modifier = Modifier.semantics { heading() })
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(c.s1).border(1.dp, c.line, RoundedCornerShape(Radius.card))) {
+                SettingsLink(stringResource(R.string.settings_export), danger = false, onClick = onExport)
+                HorizontalDivider(color = c.line)
                 SettingsLink(stringResource(R.string.settings_log_out), danger = false, onClick = onLogOut)
                 HorizontalDivider(color = c.line)
                 SettingsLink(stringResource(R.string.settings_delete_account), danger = true, onClick = onDelete)

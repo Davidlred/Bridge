@@ -238,6 +238,8 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun shareGame(allianceId: String, gameId: String) { call("POST", "/v1/alliances/$allianceId/games/$gameId/share", null, authed = true) }
     suspend fun rating(allianceId: String): RatingDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rating", null, authed = true))
     suspend fun rankings(allianceId: String): BoardDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rankings", null, authed = true))
+    /** The whole account as JSON ("Download my data"). Never logged or cached. */
+    suspend fun exportData(): String = call("GET", "/v1/me/export", null, authed = true)
     suspend fun badges(): BadgesDto = json.decodeFromString(call("GET", "/v1/me/badges", null, authed = true))
 
     /** This install, for push and the user's home time zone. [pushToken] is null until Firebase is configured. */

@@ -724,4 +724,6 @@
     <string name="badge_goal_hint">Achieve your goal</string>
     <string name="badge_a11y_earned">%1$s, earned</string>
     <string name="badge_a11y_locked">%1$s, not earned yet. %2$s</string>
+    <string name="settings_export">Download my data</string>
+    <string name="toast_exported">Your data is saved.</string>
 </resources>

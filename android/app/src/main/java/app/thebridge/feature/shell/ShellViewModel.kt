@@ -82,6 +82,16 @@ class ShellViewModel @Inject constructor(
 
     fun clearDeleteError() { _deleteError.value = null }
 
+    /** "Download my data": fetches the export and writes it where the user chose in the system Save dialog. */
+    fun exportData(target: android.net.Uri) = viewModelScope.launch {
+        try {
+            val json = api2.exportData()
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ctx.contentResolver.openOutputStream(target)?.use { it.write(json.toByteArray()) } }
+            toaster.show(UiText.Res(R.string.toast_exported), ToastKind.Ok)
+        } catch (e: OfflineException) { toaster.show(UiText.Res(R.string.error_offline), ToastKind.Warn) }
+        catch (e: Exception) { toaster.show(UiText.Res(R.string.error_generic), ToastKind.Warn) }
+    }
+
     /** Profile → Privacy: Nothing → Streaks only → Streaks & milestones. */
     fun cycleShare() = viewModelScope.launch { social.setShare(share.first().next()) }
 

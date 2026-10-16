@@ -231,6 +231,8 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
     val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
     val share by shell.share.collectAsStateWithLifecycle(app.thebridge.data.ShareLevel.Streaks)
+    // "Download my data": the system Save dialog picks where the JSON goes.
+    val saveExport = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(shell::exportData) }
     // One coach ViewModel for the tab and Study Mode, so they share the conversation.
     val coachVm = app.thebridge.feature.coach.rememberCoachViewModel()
     val toTab: (Any) -> Unit = { graph -> nav.navigate(graph) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
@@ -283,7 +285,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         reminders = reminders, onDaily = shell::cycleDaily, onRisk = shell::cycleRisk,
                         hasPhoto = user?.photoUrl != null, onRemovePhoto = shell::removePhoto,
                         coachName = user?.coachName ?: "Arc", onRenameCoach = shell::renameCoach, coachReadsJournal = coachReadsJournal, onCoachReadsJournal = shell::setCoachReadsJournal,
-                        share = share, onShare = shell::cycleShare, onHall = { nav.navigate(HallOfFame) },
+                        share = share, onShare = shell::cycleShare, onHall = { nav.navigate(HallOfFame) }, onExport = { saveExport.launch("the-bridge-export.json") },
                     )
                 }
                 composable<HallOfFame> { app.thebridge.feature.community.HallRoute(onBack = { nav.popBackStack() }) }
