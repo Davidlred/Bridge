@@ -79,6 +79,7 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.work.runtime)
     implementation("${libs.jna.get()}@aar")              // UniFFI bindings call the Rust library through JNA
+    testImplementation(libs.jna)                            // desktop JNA for the bindings test against a host build of crypto/
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation)

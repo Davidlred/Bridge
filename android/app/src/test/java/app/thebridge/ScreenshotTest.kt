@@ -90,6 +90,16 @@ import app.thebridge.feature.community.RankingsScreen
 import app.thebridge.feature.game.GameActions
 import app.thebridge.feature.game.GameScreen
 import app.thebridge.feature.game.GameUi
+import app.thebridge.data.Verification
+import app.thebridge.data.local.DmMessageEntity
+import app.thebridge.data.remote.DmContactDto
+import app.thebridge.feature.dm.DmRow
+import app.thebridge.feature.dm.InboxScreen
+import app.thebridge.feature.dm.InboxUi
+import app.thebridge.feature.dm.SafetyContent
+import app.thebridge.feature.dm.ThreadActions
+import app.thebridge.feature.dm.ThreadScreen
+import app.thebridge.feature.dm.ThreadUi
 import app.thebridge.ui.theme.BridgeTheme
 import app.thebridge.ui.theme.LocalBridgeColors
 import org.junit.Rule
@@ -263,6 +273,25 @@ class ScreenshotTest {
     @Test fun hallOfFame() = snap("hall") {
         HallOfFameScreen(BadgesDto(true, listOf(BadgeDto("first", true), BadgeDto("s7", true), BadgeDto("s21", false, progress = 9, goal = 21), BadgeDto("arch", true),
             BadgeDto("s30", false, progress = 9, goal = 30), BadgeDto("week", false), BadgeDto("ref", false, progress = 12, goal = 30), BadgeDto("ally", true), BadgeDto("goal", false))), {}, {})
+    }
+    // --- Encrypted DMs ---
+    private val dmMsgs = listOf(
+        DmMessageEntity("d1", "u1", false, "Saw your 30-day streak. How do you keep the mornings going?", now - 50 * 60_000),
+        DmMessageEntity("d2", "u1", true, "Clothes out the night before, and the alarm across the room.", now - 45 * 60_000),
+        DmMessageEntity("d3", "u1", false, "Trying that tomorrow.", now - 30 * 60_000),
+        DmMessageEntity("d4", "u1", true, "Tell me how it goes", now - 60_000, status = "queued"),
+        DmMessageEntity("d5", "u1", true, "Good luck!", now, status = "failed"),
+    )
+    @Test fun dmInbox() = snap("dm-inbox") {
+        InboxScreen(InboxUi(listOf(
+            DmRow(DmContactDto("u1", "Jide", true), dmMsgs[2], unread = true, verified = true),
+            DmRow(DmContactDto("u2", "Funmi", true), dmMsgs[1].copy(peerUserId = "u2", createdAt = now - 26 * hour), unread = false, verified = false),
+            DmRow(DmContactDto("u3", "Bayo", false), null, unread = false, verified = false)), loaded = true), {}, {}, now)
+    }
+    @Test fun dmThread() = snap("dm-thread") { ThreadScreen(ThreadUi("Jide", dmMsgs, Verification.Verified), ThreadActions(), now) }
+    @Test fun dmThreadKeyChanged() = snap("dm-thread-changed") { ThreadScreen(ThreadUi("Jide", dmMsgs.take(3), Verification.Changed, input = "Are you on a new phone?"), ThreadActions(), now) }
+    @Test fun dmSafety() = snap("dm-safety") {
+        Box(Modifier.padding(24.dp)) { SafetyContent("Jide", listOf(listOf("05211", "84720", "39021", "77310", "10442", "93017", "28150", "64093", "11827", "50306", "72291", "40968")), {}, {}) }
     }
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}, onHall = {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }

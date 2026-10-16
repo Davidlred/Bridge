@@ -109,6 +109,18 @@ class StreamInterrupted : Exception()
 @Serializable private data class GameResponse(val game: GameDto)
 @Serializable private data class NudgeResponse(val sent: Int = 0)
 
+// --- Encrypted DMs: the server relays public keys and ciphertext only ---
+@Serializable data class DmContactDto(val userId: String, val name: String, val ready: Boolean = false)
+@Serializable data class DeviceKeysDto(val deviceId: String, val curve25519: String, val ed25519: String)
+@Serializable data class ClaimedKeyDto(val deviceId: String, val keyId: String, val key: String, val fallback: Boolean = false)
+@Serializable data class EnvelopeOutDto(val deviceId: String, val type: Int, val body: String)
+@Serializable data class EnvelopeDto(val id: String, val from: String, val fromDevice: String, val senderKey: String? = null, val clientId: String, val type: Int, val body: String, val peer: String, val createdAt: Long = 0)
+@Serializable private data class ContactsResponse(val contacts: List<DmContactDto>)
+@Serializable private data class DevicesResponse(val devices: List<DeviceKeysDto>)
+@Serializable private data class ClaimResponse(val keys: List<ClaimedKeyDto>)
+@Serializable private data class InboxResponse(val envelopes: List<EnvelopeDto>)
+@Serializable private data class KeyCountResponse(val oneTimeKeys: Int)
+
 /** Events of one coach reply. */
 sealed interface CoachEvent {
     data class Token(val text: String) : CoachEvent
@@ -218,6 +230,13 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
         call("POST", "/v1/reports", buildJsonObject { put("targetKind", targetKind); put("targetId", targetId); put("reason", reason) }, authed = true)
     }
     suspend fun block(userId: String) { call("PUT", "/v1/blocks/$userId", null, authed = true) }
+    /** Report a person. For DMs, [messages] are what the reporter's device decrypted (the server can't read DMs). */
+    suspend fun reportUser(userId: String, reason: String, messages: List<String>) {
+        call("POST", "/v1/reports", buildJsonObject {
+            put("targetKind", "user"); put("targetId", userId); put("reason", reason)
+            put("evidence", buildJsonObject { put("messages", kotlinx.serialization.json.JsonArray(messages.map { kotlinx.serialization.json.JsonPrimitive(it.take(2000)) })) })
+        }, authed = true)
+    }
 
     suspend fun alliances(): List<AllianceDto> = json.decodeFromString<AlliancesResponse>(call("GET", "/v1/alliances", null, authed = true)).alliances
     suspend fun createAlliance(name: String, planMode: String, goalId: String): AllianceDto =
@@ -241,6 +260,30 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     /** The whole account as JSON ("Download my data"). Never logged or cached. */
     suspend fun exportData(): String = call("GET", "/v1/me/export", null, authed = true)
     suspend fun badges(): BadgesDto = json.decodeFromString(call("GET", "/v1/me/badges", null, authed = true))
+
+    suspend fun registerE2eDevice(deviceId: String, curve25519: String, ed25519: String) {
+        call("PUT", "/v1/e2e/devices/$deviceId", buildJsonObject { put("curve25519", curve25519); put("ed25519", ed25519) }, authed = true)
+    }
+    /** Publishes one-time keys (and a fallback key); returns how many unused one-time keys the server holds. */
+    suspend fun publishKeys(deviceId: String, keys: List<Pair<String, String>>, fallback: Pair<String, String>?): Int =
+        json.decodeFromString<KeyCountResponse>(call("POST", "/v1/e2e/devices/$deviceId/keys", buildJsonObject {
+            put("oneTimeKeys", kotlinx.serialization.json.JsonArray(keys.map { (id, k) -> buildJsonObject { put("id", id); put("key", k) } }))
+            if (fallback != null) put("fallback", buildJsonObject { put("id", fallback.first); put("key", fallback.second) })
+        }, authed = true)).oneTimeKeys
+    suspend fun dmContacts(): List<DmContactDto> = json.decodeFromString<ContactsResponse>(call("GET", "/v1/e2e/contacts", null, authed = true)).contacts
+    suspend fun userDevices(userId: String): List<DeviceKeysDto> = json.decodeFromString<DevicesResponse>(call("GET", "/v1/e2e/users/$userId/devices", null, authed = true)).devices
+    suspend fun claimKeys(deviceIds: List<String>): List<ClaimedKeyDto> =
+        json.decodeFromString<ClaimResponse>(call("POST", "/v1/e2e/claim", buildJsonObject { put("deviceIds", kotlinx.serialization.json.JsonArray(deviceIds.map { kotlinx.serialization.json.JsonPrimitive(it) })) }, authed = true)).keys
+    suspend fun sendDm(to: String, fromDevice: String, clientId: String, envelopes: List<EnvelopeOutDto>) {
+        call("POST", "/v1/e2e/messages", buildJsonObject {
+            put("to", to); put("fromDevice", fromDevice); put("clientId", clientId)
+            put("envelopes", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(EnvelopeOutDto.serializer()), envelopes))
+        }, authed = true)
+    }
+    suspend fun inbox(deviceId: String): List<EnvelopeDto> = json.decodeFromString<InboxResponse>(call("GET", "/v1/e2e/inbox?deviceId=$deviceId", null, authed = true)).envelopes
+    suspend fun ackInbox(deviceId: String, ids: List<String>) {
+        call("POST", "/v1/e2e/inbox/ack", buildJsonObject { put("deviceId", deviceId); put("ids", kotlinx.serialization.json.JsonArray(ids.map { kotlinx.serialization.json.JsonPrimitive(it) })) }, authed = true)
+    }
 
     /** This install, for push and the user's home time zone. [pushToken] is null until Firebase is configured. */
     suspend fun registerDevice(id: String, pushToken: String?) {

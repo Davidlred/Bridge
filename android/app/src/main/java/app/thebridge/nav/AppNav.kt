@@ -226,7 +226,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val reduce = LocalReduceMotion.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     // Hide the bar on full-screen flows
-    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true
+    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true || dest?.hasRoute<DmThread>() == true
     val name = user?.displayName.orEmpty()
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
     val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
@@ -252,8 +252,10 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
                 composable<Community> {
-                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id -> nav.navigate(GameNight(id)) }, onBoard = { id -> nav.navigate(Rankings(id)) })
+                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id -> nav.navigate(GameNight(id)) }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) })
                 }
+                composable<Messages> { app.thebridge.feature.dm.InboxRoute(onBack = { nav.popBackStack() }, onOpen = { id -> nav.navigate(DmThread(id)) }) }
+                composable<DmThread> { app.thebridge.feature.dm.ThreadRoute(onBack = { nav.popBackStack() }) }
                 composable<Rankings> { app.thebridge.feature.community.RankingsRoute(onBack = { nav.popBackStack() }) }
                 composable<AllianceRoute> { }
                 composable<AllianceChat> { AllianceChatRoute(onBack = { nav.popBackStack() }) }
@@ -289,8 +291,6 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                     )
                 }
                 composable<HallOfFame> { app.thebridge.feature.community.HallRoute(onBack = { nav.popBackStack() }) }
-                composable<Messages> { }
-                composable<DmThread> { }
             }
         }
         if (!fullScreen) BottomBar(nav, dest)

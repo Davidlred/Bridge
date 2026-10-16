@@ -144,6 +144,49 @@ interface SocialDao {
     @Query("DELETE FROM alliance_messages WHERE allianceId = :allianceId AND status = 'sent'") suspend fun clearSent(allianceId: String)
 }
 
+/** This install's Olm account (identity and one-time keys), as an encrypted pickle. One row. */
+@Entity(tableName = "olm_account")
+data class OlmAccountEntity(@PrimaryKey val id: Int = 0, val pickle: String, val registered: Boolean = false)
+
+/** One Olm session per device we talk to (the other person's devices and our own other devices). */
+@Entity(tableName = "olm_sessions", indices = [Index("peerUserId")])
+data class OlmSessionEntity(@PrimaryKey val deviceId: String, val peerUserId: String, val curve25519: String, val ed25519: String, val pickle: String, val updatedAt: Long = System.currentTimeMillis())
+
+/** Decrypted direct messages, kept only on this device (the database is SQLCipher-encrypted). [id] is the sender's client id. */
+@Entity(tableName = "dm_messages", indices = [Index("peerUserId")])
+data class DmMessageEntity(
+    @PrimaryKey val id: String,
+    val peerUserId: String,
+    val mine: Boolean,
+    val body: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val status: String = "sent",            // sent | queued | failed | undecryptable
+    val read: Boolean = false,
+)
+
+/** What we know about the other person: name, and the device keys they had when we last verified the safety number. */
+@Entity(tableName = "dm_peers")
+data class DmPeerEntity(@PrimaryKey val userId: String, val name: String, val verifiedKeys: String? = null, val currentKeys: String? = null)
+
+@Dao
+interface DmDao {
+    @Query("SELECT * FROM olm_account WHERE id = 0") suspend fun account(): OlmAccountEntity?
+    @Upsert suspend fun saveAccount(a: OlmAccountEntity)
+    @Query("SELECT * FROM olm_sessions WHERE deviceId = :deviceId") suspend fun session(deviceId: String): OlmSessionEntity?
+    @Upsert suspend fun saveSession(s: OlmSessionEntity)
+    @Query("DELETE FROM olm_sessions WHERE deviceId = :deviceId") suspend fun dropSession(deviceId: String)
+    @Query("SELECT * FROM dm_messages WHERE peerUserId = :peer ORDER BY createdAt") fun thread(peer: String): Flow<List<DmMessageEntity>>
+    @Query("SELECT * FROM dm_messages ORDER BY createdAt") fun all(): Flow<List<DmMessageEntity>>
+    @Query("SELECT * FROM dm_messages WHERE status = 'queued' ORDER BY createdAt") suspend fun queued(): List<DmMessageEntity>
+    @Query("SELECT * FROM dm_messages WHERE id = :id") suspend fun message(id: String): DmMessageEntity?
+    @Upsert suspend fun saveMessage(m: DmMessageEntity)
+    @Query("DELETE FROM dm_messages WHERE id = :id") suspend fun deleteMessage(id: String)
+    @Query("UPDATE dm_messages SET read = 1 WHERE peerUserId = :peer AND NOT mine") suspend fun markRead(peer: String)
+    @Query("SELECT * FROM dm_peers") fun peers(): Flow<List<DmPeerEntity>>
+    @Query("SELECT * FROM dm_peers WHERE userId = :id") suspend fun peer(id: String): DmPeerEntity?
+    @Upsert suspend fun savePeer(p: DmPeerEntity)
+}
+
 @Entity(tableName = "outbox")
 data class OutboxEntity(
     @PrimaryKey val id: String,    // idempotency key
@@ -220,9 +263,9 @@ interface PullDao {
 
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
-        SocialCacheEntity::class, AllianceMessageEntity::class],
-    version = 4, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+        SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class],
+    version = 5, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao
@@ -232,6 +275,7 @@ abstract class BridgeDb : RoomDatabase() {
     abstract fun journal(): JournalDao
     abstract fun chat(): ChatDao
     abstract fun social(): SocialDao
+    abstract fun dm(): DmDao
 }
 
 object LocalDay {

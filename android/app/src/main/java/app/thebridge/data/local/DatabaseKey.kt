@@ -40,6 +40,10 @@ object DatabaseKey {
         return p.getBoolean("resync", false).also { if (it) p.edit().remove("resync").commit() }
     }
 
+    /** 32-byte key for Olm pickles (account and sessions), derived from the database passphrase. */
+    fun olmPickleKey(ctx: Context): ByteArray =
+        java.security.MessageDigest.getInstance("SHA-256").digest("bridge-olm-pickle-v1".toByteArray() + passphrase(ctx))
+
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }

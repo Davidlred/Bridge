@@ -234,6 +234,9 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
     private val _connected = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** True once the server has accepted the auth frame; a reconnect flips it back, so screens can re-join. */
     val connected: kotlinx.coroutines.flow.StateFlow<Boolean> = _connected
+    private val _dmPings = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    /** "Something is waiting in your encrypted inbox" (the event carries no content). */
+    val dmPings: kotlinx.coroutines.flow.SharedFlow<Unit> = _dmPings
 
     fun send(frame: JsonObject): Boolean = socket?.send(frame.toString()) == true
 
@@ -281,6 +284,7 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
             }
             "hidden" -> e["id"]?.jsonPrimitive?.content?.let { db.social().removeByServerId(it) }   // removed by moderation
             "ready" -> _connected.value = true
+            "dm" -> _dmPings.emit(Unit)
             else -> if (e["type"]?.jsonPrimitive?.content?.startsWith("game:") == true) _events.emit(e)
         }
     }

@@ -78,7 +78,7 @@ data class CommunityActions(
     val showTab: (CommunityTab) -> Unit = {}, val react: (PostDto, Reaction) -> Unit = { _, _ -> }, val postMenu: (PostDto) -> Unit = {},
     val create: () -> Unit = {}, val join: () -> Unit = {}, val select: (String) -> Unit = {}, val invite: (AllianceDto) -> Unit = {}, val sampleInvite: () -> Unit = {},
     val openChat: (AllianceDto) -> Unit = {}, val options: (AllianceDto) -> Unit = {}, val applyNow: (AllianceDto) -> Unit = {},
-    val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
+    val openDms: () -> Unit = {}, val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
 )
 
 @Composable
@@ -96,6 +96,10 @@ fun CommunityScreen(ui: CommunityUi, actions: CommunityActions, today: LocalDate
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.community_title), style = BType.display(25), color = c.ink, modifier = Modifier.semantics { heading() })
                 Text(stringResource(R.string.community_sub, label), style = BType.body(13), color = c.mut)
+            }
+            if (!ui.locked && !ui.previewing) Box(Modifier.size(44.dp).clip(CircleShape).background(c.s1).border(1.dp, c.line, CircleShape)
+                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.dm_open), onClick = actions.openDms), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.ic_lock), stringResource(R.string.dm_open), tint = c.ink, modifier = Modifier.size(20.dp))
             }
             if (!ui.locked) ShareChip(ui.share, actions.cycleShare)
         }
