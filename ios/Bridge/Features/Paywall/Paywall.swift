@@ -98,6 +98,7 @@ struct PaywallSheet: View {
     var body: some View {
         PaywallContent(product: product, available: billing.available, loading: loading, offers: offers, selected: $selected, busy: busy, buy: buy, restore: restore, dismiss: onDone)
             .task {
+                Analytics.track(.paywallViewed, ["product": product.entitlement])
                 offers = await billing.offers(product)
                 selected = (offers.first { $0.period == .year } ?? offers.first)?.id          // annual first when there is one
                 loading = false
@@ -107,11 +108,12 @@ struct PaywallSheet: View {
     private func buy() {
         guard let id = selected else { return }
         busy = true
+        Analytics.track(.purchaseStarted, ["product": product.entitlement])
         Task {
             let outcome = await billing.purchase(id)
             busy = false
             switch outcome {
-            case .done: toaster.show(String(localized: "You're all set. Thanks for supporting The Bridge."), .ok); onDone()
+            case .done: Analytics.track(.purchaseCompleted, ["product": product.entitlement]); toaster.show(String(localized: "You're all set. Thanks for supporting The Bridge."), .ok); onDone()
             case .pending: toaster.show(String(localized: "Waiting for approval. It unlocks as soon as the store confirms.")); onDone()
             case .failed: toaster.show(String(localized: "The purchase didn't go through. You haven't been charged."), .warn)
             case .cancelled: break

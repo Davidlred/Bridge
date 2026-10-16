@@ -12,6 +12,8 @@ settings:
     API_BASE_URL: https://api.thebridge.app
     # RevenueCat public SDK key (appl_…). Empty = the paywall shows, but purchases are switched off.
     REVENUECAT_KEY: ""
+    # PostHog project key (phc_…). Empty = no analytics.
+    POSTHOG_KEY: ""
   configs:
     Debug:
       API_BASE_URL: http://localhost:8080
@@ -51,6 +53,7 @@ targets:
           - GeistMono.ttf
         APIBaseURL: $(API_BASE_URL)
         RevenueCatKey: $(REVENUECAT_KEY)
+        PostHogKey: $(POSTHOG_KEY)
         BGTaskSchedulerPermittedIdentifiers: [app.thebridge.sync]
         UIBackgroundModes: [fetch, remote-notification]
         ITSAppUsesNonExemptEncryption: true

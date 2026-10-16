@@ -28,7 +28,7 @@ struct BridgeApp: App {
                 .environment(social)
                 .environment(dms)
                 .environment(billing)
-                .task { billing.configure() }
+                .task { billing.configure(); Analytics.setup() }
                 .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }
@@ -179,8 +179,8 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in session.expired() }
         .onReceive(NotificationCenter.default.publisher(for: .upgradeRequired)) { _ in mustUpgrade = true }
         .onChange(of: session.phase) { _, phase in
-            if phase == .ready { Task { await social.registerDevice(); if let id = session.user?.id { await billing.identify(id.uuidString.lowercased()) } } }
-            if phase == .signedOut { Task { await billing.signedOut() } }
+            if phase == .ready { Task { await social.registerDevice(); if let id = session.user?.id { await billing.identify(id.uuidString.lowercased()); Analytics.identify(id.uuidString.lowercased()) } } }
+            if phase == .signedOut { Task { await billing.signedOut() }; Analytics.reset() }
         }
         .onChange(of: network.online) { was, now in
             if now && !was {

@@ -78,6 +78,9 @@ struct GameNightScreen: View {
         switch e["type"] as? String {
         case "game:state":
             guard let raw = e["game"], let data = try? JSONSerialization.data(withJSONObject: raw), let g = try? JSONDecoder().decode(GameDTO.self, from: data), g.id == model.game?.id else { return }
+            if g.phase == "result" && model.game?.phase != "result" {
+                Analytics.track(.gamePlayed, ["ranked": g.ranked, "players": g.players.count, "won": (g.buildersWon == true) != (g.drifterId == model.me)])
+            }
             model.game = g
         case "game:role":
             if e["gameId"] as? String == model.game?.id { model.role = e["role"] as? String }

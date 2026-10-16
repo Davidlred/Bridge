@@ -184,6 +184,7 @@ struct CommunityScreen: View {
             do {
                 let a = try await social.create(name: model.name, shared: model.shared, goalId: goalId)
                 model.sheet = nil; model.tab = .alliance; model.selectedId = a.id
+                Analytics.track(.allianceCreated, ["mode": a.planMode])
                 toaster.show(model.shared ? String(localized: "Alliance created. Everyone who joins gets your goal, deadline and daily tasks.") : String(localized: "Alliance created. Invite up to 14 people."), .ok)
             } catch APIError.server(_, "name_not_allowed", _, _) { model.createError = String(localized: "Pick a different name.") }
             catch { model.createError = offlineOr(error) }
@@ -207,6 +208,7 @@ struct CommunityScreen: View {
                 let label = model.preview?.label
                 let a = try await social.join(code: code, goalId: confirming ? nil : goalId)
                 model.sheet = nil; model.tab = .alliance; model.selectedId = a.id
+                Analytics.track(.allianceJoined, ["mode": a.planMode, "late_days": (model.preview?.pace?.groupDay ?? 1) - 1])
                 toaster.show(a.isShared ? String(localized: "Joined \(a.name). \(label ?? a.name) is now one of your goals.") : String(localized: "You joined \(a.name)."), .ok)
             } catch APIError.server(_, let code, _, _) {
                 model.joinError = switch code {

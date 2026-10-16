@@ -30,12 +30,14 @@ final class TodayModel {
     func toggle(_ task: PlanTask, in goal: GoalState) {
         let done = !task.done
         store?.setDone(task.id, done)
+        if done { Analytics.track(.taskCompleted) }
         if done { Task { await social?.announce(goalId: goal.id, store: store) } }      // share progress, if the user allows it
         guard done, let g = store?.goals.first(where: { $0.id == goal.id }), g.progress.allDone else { return }
         // All of a goal's tasks done for the first time today: celebrate once per goal per day.
         let key = "celebrated.\(g.id.uuidString).\(LocalDay.today())"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
         UserDefaults.standard.set(true, forKey: key)
+        Analytics.track(.dayCompleted, ["tasks": g.progress.tasksToday, "streak": g.progress.streak])
         Task { try? await Task.sleep(for: .seconds(0.65)); celebrate = g.id }
     }
 

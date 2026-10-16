@@ -84,8 +84,8 @@ final class OnboardingModel {
     }
 
     // MARK: Steps
-    func toRoutine() { if goalReady { draft.step = .routine } }
-    func toPhoto() { if routineReady { draft.step = .photo } }
+    func toRoutine() { if goalReady { draft.step = .routine; Analytics.track(.onboardingStep, ["step": "routine"]) } }
+    func toPhoto() { if routineReady { draft.step = .photo; Analytics.track(.onboardingStep, ["step": "photo"]) } }
     func back() {
         switch draft.step {
         case .routine: draft.step = .goal
@@ -130,7 +130,9 @@ final class OnboardingModel {
         planTask = Task {
             defer { planTask = nil }
             do {
+                let started = Date.now
                 let plan = try await APIClient.shared.plan(goal: d.goal.trimmingCharacters(in: .whitespaces), deadline: d.deadline!, today: LocalDay.today(), routine: d.routine.trimmingCharacters(in: .whitespaces), existingGoals: others)
+                Analytics.track(.planGenerated, ["latency_ms": Int(Date.now.timeIntervalSince(started) * 1000), "tasks": plan.tasks.count, "clarify": plan.needsClarification != nil])
                 if let q = plan.needsClarification { draft.plan = .clarify; draft.clarification = q; return }
                 draft.label = draft.label.isEmpty ? (plan.label.isEmpty ? GoalText.autoLabel(d.goal) : plan.label) : draft.label
                 draft.feasibility = plan.feasibility; draft.category = plan.category

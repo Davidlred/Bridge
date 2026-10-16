@@ -42,6 +42,7 @@ struct ProfileView: View {
     @Environment(AppRouter.self) private var router
     @State private var export: JSONExport?
     @State private var exporting = false
+    @State private var analyticsOn = Analytics.enabled
     @Environment(GoalStore.self) private var goals
     enum Sheet: String, Identifiable { case delete, logOut; var id: String { rawValue } }
 
@@ -89,6 +90,14 @@ struct ProfileView: View {
             }
             SettingsSection(title: "Privacy") {
                 SettingsValue(label: "Community sharing", value: social.share.settingsLabel) { social.cycleShare(userId: session.user?.id, goals: goals) }
+                Divider().overlay(Theme.line)
+                Toggle(isOn: Binding(get: { analyticsOn }, set: { analyticsOn = $0; Analytics.enabled = $0 })) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Share anonymous usage data").font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                        Text("Counts like tasks done and features used. Never your goals, tasks, journal or messages.").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                    }
+                }
+                .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)
             }
             if session.user?.photoUrl != nil {
                 SettingsSection(title: "Photo") { SettingsLink(label: "Remove photo and its images", danger: true, action: removePhoto) }

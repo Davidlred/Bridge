@@ -54,6 +54,7 @@ final class CoachModel {
         let text = (retry?.text ?? (study ? studyInput : input)).trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, !busy else { return }
         if study { studyInput = ""; studyReplyId = nil } else if retry == nil { input = "" }
+        if retry == nil { Analytics.track(.coachMessageSent, ["study": study]) }
         let conv = conversation
         let history = shown.filter { $0.status != "failed" && !$0.text.isEmpty && $0.id != retry?.id }.suffix(20).map { ["role": $0.role, "text": String($0.text.prefix(4000))] }
         let user = retry ?? ChatMessageEntity(conversation: conv, role: "user", text: text, status: "sending")

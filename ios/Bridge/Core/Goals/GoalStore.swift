@@ -214,6 +214,7 @@ final class GoalStore {
     /// Autosave: row + outbox in one save. `resolve` drops the other device's copy after the user picks.
     func saveJournal(goalId: UUID?, date: String, mood: Int?, body: String, resolve: Bool = false) {
         let text = String(body.prefix(10_000))
+        Analytics.journalSaved("\(goalId?.uuidString ?? "-")|\(date)", mood: mood)
         let row = journalEntry(goalId: goalId, date: date) ?? { let e = JournalEntity(id: UUIDv7.next(), goalId: goalId, localDate: date); ctx.insert(e); return e }()
         row.mood = mood; row.body = text; row.updatedAt = .now
         if resolve, let other = journalConflict(of: row.id) { ctx.delete(other) }

@@ -19,6 +19,12 @@ final class FoundationTests: XCTestCase {
         XCTAssertLessThan(a.uuidString, b.uuidString)
     }
 
+    /// Analytics may carry ids, counts and codes, never what people write (CLAUDE.md).
+    func testAnalyticsKeepsOnlyCountsAndCodes() {
+        let kept = cleanProps(["tasks": 4, "study": true, "mode": "shared", "title": "Run a half marathon", "goal": "Pass the JLPT", "body": String(repeating: "x", count: 25), "Bad Key": 1])
+        XCTAssertEqual(Set(kept.keys), ["tasks", "study", "mode"])
+    }
+
     func testAuthValidationMatchesPrototypeRules() {
         XCTAssertNotNil(AuthValidation.name(" S "))
         XCTAssertNil(AuthValidation.name("Sharon"))
