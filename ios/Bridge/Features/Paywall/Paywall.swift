@@ -151,7 +151,7 @@ struct PaywallContent: View {
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(features.indices, id: \.self) { i in
-                        Label { Text(features[i].1).font(BFont.body(15)).foregroundStyle(Theme.ink) } icon: { Image(systemName: features[i].0).foregroundStyle(Theme.acc) }
+                        Label { Text(features[i].1).font(BFont.body(15)).foregroundStyle(Theme.ink) } icon: { Image(systemName: features[i].0).foregroundStyle(Theme.acc).frame(width: 28) }   // same width, so the text lines up
                     }
                 }
                 if !available {
