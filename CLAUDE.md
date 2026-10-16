@@ -27,9 +27,9 @@ Native goal-coaching app. Read this first, then `README.md` (screens + tokens), 
 - Never log or send to analytics: goal text, task titles, journal, chat or DM content.
 - Free limits: 3 active goals, 15 alliance members. Entitlements come from RevenueCat webhooks on the server; the client SDK cache is only for instant UI.
 - Accounts must be deletable in-app.
+- E2E DMs use **vodozemac** (Olm, Apache-2.0) through the `crypto/` Rust crate and its UniFFI bindings. Decided 2026-10-16; `libsignal` (AGPL) is not used.
 
 ## Open decisions (ask before implementing)
-- E2E DMs: `libsignal` is AGPL-3.0. Confirm licensing, or use vodozemac / OpenMLS instead.
 - Exact Claude model version on Replicate (pin the newest available) and image model after a style bake-off.
 - Age-of-consent table per launch country (US, EU, UK, Africa, Asia).
 

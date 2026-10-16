@@ -37,7 +37,7 @@ iOS (SwiftUI, SwiftData)         Android (Compose, Room)
 - `alliance_messages`, `community_posts`, `reactions`, `reports`, `blocks`
 - `game_sessions`, `game_players`, `alliance_scores_weekly`
 - `entitlements` (mirror of RevenueCat), `ai_usage` (quota)
-- Signal: `signal_identity_keys`, `signal_prekeys`, `dm_envelopes` (opaque ciphertext)
+- E2E: `e2e_devices` (public identity keys), `e2e_one_time_keys`, `e2e_envelopes` (opaque ciphertext)
 - `changes` (per-user change log with monotonically increasing `server_seq`, used by sync pull)
 
 All ids are **UUIDv7, generated on the client** for user-created rows so offline creates never need a round trip.
@@ -96,12 +96,13 @@ Weekly season (Mon 00:00 alliance-majority timezone). Per alliance, normalized p
 - Android 13+: request `POST_NOTIFICATIONS` after the first plan is created (value moment), not on launch. iOS: provisional authorization first, full prompt after day 1.
 
 ## E2E DMs
-- **License note:** `libsignal` is **AGPL-3.0**. Shipping it in a closed-source app requires either open-sourcing the client or a commercial arrangement. Get legal sign-off. Alternatives with permissive licenses: **vodozemac** (Matrix Olm/Megolm, Apache-2.0) or **OpenMLS** (MIT). Architecture below fits either.
-- Each device has an identity key; server stores public prekey bundles only. Sessions per device pair; multi-device fan-out (encrypt to each recipient device).
-- Server stores only `dm_envelopes` (ciphertext, recipient device, created_at), deleted on ack or after 30 days.
+- **Library (decided 2026-10-16):** **vodozemac** (Matrix Olm, Apache-2.0), wrapped in the `crypto/` Rust crate with UniFFI bindings for Kotlin and Swift. `libsignal` was ruled out because it is AGPL-3.0. Earlier note, kept for context: alternatives with permissive licenses were **vodozemac** (Matrix Olm/Megolm, Apache-2.0) or **OpenMLS** (MIT). Architecture below fits either.
+- Each device has an Olm account (Curve25519 + Ed25519 identity keys); the server stores the public identity keys, signed one-time keys and a fallback key only. Sessions per device pair; multi-device fan-out (encrypt to each recipient device).
+- Server stores only `e2e_envelopes` (ciphertext, recipient device, created_at), deleted on ack or after 30 days.
 - Local message store encrypted (SQLCipher on Android, Data Protection Complete + Keychain key on iOS).
 - Safety numbers screen; key change → inline warning in thread.
 - Reporting: reporter's device decrypts and submits selected messages with a signed attestation; server can't moderate DMs otherwise (say so in the privacy policy).
+- Who can DM: v1 allows DMs only between people who share an active alliance and haven't blocked each other.
 - Minors: DMs off by default for users under 18; adult ↔ minor DMs disabled unless both are in the same shared-plan alliance led by a verified educator account (or keep fully disabled for v1).
 - Alliance chat is **not** E2E in v1 (needs AI moderation and server history for late joiners). State this clearly in UI copy.
 

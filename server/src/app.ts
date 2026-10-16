@@ -17,6 +17,7 @@ import { rankingRoutes } from './social/rankings.js';
 import { badgeRoutes } from './social/badges.js';
 import { billingRoutes } from './billing.js';
 import { exportRoutes } from './export.js';
+import { dmRoutes } from './social/dm.js';
 import { PlanRequest } from './ai/planSchema.js';
 import { generatePlan } from './ai/goalPlanner.js';
 import { AIUnavailable } from './ai/replicate.js';
@@ -63,6 +64,7 @@ export async function buildApp() {
   await app.register(badgeRoutes);
   await app.register(billingRoutes);
   await app.register(exportRoutes);
+  await app.register(dmRoutes);
 
   app.post('/v1/ai/plan', { onRequest: auth, config: { rateLimit: { max: 5, timeWindow: '1 day' } } }, async (req, reply) => {
     const body = PlanRequest.safeParse(req.body);

@@ -150,6 +150,9 @@ export async function authRoutes(app: FastifyInstance) {
     await deletePhotoAndFaceImages(req.userId);
     await sql`delete from journal_entries where user_id = ${req.userId}`;
     await sql`delete from coach_messages where user_id = ${req.userId}`;
+    // Encrypted messages: identity keys go, and with them every envelope waiting for this account's devices.
+    await sql`delete from e2e_devices where user_id = ${req.userId}`;
+    await sql`delete from e2e_envelopes where sender_user = ${req.userId} or recipient_user = ${req.userId} or peer_user = ${req.userId}`;
     // Alliances: leads hand over to the longest-standing member; members' shared goals become personal ones.
     for (const m of await sql`select alliance_id from alliance_members where user_id = ${req.userId} and status <> 'left'`) await sql.begin(tx => leave(tx, m.alliance_id, req.userId));
     await sql`update users set journal_dek = null where id = ${req.userId}`;

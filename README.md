@@ -7,7 +7,7 @@ Decisions locked for v1:
 - **Clients:** SwiftUI (iOS 17+) and Jetpack Compose (Android 10 / API 29+). Two native codebases, shared design tokens.
 - **Backend:** Node 20 + TypeScript (Fastify), Postgres 16, Redis for realtime fan-out. Hosted on Fly.io.
 - **AI:** Replicate, server-side only. Frontier Claude model for planning and coach; image model for goal cover art. See `docs/AI.md`.
-- **Payments:** RevenueCat. **Analytics:** PostHog (EU cloud for EU/UK users). **E2E DMs:** Signal protocol (read the license note in `docs/ARCHITECTURE.md` first).
+- **Payments:** RevenueCat. **Analytics:** PostHog (EU cloud for EU/UK users). **E2E DMs:** Olm via vodozemac (see `docs/ARCHITECTURE.md` → E2E DMs).
 - **Sign-in:** Apple, Google, email + password. **Reminders:** local + server push. **Moderation:** AI + user reports.
 - **Offline-first:** tasks, completions and journal work fully offline and sync later.
 - **Launch regions:** US, EU, UK, Africa, Asia.
@@ -37,7 +37,7 @@ design/                   the HTML prototype + assets
 3. **Coach + Journal:** streaming coach chat with mascot states; Study Mode; journal loop after finishing the day.
 4. **Social:** goal-scoped Community (unlock at 7-day streak), Alliances (own plan / shared plan), alliance chat, moderation, push.
 5. **Game Night, rankings, Hall of Fame.**
-6. **E2E DMs** (Signal protocol), **paywall** (RevenueCat), analytics, store submission.
+6. **E2E DMs** (Olm via vodozemac), **paywall** (RevenueCat), analytics, store submission.
 
 Ship 1–3 to TestFlight / internal track before starting 4.
 
