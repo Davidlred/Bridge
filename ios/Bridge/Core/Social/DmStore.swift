@@ -5,7 +5,7 @@ import SwiftData
 
 /// 32 random bytes in the Keychain (this device only) that encrypt the Olm pickles.
 enum OlmPickleKey {
-    private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "app.thebridge", kSecAttrAccount as String: "olm-pickle"]
+    private static var query: [String: Any] { [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "app.thebridge", kSecAttrAccount as String: "olm-pickle"] }
     static var value: Data {
         var q = query; q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: AnyObject?
