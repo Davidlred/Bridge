@@ -1,0 +1,79 @@
+commit: 618b2e4b9c286fe5180798dfe87cdd59027b45b8
+run: https://github.com/Davidlred/Bridge/actions/runs/38992740296
+
+== crypto ==
+    Finished `release` profile [optimized] target(s) in 1m 04s
+    Finished `release` profile [optimized] target(s) in 43.40s
+    Finished `release` profile [optimized] target(s) in 47.89s
+xcframework successfully written out to: /Users/runner/work/Bridge/Bridge/ios/BridgeCrypto/bridge_cryptoFFI.xcframework
+
+== build errors ==
+** TEST BUILD SUCCEEDED **
+
+== tests ==
+Test Case '-[BridgeTests.CryptoTests testTwoDevicesTalkThroughTheBindings]' started.
+Test Case '-[BridgeTests.CryptoTests testTwoDevicesTalkThroughTheBindings]' passed (0.030 seconds).
+Test Case '-[BridgeTests.FoundationTests testAnalyticsKeepsOnlyCountsAndCodes]' started.
+Test Case '-[BridgeTests.FoundationTests testAnalyticsKeepsOnlyCountsAndCodes]' passed (0.003 seconds).
+Test Case '-[BridgeTests.FoundationTests testAuthValidationMatchesPrototypeRules]' started.
+Test Case '-[BridgeTests.FoundationTests testAuthValidationMatchesPrototypeRules]' passed (0.001 seconds).
+Test Case '-[BridgeTests.FoundationTests testDayClosesAt3amLocal]' started.
+Test Case '-[BridgeTests.FoundationTests testDayClosesAt3amLocal]' passed (0.001 seconds).
+Test Case '-[BridgeTests.FoundationTests testUUIDv7CarriesTimestampAndSorts]' started.
+Test Case '-[BridgeTests.FoundationTests testUUIDv7CarriesTimestampAndSorts]' passed (0.004 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.009 (0.141) seconds
+Test Case '-[BridgeTests.GoalsCoreTests testDeadlines]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testDeadlines]' passed (0.005 seconds).
+Test Case '-[BridgeTests.GoalsCoreTests testDriftAgainstPaceTarget]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testDriftAgainstPaceTarget]' passed (0.002 seconds).
+Test Case '-[BridgeTests.GoalsCoreTests testGoalTextHints]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testGoalTextHints]' passed (0.005 seconds).
+Test Case '-[BridgeTests.GoalsCoreTests testProgressCountsFinishedDaysPlusTodaysShare]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testProgressCountsFinishedDaysPlusTodaysShare]' passed (0.003 seconds).
+Test Case '-[BridgeTests.GoalsCoreTests testStreakRunsBackFromTodayOrYesterday]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testStreakRunsBackFromTodayOrYesterday]' passed (0.002 seconds).
+Test Case '-[BridgeTests.GoalsCoreTests testTaskTimes]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testTaskTimes]' passed (0.002 seconds).
+Test Case '-[BridgeTests.GoalsCoreTests testTotalNeverDropsBelowTheDayIndex]' started.
+Test Case '-[BridgeTests.GoalsCoreTests testTotalNeverDropsBelowTheDayIndex]' passed (0.001 seconds).
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.019 (0.170) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.058 (1.370) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.058 (1.371) seconds
+** TEST EXECUTE SUCCEEDED **
+
+== snapshots ==
+mode: verify
+Test Case '-[BridgeTests.FoundationSnapshotTests testAllianceChat]' passed (0.728 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testAllianceGame]' passed (2.066 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testAllianceNone]' passed (0.770 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testAllianceShared]' passed (0.822 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testCoach]' passed (0.961 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testCommunityFeed]' passed (0.773 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testCommunityLocked]' passed (0.393 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testCommunityPreview]' passed (0.300 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testCreateAlliance]' passed (0.264 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testDeleteAccount]' passed (0.152 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testDmInbox]' passed (0.292 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testDmSafety]' passed (0.214 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testDmThread]' passed (0.270 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testGameResult]' passed (0.245 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testGameRole]' passed (0.190 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testGameRound]' passed (0.201 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testGameVote]' passed (0.224 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testHallOfFame]' passed (0.351 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testJoinPreview]' passed (0.244 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testJournal]' passed (0.965 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testLogIn]' passed (0.260 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testOfflineBanner]' passed (0.152 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testPaywall]' passed (0.205 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testPaywallUnavailable]' passed (0.264 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testProfile]' passed (0.338 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testRankings]' passed (0.251 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testReauth]' passed (0.244 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testSignUp]' passed (0.414 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testStudy]' passed (0.866 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testToday]' passed (0.257 seconds).
+Test Case '-[BridgeTests.FoundationSnapshotTests testWelcome]' passed (0.224 seconds).
+	 Executed 31 tests, with 0 failures (0 unexpected) in 13.900 (13.910) seconds
+	 Executed 31 tests, with 0 failures (0 unexpected) in 13.900 (13.911) seconds
+	 Executed 31 tests, with 0 failures (0 unexpected) in 13.900 (13.913) seconds
