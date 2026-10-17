@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import SwiftData
 
 /// Profile → Privacy → Community sharing. Streaks only by default.
@@ -234,7 +235,11 @@ final class SocialStore {
     func badges() async throws -> BadgesDTO { try await api.badges() }
 
     /// Push registration for this install (no token until APNs is configured), plus the home time zone.
-    func registerDevice() async { try? await api.registerDevice(pushToken: nil) }
+    /// Registers this install (with the APNs token once iOS has given us one) and asks iOS for a push token.
+    func registerDevice() async {
+        try? await api.registerDevice(pushToken: UserDefaults.standard.string(forKey: AppDelegate.tokenKey))
+        if await NotificationScheduler.shared.authorized() { UIApplication.shared.registerForRemoteNotifications() }
+    }
 }
 
 /**

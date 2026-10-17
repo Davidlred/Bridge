@@ -4,6 +4,7 @@ import Network
 
 @main
 struct BridgeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var session = SessionStore()
     @State private var router = AppRouter()
     @State private var network = NetworkStatus()
