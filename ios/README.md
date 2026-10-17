@@ -8,6 +8,7 @@ cd ios && xcodegen && open Bridge.xcodeproj
 ```
 
 Fonts are bundled as variable fonts in `Bridge/Resources/Fonts/` (Bricolage Grotesque, Geist, Geist Mono; SIL OFL).
+Keys are build settings (pass to xcodebuild or set in an .xcconfig, never commit them): `REVENUECAT_KEY` (appl_…, purchases; empty = buying off) and `POSTHOG_KEY` (phc_…, analytics; empty = none). Encrypted DMs need the Rust library: run `crypto/build-ios.sh` once on the Mac (CI does it on every build).
 Debug builds call `http://localhost:8080`. Sign-in on iOS is Apple or email; Google sign-in is Android-only.
 
 > There is no Mac in the loop yet: every push that touches ios/ is built and unit-tested on a GitHub macOS runner (.github/workflows/ios.yml), and the result is published to the ci-logs branch (ios.txt). Snapshot tests (FoundationSnapshotTests) have no reference images yet; record them on a Mac or in CI before relying on them.
