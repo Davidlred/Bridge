@@ -69,7 +69,7 @@ Coach conversations sync across devices (sync entity `chat`, encrypted like the 
 
 Images are generated in the API process after the request returns. That is fine for one machine; move it to the worker queue (BullMQ) before running several.
 
-Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, completions are a set (an uncomplete only wins if newer), 3 active goals without `plus` (`goal_limit`), shared-plan tasks are read-only (`shared_task_readonly`), the goal deadline is only ever what the client sent.
+Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, completions are a set (an uncomplete only wins if newer), 3 active goals without `plus` (`goal_limit`); when `plus` ends (expiration or refund webhook, or the next pull) the goals beyond 3 become `paused`, keeping the 3 worked on most recently, and paused goals reject task, completion and field edits (`goal_paused`) until the user resumes them within the limit; shared-plan tasks are read-only (`shared_task_readonly`), the goal deadline is only ever what the client sent.
 
 ## Before launch
 - **Email provider**: `src/mailer.ts` prints links in development and throws in production. Wire a transactional sender (Resend, Postmark, SES).
