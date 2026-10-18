@@ -9,7 +9,7 @@ import SwiftData
     var statement: String
     var startDate: String          // yyyy-MM-dd, user's local calendar
     var deadline: String           // picked by the user; AI never changes it
-    var status: String             // active | archived | completed
+    var status: String             // active | archived | completed | paused (Plus ended above the free limit)
     var sourceAllianceId: UUID?    // set when created from a shared-plan alliance
     var colorIndex: Int
     var updatedAt: Date

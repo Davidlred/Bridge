@@ -163,6 +163,13 @@ final class FoundationSnapshotTests: XCTestCase {
     }
     func testRecap() { verify(RecapCard(goal: overdue, onComplete: {}, onExtend: {}, onArchive: {}).padding(24).background(Theme.bg), named: "today-recap") }
     func testAway() { verify(AwayCard(onAdjust: {}).padding(24).background(Theme.bg), named: "today-away") }
+    func testPausedCard() { verify(PausedCard(count: 1, onChoose: {}).padding(24).background(Theme.bg), named: "today-paused") }
+    func testChooseGoals() {
+        let goals = [GoalChoice(id: goal.id, label: "Half marathon", statement: "Run a half marathon in under 2 hours."),
+                     GoalChoice(id: UUID(uuidString: "018b0000-0000-7000-8000-0000000000a2")!, label: "Spanish B1", statement: "Hold a 20-minute conversation in Spanish."),
+                     GoalChoice(id: UUID(uuidString: "018b0000-0000-7000-8000-0000000000a3")!, label: "Save £2k", statement: "Save £2,000 for a deposit by June.")]
+        verify(ChooseGoalsView(goals: goals, initial: Set(goals.prefix(2).map(\.id)), max: 3, onSave: { _ in }, onUpgrade: {}).background(Theme.s1), named: "choose-goals")
+    }
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }
     func testPaywallUnavailable() { verify(PaywallContent(product: .plus, available: false, loading: false, offers: [], selected: .constant(nil)).background(Theme.bg), named: "paywall-plus-off") }
     func testCreateAlliance() {

@@ -16,6 +16,9 @@ struct PlanTask: Identifiable, Equatable {
     var readOnly: Bool { origin == "shared" }
 }
 
+/// A goal paused when Plus ended: read-only, history kept, until the user picks it as one of their active goals.
+struct GoalChoice: Identifiable, Equatable { let id: UUID; let label: String; let statement: String }
+
 struct GoalImage: Equatable { let status: String; let url: String?; let withFace: Bool }
 
 /// One active goal with today's plan and progress. Built from the local store only.
@@ -46,6 +49,7 @@ final class GoalStore {
     private static let priorityOrder = ["High": 0, "Medium": 1, "Low": 2]
 
     private(set) var goals: [GoalState] = []
+    private(set) var paused: [GoalChoice] = []
     @ObservationIgnored private var ctx: ModelContext { Persistence.container.mainContext }
 
     init() {
@@ -63,6 +67,8 @@ final class GoalStore {
         let images = (try? ctx.fetch(FetchDescriptor<GoalImageEntity>())) ?? []
         let journaled = Set(((try? ctx.fetch(FetchDescriptor<JournalEntity>(predicate: #Predicate { $0.localDate == today && $0.conflictOf == nil }))) ?? [])
             .filter { !$0.body.isEmpty || $0.mood != nil }.compactMap(\.goalId))
+        paused = ((try? ctx.fetch(FetchDescriptor<GoalEntity>(predicate: #Predicate { $0.status == "paused" }))) ?? [])
+            .sorted { $0.id.uuidString < $1.id.uuidString }.map { GoalChoice(id: $0.id, label: $0.label, statement: $0.statement) }
         goals = active.sorted { $0.id.uuidString < $1.id.uuidString }.map { g in
             let live = g.tasks.filter { $0.deletedAt == nil }
             let created = Dictionary(uniqueKeysWithValues: live.map { ($0.id, Progress.createdDay($0.id, start: g.startDate)) })
@@ -133,6 +139,14 @@ final class GoalStore {
 
     /// Archived goals leave the daily plan; their images, journal and history are kept.
     func archive(_ id: UUID) { setStatus(id, "archived") }
+
+    /// The user picks which goals stay active. Pauses are queued before resumes so the server's limit check passes.
+    func chooseActive(_ keep: Set<UUID>) {
+        let all = (try? ctx.fetch(FetchDescriptor<GoalEntity>(predicate: #Predicate { $0.status == "active" || $0.status == "paused" }))) ?? []
+        for g in all where g.status == "active" && !keep.contains(g.id) { g.status = "paused"; g.updatedAt = .now; enqueue("goal", g.id, "upsert", ["status": "paused"]) }
+        for g in all where g.status == "paused" && keep.contains(g.id) { g.status = "active"; g.updatedAt = .now; enqueue("goal", g.id, "upsert", ["status": "active"]) }
+        commit()
+    }
 
     /// The user says they made it (early, on the day or after the deadline). Earns the "goal" badge on the server.
     func complete(_ id: UUID) { setStatus(id, "completed") }

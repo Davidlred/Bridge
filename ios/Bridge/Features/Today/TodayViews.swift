@@ -78,8 +78,8 @@ final class TodayModel {
 }
 
 enum TodaySheet: Identifiable, Equatable {
-    case task(UUID), add(UUID), goal(UUID), archive(UUID), limit, plus
-    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .limit: "l"; case .plus: "p" } }
+    case task(UUID), add(UUID), goal(UUID), archive(UUID), choose, limit, plus
+    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .choose: "c"; case .limit: "l"; case .plus: "p" } }
 }
 
 struct TodayView: View {
@@ -102,6 +102,7 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header(goals)
                 if notificationsOff && !goals.isEmpty { notificationBanner }
+                if !store.paused.isEmpty { PausedCard(count: store.paused.count) { sheet = .choose }.padding(.top, 16) }
                 if goals.isEmpty { noGoals }
                 else if let open { detail(goals, open) }
                 else { overview(goals) }
@@ -375,6 +376,13 @@ struct TodayView: View {
                     complete(g)
                 }
             }
+        case .choose:
+            let plus = billing.active.contains("plus")
+            ChooseGoalsView(goals: store.goals.map { GoalChoice(id: $0.id, label: $0.label, statement: $0.statement) } + store.paused, initial: Set(store.goals.map(\.id)),
+                            max: plus ? Int.max : GoalStore.freeGoalLimit, onSave: { keep in
+                store.chooseActive(keep); sheet = nil
+                if let id = model.openGoalId, !keep.contains(id) { model.open(nil) }
+            }, onUpgrade: plus ? nil : { sheet = .plus })
         case .archive(let id):
             ArchiveGoalSheet(onArchive: { archive(id) }, onCancel: { sheet = nil })
         }
@@ -688,6 +696,68 @@ struct LimitSheet: View {
         }
         .padding(.horizontal, 20).padding(.top, 28)
         .presentationDetents([.medium])
+    }
+}
+
+/// Plus ended with more than three goals: the extras are paused and read-only until the user picks.
+struct PausedCard: View {
+    let count: Int
+    var onChoose: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Some goals are paused").font(BFont.display(16)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text("Plus ended, so ^[\(count) goal](inflect: true) became read-only. History is kept. Choose which goals stay active.").font(BFont.body(13)).foregroundStyle(Theme.ink2)
+            Button(action: onChoose) {
+                HStack(spacing: 6) { Text("Choose active goals"); Image(systemName: "arrow.right").font(.system(size: 14)) }
+                    .font(BFont.body(14, .semibold)).foregroundStyle(Theme.ink).frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.warnTint, in: RoundedRectangle(cornerRadius: 18, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.warn, lineWidth: 1))
+    }
+}
+
+/// Pick up to `max` goals to keep active; the rest stay paused with their history.
+struct ChooseGoalsView: View {
+    let goals: [GoalChoice]
+    let initial: Set<UUID>
+    let max: Int
+    var onSave: (Set<UUID>) -> Void
+    var onUpgrade: (() -> Void)?
+    @State private var keep: Set<UUID>?
+    var body: some View {
+        let chosen = keep ?? initial
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Choose your active goals").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Text("Up to \(GoalStore.freeGoalLimit) goals can be active without Plus. The others stay paused and read-only, with their history kept.").font(BFont.body(14)).foregroundStyle(Theme.ink2)
+                VStack(spacing: 8) {
+                    ForEach(goals) { g in
+                        let on = chosen.contains(g.id)
+                        let enabled = on || chosen.count < max
+                        Button { keep = on ? chosen.subtracting([g.id]) : chosen.union([g.id]) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: on ? "checkmark.square.fill" : "square").font(.system(size: 22)).foregroundStyle(on ? Theme.acc : Theme.mut2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(g.label).font(BFont.body(15, .semibold)).foregroundStyle(enabled ? Theme.ink : Theme.mut)
+                                    Text(g.statement).font(BFont.body(12)).foregroundStyle(Theme.mut).lineLimit(2)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 56)
+                            .background(on ? Theme.accTint : Theme.s1, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Theme.acc : Theme.line, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain).disabled(!enabled)
+                        .accessibilityAddTraits(on ? [.isSelected] : [])
+                    }
+                }
+                if max != Int.max { Text("\(chosen.count) OF \(max) CHOSEN").bridgeLabel(11) }
+                Button("Save changes") { onSave(chosen) }.buttonStyle(PrimaryButtonStyle()).disabled(chosen.isEmpty)
+                if let onUpgrade { Button("Get more goals with Plus", action: onUpgrade).buttonStyle(SecondaryButtonStyle()) }
+            }
+            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
+        }
     }
 }
 
