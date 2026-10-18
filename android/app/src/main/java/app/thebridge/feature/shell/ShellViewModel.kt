@@ -55,6 +55,8 @@ class ShellViewModel @Inject constructor(
     val user = session.user
     val online = network.online
     val queued = db.outbox().count().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    /** Messages that exist only on this device (E2E): logging out deletes them for good. */
+    val dmMessages = db.dm().count().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
     val toasts = toaster.toasts
     val upgradeRequired = api.upgradeRequired
 

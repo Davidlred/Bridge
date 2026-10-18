@@ -220,6 +220,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val dest = entry?.destination
     val user by shell.user.collectAsStateWithLifecycle()
     val queued by shell.queued.collectAsStateWithLifecycle()
+    val dmMessages by shell.dmMessages.collectAsStateWithLifecycle()
     val deleting by shell.deleting.collectAsStateWithLifecycle()
     val deleteError by shell.deleteError.collectAsStateWithLifecycle()
     val c = LocalBridgeColors.current
@@ -283,7 +284,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 composable<Profile> {
                     ProfileScreen(
                         name, user?.email, user?.createdAt?.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() },
-                        onLogOut = { if (queued > 0) sheet = "logout" else shell.logOut() },
+                        onLogOut = { if (queued > 0 || dmMessages > 0) sheet = "logout" else shell.logOut() },
                         onDelete = { shell.clearDeleteError(); sheet = "delete" },
                         reminders = reminders, onDaily = shell::cycleDaily, onRisk = shell::cycleRisk,
                         hasPhoto = user?.photoUrl != null, onRemovePhoto = shell::removePhoto,
@@ -300,7 +301,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
 
     when (sheet) {
         "delete" -> DeleteAccountSheet(deleting, deleteError, onConfirm = shell::deleteAccount, onDismiss = { sheet = null })
-        "logout" -> LogOutSheet(queued, onConfirm = { sheet = null; shell.logOut() }, onDismiss = { sheet = null })
+        "logout" -> LogOutSheet(queued, dmMessages > 0, onConfirm = { sheet = null; shell.logOut() }, onDismiss = { sheet = null })
     }
 }
 

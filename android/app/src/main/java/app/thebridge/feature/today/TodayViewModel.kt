@@ -160,5 +160,15 @@ class TodayViewModel @Inject constructor(
         toaster.show(UiText.Res(R.string.toast_goal_archived))
     }
 
+    /** The goal just marked complete, kept for the celebration after it leaves the active list. */
+    private val _finished = MutableStateFlow<GoalState?>(null)
+    val finished = _finished.asStateFlow()
+    fun complete(id: String) = viewModelScope.launch {
+        _finished.value = state.value.goals.find { it.goal.id == id } ?: return@launch
+        repo.completeGoal(id)
+        if (open.value == id) openGoal(null)
+    }
+    fun closeFinished() { _finished.value = null }
+
     private companion object { val CELEBRATED = stringSetPreferencesKey("celebrated") }
 }

@@ -82,8 +82,10 @@ data class OnboardingUi(
     val otherGoals: Int,
     val busy: Boolean = false,
     val labelError: UiText? = null,
+    /** Fixed day for previews and snapshot tests; null follows the clock. */
+    val fixedToday: LocalDate? = null,
 ) {
-    val today: LocalDate get() = LocalDate.parse(LocalDay.today())
+    val today: LocalDate get() = fixedToday ?: LocalDate.parse(LocalDay.today())
     val deadline: LocalDate? get() = draft.deadline?.let(LocalDate::parse)
     fun deadlineProblem(min: Int = Deadlines.MIN_DAYS_NEW) = Deadlines.check(deadline, today, min)
     val goalReady: Boolean get() = draft.goal.trim().length >= GoalText.MIN_LENGTH && deadlineProblem() == null

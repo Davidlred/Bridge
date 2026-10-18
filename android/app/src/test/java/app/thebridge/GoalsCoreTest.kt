@@ -29,6 +29,17 @@ class GoalsCoreTest {
     @Test fun `total never drops below the day index once the deadline has passed`() {
         val p = Progress.of(start, d(5), d(8), mapOf("a" to start), emptyMap())
         assertEquals(8, p.total); assertEquals(7f / 8, p.fraction, 0.0001f)
+        assertTrue(p.overdue); assertEquals(0, p.daysLeft)
+        assertFalse(Progress.of(start, d(5), d(5), mapOf("a" to start), emptyMap()).overdue)   // the deadline day itself is still open
+    }
+
+    @Test fun `three missed days in a row bring the welcome back, until something is done today`() {
+        val tasks = mapOf("a" to start)
+        assertEquals(2, Progress.of(start, d(30), d(3), tasks, emptyMap()).awayDays)          // nothing yet: counts from the start
+        val away = Progress.of(start, d(30), d(9), tasks, mapOf("a" to setOf(d(2), d(5))))
+        assertEquals(3, away.awayDays); assertTrue(away.away); assertEquals(2, away.activeDays)
+        assertFalse(Progress.of(start, d(30), d(9), tasks, mapOf("a" to setOf(d(5), d(9)))).away)   // ticked a task today
+        assertFalse(Progress.of(start, d(30), d(8), tasks, mapOf("a" to setOf(d(5)))).away)         // only two days missed
     }
 
     @Test fun `streak runs back from today, or from yesterday while today is still open`() {

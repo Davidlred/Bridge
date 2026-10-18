@@ -110,7 +110,7 @@ data class TodayActions(
     val addGoal: () -> Unit = {}, val openTask: (PlanTask) -> Unit = {}, val newTask: () -> Unit = {}, val editGoal: (GoalState) -> Unit = {},
     val openJournal: (String) -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
     val recheck: (String) -> Unit = {}, val retryImages: (GoalState) -> Unit = {}, val openNotificationSettings: (() -> Unit)? = null,
-    val openCommunity: (String) -> Unit = {},
+    val openCommunity: (String) -> Unit = {}, val complete: (String) -> Unit = {}, val archive: (String) -> Unit = {},
 )
 
 @Composable
@@ -305,6 +305,10 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
     val start = LocalDate.parse(g.goal.startDate); val end = LocalDate.parse(g.goal.deadline)
     val md = DateTimeFormatter.ofPattern("MMM d", Locale.getDefault())
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        when {
+            p.overdue -> RecapCard(g, actions)
+            p.away -> AwayCard { actions.showView(GoalView.Reality) }
+        }
         Column(Modifier.fillMaxWidth().padding(top = 22.dp).background(c.s1, RoundedCornerShape(24.dp)).border(1.dp, c.line, RoundedCornerShape(24.dp)).padding(start = 10.dp, end = 10.dp, top = 18.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             val pctText = "%.1f%%".format(p.fraction * 100)
@@ -553,7 +557,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
 }
 
 @Composable
-fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate) -> Unit, onArchive: () -> Unit, onDismiss: () -> Unit) {
+fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate) -> Unit, onArchive: () -> Unit, onDismiss: () -> Unit, onComplete: (() -> Unit)? = null) {
     val c = LocalBridgeColors.current
     var label by rememberSaveable { mutableStateOf(g.goal.label) }
     var deadline by rememberSaveable { mutableStateOf(g.goal.deadline) }
@@ -582,6 +586,9 @@ fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate)
                         Deadlines.check(picked, today, Deadlines.MIN_DAYS_EDIT) == null -> onSave(label, picked)
                     }
                 })
+                if (onComplete != null) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.ok, RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onComplete), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.mark_complete), style = BType.body(14, FontWeight.Medium), color = c.ok)
+                }
                 if (canArchive) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.bad, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { confirm = true }, contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.archive_goal), style = BType.body(14, FontWeight.Medium), color = c.bad)
                 }
@@ -601,6 +608,84 @@ fun LimitSheet(onManage: () -> Unit, onDismiss: () -> Unit, onUpgrade: (() -> Un
             PrimaryButton(stringResource(R.string.limit_manage), onManage)
             if (onUpgrade != null) SecondaryButton(stringResource(R.string.limit_upgrade), onUpgrade)
             SecondaryButton(stringResource(R.string.consent_decline), onDismiss)
+        }
+    }
+}
+
+/** The deadline has passed: extend, mark complete or archive. Whatever happened, no guilt. */
+@Composable
+private fun RecapCard(g: GoalState, actions: TodayActions) {
+    val c = LocalBridgeColors.current
+    val md = DateTimeFormatter.ofPattern("MMM d", Locale.getDefault())
+    val n = g.progress.activeDays
+    Column(Modifier.fillMaxWidth().padding(top = 22.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.accLine, RoundedCornerShape(20.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(stringResource(R.string.recap_kicker, LocalDate.parse(g.goal.deadline).format(md).uppercase()), style = BType.label(10f, 0.14f), color = c.accInk)
+        Text(stringResource(R.string.recap_title), style = BType.display(20), color = c.ink, modifier = Modifier.semantics { heading() })
+        Text(pluralStringResource(R.plurals.recap_body, n, n), style = BType.body(14, lineHeight = 1.45f), color = c.ink2)
+        Spacer(Modifier.height(4.dp))
+        PrimaryButton(stringResource(R.string.recap_complete), { actions.complete(g.goal.id) })
+        SecondaryButton(stringResource(R.string.recap_extend), { actions.editGoal(g) })
+        Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { actions.archive(g.goal.id) }, contentAlignment = Alignment.Center) {
+            Text(stringResource(R.string.recap_archive), style = BType.body(14, FontWeight.Medium), color = c.mut)
+        }
+    }
+}
+
+/** Three or more days missed: pick up with today's plan only. */
+@Composable
+private fun AwayCard(onAdjust: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(Modifier.fillMaxWidth().padding(top = 22.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp)).padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.away_title), style = BType.display(20), color = c.ink, modifier = Modifier.semantics { heading() })
+        Text(stringResource(R.string.away_body), style = BType.body(14, lineHeight = 1.45f), color = c.ink2)
+        Row(Modifier.heightIn(min = 44.dp).clickable(role = Role.Button, onClick = onAdjust), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(R.string.away_adjust), style = BType.body(14, FontWeight.Medium), color = c.accInk)
+            Icon(painterResource(R.drawable.ic_arrow_forward), null, tint = c.accInk, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+fun ArchiveGoalSheet(onArchive: () -> Unit, onDismiss: () -> Unit) {
+    val c = LocalBridgeColors.current
+    BridgeSheet(onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SheetTitle(stringResource(R.string.archive_title))
+            Text(stringResource(R.string.archive_body), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
+            PrimaryButton(stringResource(R.string.archive), onArchive, container = c.bad, content = c.ink)
+            SecondaryButton(stringResource(R.string.cancel), onDismiss)
+        }
+    }
+}
+
+/** The goal was marked complete: the future self, the days it took, and the next goal. */
+@Composable
+fun GoalCrossedScreen(g: GoalState, onNext: () -> Unit, onClose: () -> Unit) {
+    Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { GoalCrossedContent(g, onNext, onClose) }
+}
+
+@Composable
+fun GoalCrossedContent(g: GoalState, onNext: () -> Unit, onClose: () -> Unit) {
+    val c = LocalBridgeColors.current
+    val n = g.progress.activeDays
+    Column(Modifier.fillMaxSize().background(c.bg).verticalScroll(rememberScrollState())) {
+        Box(Modifier.fillMaxWidth().height(470.dp)) {
+            GoalImage(g.future?.url, g.goal.statement, Modifier.matchParentSize())
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to c.bg)))
+            Text(stringResource(R.string.future_self), style = BType.label(10f, 0.16f), color = c.accInk, modifier = Modifier.padding(start = 24.dp, top = 64.dp))
+        }
+        Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(stringResource(R.string.crossed_kicker, g.goal.label.uppercase()), style = BType.label(11f, 0.14f), color = c.ok)
+            Text(stringResource(R.string.crossed_title), style = BType.display(34, 1.08f), color = c.ink, modifier = Modifier.semantics { heading() })
+            Text(g.goal.statement, style = BType.body(15, FontWeight.Medium, 1.45f), color = c.ink2)
+            Text(pluralStringResource(R.plurals.crossed_body, n, n), style = BType.body(15, lineHeight = 1.5f), color = c.mut)
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton(stringResource(R.string.crossed_next), onNext)
+            Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClose), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.crossed_back), style = BType.body(15, FontWeight.Medium), color = c.ink2)
+            }
         }
     }
 }

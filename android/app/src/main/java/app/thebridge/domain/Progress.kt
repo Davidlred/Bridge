@@ -17,13 +17,22 @@ data class GoalProgress(
     val streak: Int,
     /** Percentage points against the pace target, or null before there is any history. */
     val drift: Int?,
+    /** Today is after the deadline: the recap replaces the plan header. */
+    val overdue: Boolean = false,
+    /** Finished days in a row with nothing done, up to yesterday. 3+ shows the gentle re-entry. */
+    val awayDays: Int = 0,
+    /** Days with at least one completed task, since the start. */
+    val activeDays: Int = 0,
 ) {
-    val daysLeft: Int get() = (total - day + 1).coerceAtLeast(0)
+    val daysLeft: Int get() = if (overdue) 0 else (total - day + 1).coerceAtLeast(0)
+    val away: Boolean get() = awayDays >= Progress.AWAY_DAYS && doneToday == 0
     val todayFraction: Float get() = if (tasksToday == 0) 0f else doneToday.toFloat() / tasksToday
     val allDone: Boolean get() = tasksToday > 0 && doneToday == tasksToday
 }
 
 object Progress {
+    /** Missed this many days in a row: welcome back, no catching up. */
+    const val AWAY_DAYS = 3
     /** The plan is "on pace" when about 4 in 5 planned tasks get done: consistency, not perfection. */
     const val PACE_TARGET = 0.8f
 
@@ -38,11 +47,16 @@ object Progress {
         val tasks = taskCreatedDays.keys
         val doneToday = tasks.count { today in completions[it].orEmpty() }
         val todayShare = if (tasks.isEmpty()) 0f else doneToday.toFloat() / tasks.size
+        val days = completions.values.flatten().toSet()
+        val last = days.filter { it.isBefore(today) }.maxOrNull()
         return GoalProgress(
             day = day, total = total, doneToday = doneToday, tasksToday = tasks.size,
             fraction = ((day - 1 + todayShare) / total).coerceIn(0f, 1f),
             streak = streak(completions.values.flatten().toSet(), today),
             drift = drift(start, today, taskCreatedDays, completions),
+            overdue = today.isAfter(deadline),
+            awayDays = ChronoUnit.DAYS.between(last ?: start.minusDays(1), today).toInt().minus(1).coerceAtLeast(0),
+            activeDays = days.count { !it.isAfter(today) },
         )
     }
 

@@ -211,12 +211,13 @@ fun DeleteAccountSheet(busy: Boolean, error: UiText?, onConfirm: () -> Unit, onD
 
 /** Logging out wipes local data, so warn first when something hasn't reached the server. */
 @Composable
-fun LogOutSheet(unsynced: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun LogOutSheet(unsynced: Int, hasMessages: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val c = LocalBridgeColors.current
     BridgeSheet(onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SheetTitle(stringResource(R.string.settings_log_out))
-            Text(pluralStringResource(R.plurals.logout_unsynced_warning, unsynced, unsynced), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
+            if (unsynced > 0) Text(pluralStringResource(R.plurals.logout_unsynced_warning, unsynced, unsynced), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
+            if (hasMessages) Text(stringResource(R.string.logout_dm_warning), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
             PrimaryButton(stringResource(R.string.stay_logged_in), onDismiss)
             SecondaryButton(stringResource(R.string.logout_anyway), onConfirm)
         }

@@ -157,11 +157,16 @@ class GoalRepository @Inject constructor(
     }
 
     /** Archived goals leave the daily plan; their images, journal and history are kept. */
-    suspend fun archiveGoal(id: String) {
+    suspend fun archiveGoal(id: String) = setStatus(id, "archived")
+
+    /** The user says they made it (early, on the day or after the deadline). Earns the "goal" badge on the server. */
+    suspend fun completeGoal(id: String) = setStatus(id, "completed")
+
+    private suspend fun setStatus(id: String, status: String) {
         val g = db.goals().get(id) ?: return
         write { enqueue ->
-            db.goals().upsert(g.copy(status = "archived", updatedAt = System.currentTimeMillis()))
-            enqueue("goal", id, "upsert", buildJsonObject { put("status", "archived") })
+            db.goals().upsert(g.copy(status = status, updatedAt = System.currentTimeMillis()))
+            enqueue("goal", id, "upsert", buildJsonObject { put("status", status) })
         }
     }
 

@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, onOpenCommunity: (goalId: String) -> Unit = {}, vm: TodayViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
+    val finished by vm.finished.collectAsStateWithLifecycle()
     val hasPlus by vm.hasPlus.collectAsStateWithLifecycle(false)
     val ctx = LocalContext.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }        // "task:<id>" | "add" | "goal:<id>" | "limit"
@@ -52,7 +53,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },
         openJournal = onOpenJournal, onNote = vm::onRealityNote, useDate = { id, d -> vm.useSuggestedDate(id, d) }, recheck = vm::recheck,
-        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity,
+        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity, complete = vm::complete, archive = { sheet = "archive:$it" },
         openNotificationSettings = if (notificationsOn || ui.goals.isEmpty()) null else { {
             ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
         } },
@@ -74,8 +75,10 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         s.startsWith("goal:") -> {
             val g = ui.goals.find { it.goal.id == s.removePrefix("goal:") }
             if (g == null) sheet = null
-            else EditGoalSheet(g, canArchive = true, onSave = { label, d -> vm.saveGoal(g.goal.id, label, d); sheet = null }, onArchive = { vm.archive(g.goal.id); sheet = null }, onDismiss = { sheet = null })
+            else EditGoalSheet(g, canArchive = true, onSave = { label, d -> vm.saveGoal(g.goal.id, label, d); sheet = null }, onArchive = { vm.archive(g.goal.id); sheet = null }, onDismiss = { sheet = null },
+                onComplete = { vm.complete(g.goal.id); sheet = null })
         }
+        s.startsWith("archive:") -> ArchiveGoalSheet(onArchive = { vm.archive(s.removePrefix("archive:")); sheet = null }, onDismiss = { sheet = null })
         else -> sheet = null
     }
 
@@ -84,6 +87,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         val next = ui.goals.firstOrNull { it.goal.id != id && it.progress.tasksToday > it.progress.doneToday }
         CelebrateScreen(g, g.progress.streak, next, onNext = { vm.closeCelebrate(); next?.let { vm.openGoal(it.goal.id) } }, onJournal = { vm.closeCelebrate(); onOpenJournal(id) }, onClose = vm::closeCelebrate)
     }
+    finished?.let { g -> GoalCrossedScreen(g, onNext = { vm.closeFinished(); addGoal() }, onClose = vm::closeFinished) }
 }
 
 private val ASKED = booleanPreferencesKey("notifications_asked")

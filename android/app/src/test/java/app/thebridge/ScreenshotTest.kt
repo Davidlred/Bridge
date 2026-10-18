@@ -46,6 +46,7 @@ import app.thebridge.feature.onboarding.PlanState
 import app.thebridge.feature.onboarding.ReviewStep
 import app.thebridge.feature.onboarding.RoutineStep
 import app.thebridge.feature.onboarding.Step
+import app.thebridge.feature.today.GoalCrossedContent
 import app.thebridge.feature.today.GoalView
 import app.thebridge.feature.today.TodayActions
 import app.thebridge.feature.today.TodayScreen
@@ -165,9 +166,15 @@ class ScreenshotTest {
     @Test fun todaySingle() = snap("today") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon)), TodayActions(), LocalTime.of(9, 41), day) }
     @Test fun todayOverview() = snap("today-goals") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon, spanish)), TodayActions(), LocalTime.of(9, 41), day) }
     @Test fun todayEmpty() = snap("today-empty") { TodayScreen(TodayUi(true, "Sharon"), TodayActions(), LocalTime.of(9, 41), day) }
-    @Test fun realityCheck() = snap("reality") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon), view = GoalView.Reality), TodayActions(), LocalTime.of(9, 41), day) }
+    private val overdue = goal("g1", "Half marathon", 0, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 10, 11), marathon.tasks.map { it.task to false })
+    private val away = marathon.copy(tasks = marathon.tasks.map { it.copy(done = false) },
+        progress = Progress.of(LocalDate.of(2026, 9, 20), LocalDate.of(2027, 1, 10), day, marathon.tasks.associate { it.task.id to LocalDate.of(2026, 9, 20) }, mapOf("t1" to setOf(LocalDate.of(2026, 10, 8)))))
+    @Test fun todayRecap() = snap("today-recap") { TodayScreen(TodayUi(true, "Sharon", listOf(overdue)), TodayActions(), LocalTime.of(9, 41), day) }
+    @Test fun todayAway() = snap("today-away") { TodayScreen(TodayUi(true, "Sharon", listOf(away)), TodayActions(), LocalTime.of(9, 41), day) }
+    @Test fun goalCrossed() = snap("goal-crossed") { GoalCrossedContent(overdue, {}, {}) }
+    @Test fun realityCheck() =snap("reality") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon), view = GoalView.Reality), TodayActions(), LocalTime.of(9, 41), day) }
 
-    private fun ob(d: OnboardingDraft) = OnboardingUi(d, emptyMap(), 0, 0)
+    private fun ob(d: OnboardingDraft) = OnboardingUi(d, emptyMap(), 0, 0, fixedToday = LocalDate.of(2026, 10, 13))
     @Test fun obGoal() = snap("ob-goal") { GoalStep(ob(OnboardingDraft(goalId = "g", goal = "Get much fitter overall", deadline = "2027-02-09")), null, {}, {}, {}, {}) }
     @Test fun obRoutine() = snap("ob-routine") { RoutineStep(ob(OnboardingDraft(goalId = "g", step = Step.Routine, routine = "Up at 7:30, phone in bed until 8.")), {}, {}, {}, {}) }
     @Test fun obPhoto() = snap("ob-photo") { PhotoStep(ob(OnboardingDraft(goalId = "g", step = Step.Photo)), {}, {}, {}, {}, {}) }

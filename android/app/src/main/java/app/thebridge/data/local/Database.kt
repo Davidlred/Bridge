@@ -177,6 +177,7 @@ interface DmDao {
     @Query("DELETE FROM olm_sessions WHERE deviceId = :deviceId") suspend fun dropSession(deviceId: String)
     @Query("SELECT * FROM dm_messages WHERE peerUserId = :peer ORDER BY createdAt") fun thread(peer: String): Flow<List<DmMessageEntity>>
     @Query("SELECT * FROM dm_messages ORDER BY createdAt") fun all(): Flow<List<DmMessageEntity>>
+    @Query("SELECT COUNT(*) FROM dm_messages") fun count(): Flow<Int>
     @Query("SELECT * FROM dm_messages WHERE status = 'queued' ORDER BY createdAt") suspend fun queued(): List<DmMessageEntity>
     @Query("SELECT * FROM dm_messages WHERE id = :id") suspend fun message(id: String): DmMessageEntity?
     @Upsert suspend fun saveMessage(m: DmMessageEntity)

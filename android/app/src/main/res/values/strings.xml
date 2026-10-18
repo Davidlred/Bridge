@@ -113,6 +113,7 @@
         <item quantity="one">%d change hasn\'t synced yet and will be lost if you log out now.</item>
         <item quantity="other">%d changes haven\'t synced yet and will be lost if you log out now.</item>
     </plurals>
+    <string name="logout_dm_warning">Your direct messages are end-to-end encrypted and kept only on this device. Logging out deletes them, and they can\'t be recovered when you sign in again.</string>
     <string name="logout_anyway">Log out anyway</string>
     <string name="stay_logged_in">Stay logged in</string>
     <string name="delete_title">Delete your account?</string>
@@ -791,4 +792,27 @@
     <string name="ally_plus_link">Need more than 15 members? Alliance+</string>
     <string name="settings_analytics">Share anonymous usage data</string>
     <string name="settings_analytics_sub">Counts like tasks done and features used. Never your goals, tasks, journal or messages.</string>
+
+    <!-- Deadline recap, re-entry and goal crossed (no guilt copy) -->
+    <string name="recap_kicker">TARGET DATE · %1$s</string>
+    <string name="recap_title">You reached your date.</string>
+    <plurals name="recap_body">
+        <item quantity="one">You showed up on %d day along the way. Where should this goal go next?</item>
+        <item quantity="other">You showed up on %d days along the way. Where should this goal go next?</item>
+    </plurals>
+    <string name="recap_complete">I made it: mark complete</string>
+    <string name="recap_extend">Give it more time</string>
+    <string name="recap_archive">Archive it</string>
+    <string name="away_title">Welcome back.</string>
+    <string name="away_body">Your bridge is where you left it. Here\'s today\'s plan, with nothing to catch up on.</string>
+    <string name="away_adjust">Adjust the plan in Reality Check</string>
+    <string name="mark_complete">Mark goal complete</string>
+    <string name="crossed_kicker">%1$s · GOAL CROSSED</string>
+    <string name="crossed_title">You crossed the bridge.</string>
+    <plurals name="crossed_body">
+        <item quantity="one">%d day of showing up got you here. Your Hall of Fame has a new badge.</item>
+        <item quantity="other">%d days of showing up got you here. Your Hall of Fame has a new badge.</item>
+    </plurals>
+    <string name="crossed_next">Set your next goal</string>
+    <string name="crossed_back">Back to Today</string>
 </resources>
