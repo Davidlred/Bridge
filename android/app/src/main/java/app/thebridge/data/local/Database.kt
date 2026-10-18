@@ -202,6 +202,8 @@ data class OutboxEntity(
 @Dao
 interface GoalDao {
     @Query("SELECT * FROM goals WHERE status = 'active' ORDER BY id") fun active(): Flow<List<GoalEntity>>
+    @Query("SELECT * FROM goals WHERE status = 'paused' ORDER BY id") fun paused(): Flow<List<GoalEntity>>
+    @Query("SELECT * FROM goals WHERE status IN ('active', 'paused') ORDER BY id") suspend fun activeOrPaused(): List<GoalEntity>
     @Query("SELECT * FROM goals WHERE id = :id") suspend fun get(id: String): GoalEntity?
     @Query("SELECT COUNT(*) FROM goals WHERE status = 'active'") suspend fun activeCount(): Int
     @Query("SELECT * FROM goals ORDER BY id DESC LIMIT 1") suspend fun latest(): GoalEntity?

@@ -1,5 +1,7 @@
 package app.thebridge.feature.today
 
+import androidx.compose.foundation.selection.toggleable
+import app.thebridge.data.local.GoalEntity
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
@@ -111,6 +113,7 @@ data class TodayActions(
     val openJournal: (String) -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
     val recheck: (String) -> Unit = {}, val retryImages: (GoalState) -> Unit = {}, val openNotificationSettings: (() -> Unit)? = null,
     val openCommunity: (String) -> Unit = {}, val complete: (String) -> Unit = {}, val archive: (String) -> Unit = {},
+    val choosePaused: () -> Unit = {},
 )
 
 @Composable
@@ -119,6 +122,7 @@ fun TodayScreen(ui: TodayUi, actions: TodayActions, now: LocalTime = LocalTime.n
     Column(Modifier.fillMaxSize().background(c.bg).verticalScroll(rememberScrollState()).padding(start = Space.screen, end = Space.screen, top = 12.dp, bottom = 32.dp)) {
         Header(ui, now, date)
         if (actions.openNotificationSettings != null) NotificationBanner(actions.openNotificationSettings)
+        if (ui.loaded && ui.paused.isNotEmpty()) PausedCard(ui.paused.size, actions.choosePaused)
         when {
             !ui.loaded -> Unit
             ui.goals.isEmpty() -> NoGoals(actions.addGoal)
@@ -609,6 +613,57 @@ fun LimitSheet(onManage: () -> Unit, onDismiss: () -> Unit, onUpgrade: (() -> Un
             if (onUpgrade != null) SecondaryButton(stringResource(R.string.limit_upgrade), onUpgrade)
             SecondaryButton(stringResource(R.string.consent_decline), onDismiss)
         }
+    }
+}
+
+/** Plus ended with more than three goals: the extras are paused and read-only until the user picks. */
+@Composable
+private fun PausedCard(count: Int, onChoose: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp).background(c.warnTint, RoundedCornerShape(18.dp)).border(1.dp, c.warn, RoundedCornerShape(18.dp)).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.paused_title), style = BType.display(16), color = c.ink, modifier = Modifier.semantics { heading() })
+        Text(pluralStringResource(R.plurals.paused_body, count, count), style = BType.body(13, lineHeight = 1.45f), color = c.ink2)
+        Row(Modifier.heightIn(min = 44.dp).clickable(role = Role.Button, onClick = onChoose), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(R.string.paused_choose), style = BType.body(14, FontWeight.SemiBold), color = c.ink)
+            Icon(painterResource(R.drawable.ic_arrow_forward), null, tint = c.ink, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+fun ChooseGoalsSheet(goals: List<GoalEntity>, initial: Set<String>, max: Int, onSave: (Set<String>) -> Unit, onUpgrade: (() -> Unit)?, onDismiss: () -> Unit) {
+    BridgeSheet(onDismiss) { ChooseGoalsContent(goals, initial, max, onSave, onUpgrade) }
+}
+
+/** Pick up to [max] goals to keep active; the rest stay paused with their history. */
+@Composable
+fun ChooseGoalsContent(goals: List<GoalEntity>, initial: Set<String>, max: Int, onSave: (Set<String>) -> Unit, onUpgrade: (() -> Unit)?) {
+    val c = LocalBridgeColors.current
+    var keep by rememberSaveable { mutableStateOf(initial.take(max).toSet()) }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SheetTitle(stringResource(R.string.choose_title))
+        Text(stringResource(R.string.choose_body, max), style = BType.body(14, lineHeight = 1.45f), color = c.ink2)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            goals.forEach { g ->
+                val on = g.id in keep
+                val enabled = on || keep.size < max
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (on) c.accTint else c.s1, RoundedCornerShape(14.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(14.dp))
+                    .toggleable(on, enabled = enabled, role = Role.Checkbox) { keep = if (it) keep + g.id else keep - g.id }.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(24.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(7.dp)).border(1.5.dp, if (on) c.acc else c.mut2, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
+                        if (on) Icon(painterResource(R.drawable.ic_check), null, tint = c.onAcc, modifier = Modifier.size(16.dp))
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(g.label, style = BType.body(15, FontWeight.SemiBold), color = if (enabled) c.ink else c.mut)
+                        Text(g.statement, style = BType.body(12), color = c.mut, maxLines = 2)
+                    }
+                }
+            }
+        }
+        Text(stringResource(R.string.choose_count, keep.size, max), style = BType.label(11f, 0.1f), color = c.mut)
+        PrimaryButton(stringResource(R.string.save_changes), { onSave(keep) }, enabled = keep.isNotEmpty())
+        if (onUpgrade != null) SecondaryButton(stringResource(R.string.limit_upgrade), onUpgrade)
     }
 }
 

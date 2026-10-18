@@ -47,6 +47,7 @@ import app.thebridge.feature.onboarding.ReviewStep
 import app.thebridge.feature.onboarding.RoutineStep
 import app.thebridge.feature.onboarding.Step
 import app.thebridge.feature.today.GoalCrossedContent
+import app.thebridge.feature.today.ChooseGoalsContent
 import app.thebridge.feature.today.GoalView
 import app.thebridge.feature.today.TodayActions
 import app.thebridge.feature.today.TodayScreen
@@ -171,7 +172,12 @@ class ScreenshotTest {
         progress = Progress.of(LocalDate.of(2026, 9, 20), LocalDate.of(2027, 1, 10), day, marathon.tasks.associate { it.task.id to LocalDate.of(2026, 9, 20) }, mapOf("t1" to setOf(LocalDate.of(2026, 10, 8)))))
     @Test fun todayRecap() = snap("today-recap") { TodayScreen(TodayUi(true, "Sharon", listOf(overdue)), TodayActions(), LocalTime.of(9, 41), day) }
     @Test fun todayAway() = snap("today-away") { TodayScreen(TodayUi(true, "Sharon", listOf(away)), TodayActions(), LocalTime.of(9, 41), day) }
-    @Test fun goalCrossed() = snap("goal-crossed") { GoalCrossedContent(overdue, {}, {}) }
+    private val pausedGoal = spanish.goal.copy(id = "g3", label = "Save £2k", statement = "Save £2,000 for a deposit by June.", status = "paused")
+    @Test fun todayPaused() = snap("today-paused") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon, spanish), paused = listOf(pausedGoal)), TodayActions(), LocalTime.of(9, 41), day) }
+    @Test fun chooseGoals() = snap("choose-goals") {
+        Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { ChooseGoalsContent(listOf(marathon.goal, spanish.goal, pausedGoal), setOf("g1", "g2"), 3, {}, {}) }
+    }
+    @Test fun goalCrossed() =snap("goal-crossed") { GoalCrossedContent(overdue, {}, {}) }
     @Test fun realityCheck() =snap("reality") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon), view = GoalView.Reality), TodayActions(), LocalTime.of(9, 41), day) }
 
     private fun ob(d: OnboardingDraft) = OnboardingUi(d, emptyMap(), 0, 0, fixedToday = LocalDate.of(2026, 10, 13))

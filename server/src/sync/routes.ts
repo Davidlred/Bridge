@@ -32,7 +32,7 @@ const GoalPatch = z.object({
   startDate: ISODate,                               // required on create
   deadline: ISODate,                                // required on create; the user's pick, never altered here
   category: z.string().max(40).nullable(),
-  status: z.enum(['active', 'archived', 'completed']),
+  status: z.enum(['active', 'archived', 'completed', 'paused']),
   colorIndex: z.number().int().min(0).max(2),
   routine: z.string().max(1000).nullable(),         // onboarding step 2, shown in Reality Check
   realityNote: z.string().max(1000).nullable(),     // "Why I started"
@@ -79,6 +79,8 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
   }
   if (m.op !== 'upsert') reject('invalid');
   const p = check(GoalPatch, m.patch);
+  // A paused goal is read-only: only its status can change (resume, complete, archive).
+  if (row?.status === 'paused' && Object.keys(p).some(k => k !== 'status')) reject('goal_paused');
   const becomesActive = (p.status ?? row?.status ?? 'active') === 'active' && row?.status !== 'active';
   if (becomesActive) {
     const [c] = await tx`select count(*)::int as n, exists(select 1 from entitlements where user_id = ${userId} and entitlement = 'plus' and (expires_at is null or expires_at > now())) as plus
@@ -118,6 +120,9 @@ async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
   if (row && row.user_id !== userId) reject('forbidden');
   // Shared-plan tasks belong to the alliance lead; members can complete them but never change them.
   if (row?.origin === 'shared') reject('shared_task_readonly');
+  const newGoal = z.string().uuid().safeParse(m.patch.goalId);
+  const [owner] = await tx`select g.status from goals g where g.id = coalesce((select goal_id from tasks where id = ${m.entityId}), ${newGoal.success ? newGoal.data : null}::uuid)`;
+  if (owner?.status === 'paused') reject('goal_paused');
   if (m.op === 'delete') {
     if (row && !row.deleted_at) { await tx`update tasks set deleted_at = now(), updated_at = now() where id = ${m.entityId}`; await log(tx, userId, 'task', m.entityId, 'upsert'); }
     return;
@@ -147,8 +152,9 @@ async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
 
 async function applyCompletion(tx: Tx, userId: string, m: Mutation) {
   const { localDate } = check(CompletionPatch, m.patch);
-  const [t] = await tx`select 1 from tasks where id = ${m.entityId} and user_id = ${userId}`;
+  const [t] = await tx`select g.status from tasks t join goals g on g.id = t.goal_id where t.id = ${m.entityId} and t.user_id = ${userId}`;
   if (!t) reject('task_missing');
+  if (t!.status === 'paused') reject('goal_paused');
   const at = new Date(m.clientTs);
   if (m.op === 'complete') {
     // Set semantics: two devices completing the same task on the same day yield one completion.
@@ -246,6 +252,26 @@ async function applyChat(tx: Tx, userId: string, m: Mutation) {
 const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings, journal: applyJournal, chat: applyChat };
 const ms = (d: Date | null) => (d ? d.getTime() : null);
 
+/**
+ * Without Plus, three goals stay active. When Plus ends with more, the three worked on most recently stay and the rest
+ * pause (read-only, history kept). The apps then let the user choose a different three. Runs on the billing webhook and on pull.
+ */
+export async function enforceGoalLimit(userId: string) {
+  await sql.begin(async tx => {
+    await tx`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
+    const [c] = await tx`select count(*)::int as n, exists(select 1 from entitlements where user_id = ${userId} and entitlement = 'plus' and (expires_at is null or expires_at > now())) as plus
+                         from goals where user_id = ${userId} and status = 'active'`;
+    if (c!.plus || c!.n <= FREE_GOAL_LIMIT) return;
+    const extra = await tx`select g.id from goals g where g.user_id = ${userId} and g.status = 'active'
+                           order by (select max(c.local_date) from task_completions c join tasks t on t.id = c.task_id where t.goal_id = g.id) desc nulls last, g.updated_at desc
+                           offset ${FREE_GOAL_LIMIT}`;
+    for (const g of extra) {
+      await tx`update goals set status = 'paused', updated_at = now() where id = ${g.id}`;
+      await log(tx, userId, 'goal', g.id, 'upsert');
+    }
+  });
+}
+
 export async function syncRoutes(app: FastifyInstance) {
   app.post('/v1/sync/push', { onRequest: auth }, async req => {
     const body = PushBody.safeParse(req.body);
@@ -280,6 +306,8 @@ export async function syncRoutes(app: FastifyInstance) {
     const since = z.coerce.number().int().nonnegative().catch(0).parse(req.query.since);
     // Shared-plan updates take effect on the member's local morning; bring them in before reading changes.
     await applySharedPlans(req.userId);
+    // Plus may have lapsed without a webhook reaching us (or before it did).
+    await enforceGoalLimit(req.userId);
     const rows = await sql`select server_seq, entity, entity_id, key, op from changes where user_id = ${req.userId} and server_seq > ${since} order by server_seq limit ${PULL_PAGE}`;
     // Keep only the latest change per row; current state is read from the tables.
     const latest = new Map<string, (typeof rows)[number]>();

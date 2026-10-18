@@ -815,4 +815,15 @@
     </plurals>
     <string name="crossed_next">Set your next goal</string>
     <string name="crossed_back">Back to Today</string>
+
+    <!-- Plus ended with more than three goals -->
+    <string name="paused_title">Some goals are paused</string>
+    <plurals name="paused_body">
+        <item quantity="one">%d goal is read-only since Plus ended. Its history is kept. Choose which goals stay active.</item>
+        <item quantity="other">%d goals are read-only since Plus ended. Their history is kept. Choose which goals stay active.</item>
+    </plurals>
+    <string name="paused_choose">Choose active goals</string>
+    <string name="choose_title">Choose your active goals</string>
+    <string name="choose_body">Up to %1$d goals can be active without Plus. The others stay paused and read-only, with their history kept.</string>
+    <string name="choose_count">%1$d OF %2$d CHOSEN</string>
 </resources>

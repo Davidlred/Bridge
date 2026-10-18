@@ -159,6 +159,23 @@ class GoalRepository @Inject constructor(
     /** Archived goals leave the daily plan; their images, journal and history are kept. */
     suspend fun archiveGoal(id: String) = setStatus(id, "archived")
 
+    /** Goals paused because Plus ended (read-only, history kept). */
+    fun pausedGoals(): Flow<List<GoalEntity>> = db.goals().paused()
+
+    /** The user picks which goals stay active. Pauses are queued before resumes so the server's limit check passes. */
+    suspend fun chooseActive(keep: Set<String>) {
+        val all = db.goals().activeOrPaused()
+        val now = System.currentTimeMillis()
+        write { enqueue ->
+            for (g in all.filter { it.status == "active" && it.id !in keep }) {
+                db.goals().upsert(g.copy(status = "paused", updatedAt = now)); enqueue("goal", g.id, "upsert", buildJsonObject { put("status", "paused") })
+            }
+            for (g in all.filter { it.status == "paused" && it.id in keep }) {
+                db.goals().upsert(g.copy(status = "active", updatedAt = now)); enqueue("goal", g.id, "upsert", buildJsonObject { put("status", "active") })
+            }
+        }
+    }
+
     /** The user says they made it (early, on the day or after the deadline). Earns the "goal" badge on the server. */
     suspend fun completeGoal(id: String) = setStatus(id, "completed")
 

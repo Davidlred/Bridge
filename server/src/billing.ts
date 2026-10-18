@@ -5,6 +5,7 @@ import { env } from './env.js';
 import { sql } from './db.js';
 import { auth } from './auth/tokens.js';
 import { HttpError } from './util.js';
+import { enforceGoalLimit } from './sync/routes.js';
 
 /**
  * Entitlements come from RevenueCat webhooks; the app's SDK cache is only for instant UI.
@@ -79,6 +80,8 @@ export async function billingRoutes(app: FastifyInstance) {
         await setEntitlement(e.app_user_id, ent, at, e.store ?? null, at);
       }
     }
+    // Access ended now (expiration or refund): goals above the free limit pause.
+    if (entitlements.length && (END.has(e.type) || (e.type === 'CANCELLATION' && e.cancel_reason === 'CUSTOMER_SUPPORT'))) await enforceGoalLimit(e.app_user_id);
     return reply.send({ ok: true });
   });
 

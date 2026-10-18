@@ -64,6 +64,36 @@ run('entitlements and export', () => {
     expect((await call(u, 'GET', '/v1/me/entitlements')).json().entitlements).toEqual([]);
   });
 
+  it('pauses goals above the free limit when plus ends; paused goals are read-only until the user picks them', async () => {
+    const u = await signUp();
+    await hook({ type: 'INITIAL_PURCHASE', app_user_id: u.user.id, entitlement_ids: ['plus'], expiration_at_ms: Date.now() + 30 * 864e5, event_timestamp_ms: Date.now() - 1000 });
+    const g: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      g.push(uuidv7());
+      await call(u, 'POST', '/v1/sync/push', { mutations: [mut('goal', g[i]!, 'upsert', { label: `Goal ${i}`, statement: 'Run a half marathon', startDate: '2026-01-01', deadline: '2030-01-01' })] });
+    }
+    const t0 = uuidv7(), t1 = uuidv7();
+    const today = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+    await call(u, 'POST', '/v1/sync/push', { mutations: [mut('task', t0, 'upsert', { goalId: g[0], title: 'Easy run' }), mut('task', t1, 'upsert', { goalId: g[1], title: 'Stretch' }), mut('completion', t0, 'complete', { localDate: today })] });
+
+    await hook({ type: 'EXPIRATION', app_user_id: u.user.id, entitlement_ids: ['plus'], event_timestamp_ms: Date.now() });
+    const status = async () => Object.fromEntries((await sql`select id, status from goals where user_id = ${u.user.id}`).map(r => [r.id, r.status]));
+    // The goal worked on most recently stays, then the newest
+    expect(await status()).toEqual({ [g[0]!]: 'active', [g[4]!]: 'active', [g[3]!]: 'active', [g[1]!]: 'paused', [g[2]!]: 'paused' });
+    expect((await call(u, 'GET', '/v1/sync?since=0')).json().goals.find((x: { id: string }) => x.id === g[1]).status).toBe('paused');
+
+    const push = async (...ms: object[]) => Object.values((await call(u, 'POST', '/v1/sync/push', { mutations: ms })).json().rejected);
+    expect(await push(mut('completion', t1, 'complete', { localDate: today }))).toEqual(['goal_paused']);
+    expect(await push(mut('task', t1, 'upsert', { title: 'Longer stretch' }))).toEqual(['goal_paused']);
+    expect(await push(mut('task', uuidv7(), 'upsert', { goalId: g[1], title: 'New' }))).toEqual(['goal_paused']);
+    expect(await push(mut('goal', g[1]!, 'upsert', { label: 'Renamed' }))).toEqual(['goal_paused']);
+    expect(await push(mut('goal', g[1]!, 'upsert', { status: 'active' }))).toEqual(['goal_limit']);
+    // Choosing a different three: pause one, then resume another
+    expect(await push(mut('goal', g[4]!, 'upsert', { status: 'paused' }), mut('goal', g[1]!, 'upsert', { status: 'active' }))).toEqual([]);
+    expect(await push(mut('completion', t1, 'complete', { localDate: today }))).toEqual([]);
+    expect((await status())[g[4]!]).toBe('paused');
+  });
+
   it('moves purchases away from the old account on a transfer', async () => {
     const a = await signUp(), b = await signUp();
     await hook({ type: 'INITIAL_PURCHASE', app_user_id: a.user.id, entitlement_ids: ['alliance_plus'], expiration_at_ms: Date.now() + 864e5 });

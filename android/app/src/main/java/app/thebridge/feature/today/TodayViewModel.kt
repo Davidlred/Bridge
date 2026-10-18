@@ -11,6 +11,7 @@ import app.thebridge.R
 import app.thebridge.data.AiRepository
 import app.thebridge.data.GoalRepository
 import app.thebridge.data.GoalState
+import app.thebridge.data.local.GoalEntity
 import app.thebridge.data.local.LocalDay
 import app.thebridge.data.remote.OfflineException
 import app.thebridge.data.session.SessionManager
@@ -44,6 +45,8 @@ data class TodayUi(
     val celebrate: String? = null,
     val realityBusy: Boolean = false,
     val realityError: Boolean = false,
+    /** Paused when Plus ended; the user chooses which goals stay active. */
+    val paused: List<GoalEntity> = emptyList(),
 ) {
     val streak: Int get() = goals.maxOfOrNull { it.progress.streak } ?: 0
     val open: GoalState? get() = goals.find { it.goal.id == openGoalId } ?: goals.singleOrNull()
@@ -70,8 +73,8 @@ class TodayViewModel @Inject constructor(
     private val celebrate = MutableStateFlow<String?>(null)
     private val reality = MutableStateFlow(false to false)   // busy, error
 
-    val state: StateFlow<TodayUi> = combine(repo.activeGoals(), session.user.map { it?.displayName.orEmpty() }, open, combine(view, celebrate, reality, ::Triple)) { goals, name, openId, (v, cel, r) ->
-        TodayUi(true, name, goals, openId?.takeIf { id -> goals.any { it.goal.id == id } }, v, cel, r.first, r.second)
+    val state: StateFlow<TodayUi> = combine(repo.activeGoals(), session.user.map { it?.displayName.orEmpty() }, open, combine(view, celebrate, reality, ::Triple), repo.pausedGoals()) { goals, name, openId, (v, cel, r), paused ->
+        TodayUi(true, name, goals, openId?.takeIf { id -> goals.any { it.goal.id == id } }, v, cel, r.first, r.second, paused)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUi())
 
     private val refreshed = mutableSetOf<String>()
@@ -169,6 +172,11 @@ class TodayViewModel @Inject constructor(
         if (open.value == id) openGoal(null)
     }
     fun closeFinished() { _finished.value = null }
+
+    fun chooseActive(keep: Set<String>) = viewModelScope.launch {
+        repo.chooseActive(keep)
+        if (open.value != null && open.value !in keep) openGoal(null)
+    }
 
     private companion object { val CELEBRATED = stringSetPreferencesKey("celebrated") }
 }
