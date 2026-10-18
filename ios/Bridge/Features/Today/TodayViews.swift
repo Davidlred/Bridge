@@ -8,6 +8,8 @@ final class TodayModel {
     var openGoalId: UUID?
     var view = GoalView.today
     var celebrate: UUID?
+    /// The goal just marked complete, kept for the celebration after it leaves the active list.
+    var finished: GoalState?
     var realityBusy = false
     var realityError = false
     @ObservationIgnored private var noteTask: Task<Void, Never>?
@@ -76,8 +78,8 @@ final class TodayModel {
 }
 
 enum TodaySheet: Identifiable, Equatable {
-    case task(UUID), add(UUID), goal(UUID), limit, plus
-    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .limit: "l"; case .plus: "p" } }
+    case task(UUID), add(UUID), goal(UUID), archive(UUID), limit, plus
+    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .limit: "l"; case .plus: "p" } }
 }
 
 struct TodayView: View {
@@ -115,6 +117,20 @@ struct TodayView: View {
             let next = goals.first { $0.id != g.id && $0.progress.tasksToday > $0.progress.doneToday }
             CelebrateView(goal: g, next: next, onNext: { model.celebrate = nil; if let next { model.open(next.id) } }, onJournal: { model.celebrate = nil; router.today.append(Route.journalEntry(goalId: g.id, localDate: LocalDay.today())) }, onClose: { model.celebrate = nil })
         }
+        .fullScreenCover(item: $model.finished) { g in
+            GoalCrossedView(goal: g, onNext: { model.finished = nil; addGoal() }, onClose: { model.finished = nil })
+        }
+    }
+
+    private func complete(_ g: GoalState) {
+        store.complete(g.id); sheet = nil
+        if model.openGoalId == g.id { model.open(nil) }
+        model.finished = g
+    }
+
+    private func archive(_ id: UUID) {
+        store.archive(id); sheet = nil; if model.openGoalId == id { model.open(nil) }
+        toaster.show(String(localized: "Goal archived. Its images and history are kept."))
     }
 
     /// Plus lifts the three-goal limit (the server enforces it too).
@@ -243,6 +259,11 @@ struct TodayView: View {
         let p = g.progress
         let md = Date.FormatStyle().month(.abbreviated).day()
         return VStack(alignment: .leading, spacing: 18) {
+            if p.overdue {
+                RecapCard(goal: g, onComplete: { complete(g) }, onExtend: { sheet = .goal(g.id) }, onArchive: { sheet = .archive(g.id) }).padding(.top, 22)
+            } else if p.away {
+                AwayCard { withAnimation(.easeOut(duration: 0.2)) { model.view = .reality } }.padding(.top, 22)
+            }
             VStack(spacing: 14) {
                 ZStack(alignment: .top) {
                     BridgeArc(progress: p.fraction, today: p.todayFraction).aspectRatio(340.0 / 196.0, contentMode: .fit).frame(maxWidth: 340)
@@ -349,10 +370,13 @@ struct TodayView: View {
                     toaster.show(String(localized: "Goal updated."), .ok)
                     if changed, let fresh = store.goals.first(where: { $0.id == id }) { model.recheck(fresh) }
                 } onArchive: {
-                    store.archive(id); sheet = nil; if model.openGoalId == id { model.open(nil) }
-                    toaster.show(String(localized: "Goal archived. Its images and history are kept."))
+                    archive(id)
+                } onComplete: {
+                    complete(g)
                 }
             }
+        case .archive(let id):
+            ArchiveGoalSheet(onArchive: { archive(id) }, onCancel: { sheet = nil })
         }
     }
 }
@@ -605,6 +629,7 @@ struct EditGoalSheet: View {
     let goal: GoalState
     var onSave: (String, String) -> Void
     var onArchive: () -> Void
+    var onComplete: (() -> Void)?
     @State private var label = ""
     @State private var deadline: String?
     @State private var error = false
@@ -633,6 +658,10 @@ struct EditGoalSheet: View {
                         else if let deadline, Deadlines.check(deadline, today: LocalDay.today(), minDays: Deadlines.minDaysEdit) == nil { onSave(label, deadline) }
                     }
                     .buttonStyle(PrimaryButtonStyle())
+                    if let onComplete {
+                        Button("Mark goal complete", action: onComplete).font(BFont.body(14, .medium)).foregroundStyle(Theme.ok).frame(maxWidth: .infinity, minHeight: 48)
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.ok, lineWidth: 1))
+                    }
                     Button("Archive goal") { confirm = true }.font(BFont.body(14, .medium)).foregroundStyle(Theme.bad).frame(maxWidth: .infinity, minHeight: 48)
                         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.bad, lineWidth: 1))
                 }
@@ -659,6 +688,92 @@ struct LimitSheet: View {
         }
         .padding(.horizontal, 20).padding(.top, 28)
         .presentationDetents([.medium])
+    }
+}
+
+/// The deadline has passed: extend, mark complete or archive. Whatever happened, no guilt.
+struct RecapCard: View {
+    let goal: GoalState
+    var onComplete: () -> Void
+    var onExtend: () -> Void
+    var onArchive: () -> Void
+    var body: some View {
+        let n = goal.progress.activeDays
+        VStack(alignment: .leading, spacing: 10) {
+            Text("TARGET DATE · \(Day.parse(goal.deadline)!.formatted(.dateTime.month(.abbreviated).day()).uppercased())").bridgeLabel(10, color: Theme.accInk)
+            Text("You reached your date.").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text("You showed up on ^[\(n) day](inflect: true) along the way. Where should this goal go next?").font(BFont.body(14)).foregroundStyle(Theme.ink2)
+            Spacer().frame(height: 4)
+            Button("I made it: mark complete", action: onComplete).buttonStyle(PrimaryButtonStyle())
+            Button("Give it more time", action: onExtend).buttonStyle(SecondaryButtonStyle())
+            Button("Archive it", action: onArchive).font(BFont.body(14, .medium)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.s1, in: RoundedRectangle(cornerRadius: 20, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.accLine, lineWidth: 1))
+    }
+}
+
+/// Three or more days missed: pick up with today's plan only.
+struct AwayCard: View {
+    var onAdjust: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Welcome back.").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text("Your bridge is where you left it. Here's today's plan, with nothing to catch up on.").font(BFont.body(14)).foregroundStyle(Theme.ink2)
+            Button(action: onAdjust) {
+                HStack(spacing: 6) { Text("Adjust the plan in Reality Check"); Image(systemName: "arrow.right").font(.system(size: 14)) }
+                    .font(BFont.body(14, .medium)).foregroundStyle(Theme.accInk).frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 8).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.s1, in: RoundedRectangle(cornerRadius: 20, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line, lineWidth: 1))
+    }
+}
+
+struct ArchiveGoalSheet: View {
+    var onArchive: () -> Void
+    var onCancel: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Archive this goal?").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text("Its tasks leave your daily plan. Images, journal entries and history are kept.").font(BFont.body(15)).foregroundStyle(Theme.ink2)
+            Button("Archive", action: onArchive).font(BFont.body(15, .semibold)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, minHeight: 56).background(Theme.bad, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            Button("Cancel", action: onCancel).buttonStyle(SecondaryButtonStyle())
+            Spacer()
+        }
+        .padding(.horizontal, 20).padding(.top, 28)
+        .presentationDetents([.medium])
+    }
+}
+
+/// The goal was marked complete: the future self, the days it took, and the next goal.
+struct GoalCrossedView: View {
+    let goal: GoalState
+    var onNext: () -> Void
+    var onClose: () -> Void
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .topLeading) {
+                    RemoteImage(url: goal.images["future"]?.url).frame(height: 470).clipped()
+                    LinearGradient(stops: [.init(color: .clear, location: 0.55), .init(color: Theme.bg, location: 1)], startPoint: .top, endPoint: .bottom)
+                    Text("FUTURE SELF").bridgeLabel(10, color: Theme.accInk).padding(.leading, 24).padding(.top, 64)
+                }
+                .frame(height: 470)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("\(goal.label.uppercased()) · GOAL CROSSED").bridgeLabel(11, color: Theme.ok)
+                    Text("You crossed the bridge.").font(BFont.display(34)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                    Text(goal.statement).font(BFont.body(15, .medium)).foregroundStyle(Theme.ink2)
+                    Text("^[\(goal.progress.activeDays) day](inflect: true) of showing up got you here. Your Hall of Fame has a new badge.").font(BFont.body(15)).foregroundStyle(Theme.mut)
+                    Spacer(minLength: 20)
+                    Button("Set your next goal", action: onNext).buttonStyle(PrimaryButtonStyle())
+                    Button("Back to Today", action: onClose).font(BFont.body(15, .medium)).foregroundStyle(Theme.ink2).frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .padding(.horizontal, 24).padding(.bottom, 40).offset(y: -90).padding(.bottom, -90)
+            }
+        }
+        .ignoresSafeArea(edges: .top)
+        .background(Theme.bg)
     }
 }
 

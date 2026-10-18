@@ -19,6 +19,16 @@ final class GoalsCoreTests: XCTestCase {
     func testTotalNeverDropsBelowTheDayIndex() {
         let p = Progress.of(start: start, deadline: d(5), today: d(8), taskCreated: [a: start], completions: [:])
         XCTAssertEqual(p.total, 8); XCTAssertEqual(p.fraction, 7.0 / 8, accuracy: 0.0001)
+        XCTAssertTrue(p.overdue); XCTAssertEqual(p.daysLeft, 0)
+        XCTAssertFalse(Progress.of(start: start, deadline: d(5), today: d(5), taskCreated: [a: start], completions: [:]).overdue)   // the deadline day itself is still open
+    }
+
+    func testThreeMissedDaysBringTheWelcomeBack() {
+        XCTAssertEqual(Progress.of(start: start, deadline: d(30), today: d(3), taskCreated: [a: start], completions: [:]).awayDays, 2)   // nothing yet: counts from the start
+        let away = Progress.of(start: start, deadline: d(30), today: d(9), taskCreated: [a: start], completions: [a: [d(2), d(5)]])
+        XCTAssertEqual(away.awayDays, 3); XCTAssertTrue(away.away); XCTAssertEqual(away.activeDays, 2)
+        XCTAssertFalse(Progress.of(start: start, deadline: d(30), today: d(9), taskCreated: [a: start], completions: [a: [d(5), d(9)]]).away)   // ticked a task today
+        XCTAssertFalse(Progress.of(start: start, deadline: d(30), today: d(8), taskCreated: [a: start], completions: [a: [d(5)]]).away)        // only two days missed
     }
 
     func testStreakRunsBackFromTodayOrYesterday() {

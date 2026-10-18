@@ -28,8 +28,15 @@ struct GoalProgress: Equatable, Sendable {
     var streak: Int
     /// Percentage points against the pace target, or nil before there is any history.
     var drift: Int?
+    /// Today is after the deadline: the recap replaces the plan header.
+    var overdue = false
+    /// Finished days in a row with nothing done, up to yesterday. 3+ shows the gentle re-entry.
+    var awayDays = 0
+    /// Days with at least one completed task, since the start.
+    var activeDays = 0
 
-    var daysLeft: Int { max(0, total - day + 1) }
+    var daysLeft: Int { overdue ? 0 : max(0, total - day + 1) }
+    var away: Bool { awayDays >= Progress.awayThreshold && doneToday == 0 }
     var todayFraction: Double { tasksToday == 0 ? 0 : Double(doneToday) / Double(tasksToday) }
     var allDone: Bool { tasksToday > 0 && doneToday == tasksToday }
 }
@@ -37,6 +44,8 @@ struct GoalProgress: Equatable, Sendable {
 enum Progress {
     /// The plan is "on pace" when about 4 in 5 planned tasks get done: consistency, not perfection.
     static let paceTarget = 0.8
+    /// Missed this many days in a row: welcome back, no catching up.
+    static let awayThreshold = 3
 
     /// - Parameters:
     ///   - taskCreated: local date each live task first existed (from its UUIDv7 id).
@@ -46,10 +55,15 @@ enum Progress {
         let total = max(day, Day.between(start, deadline) + 1)
         let done = taskCreated.keys.filter { completions[$0]?.contains(today) == true }.count
         let share = taskCreated.isEmpty ? 0 : Double(done) / Double(taskCreated.count)
+        let days = Set(completions.values.flatMap { $0 })
+        let last = days.filter { $0 < today }.max()
         return GoalProgress(day: day, total: total, doneToday: done, tasksToday: taskCreated.count,
                             fraction: min(1, max(0, (Double(day - 1) + share) / Double(total))),
                             streak: streak(Set(completions.values.flatMap { $0 }), today: today),
-                            drift: drift(start: start, today: today, taskCreated: taskCreated, completions: completions))
+                            drift: drift(start: start, today: today, taskCreated: taskCreated, completions: completions),
+                            overdue: today > deadline,
+                            awayDays: max(0, Day.between(last ?? Day.add(-1, to: start), today) - 1),
+                            activeDays: days.filter { $0 <= today }.count)
     }
 
     /// Consecutive days with at least one completed task, ending today (or yesterday while today is still open).

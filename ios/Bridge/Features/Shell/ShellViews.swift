@@ -34,6 +34,7 @@ struct ProfileView: View {
     @Environment(Toaster.self) private var toaster
     @State private var sheet: Sheet?
     @State private var unsynced = 0
+    @State private var hasMessages = false
     @State private var reminders = ReminderSettings.load()
     @State private var renaming = false
     @State private var coachName = ""
@@ -109,7 +110,8 @@ struct ProfileView: View {
                     Divider().overlay(Theme.line)
                     SettingsLink(label: "Log out", danger: false) {
                         unsynced = Persistence.outboxCount()
-                        if unsynced > 0 { sheet = .logOut } else { logOut() }
+                        hasMessages = Persistence.dmCount() > 0
+                        if unsynced > 0 || hasMessages { sheet = .logOut } else { logOut() }
                     }
                     Divider().overlay(Theme.line)
                     SettingsLink(label: "Delete account", danger: true) { sheet = .delete }
@@ -132,7 +134,7 @@ struct ProfileView: View {
             Group {
                 switch which {
                 case .delete: DeleteAccountSheet()
-                case .logOut: LogOutSheet(unsynced: unsynced, onConfirm: logOut)
+                case .logOut: LogOutSheet(unsynced: unsynced, hasMessages: hasMessages, onConfirm: logOut)
                 }
             }
             .presentationDetents([.medium]).presentationDragIndicator(.visible).presentationBackground(Theme.bg)
@@ -265,13 +267,19 @@ struct DeleteAccountSheet: View {
 /// Logging out wipes local data, so warn first when something hasn't reached the server.
 struct LogOutSheet: View {
     let unsynced: Int
+    var hasMessages = false
     var onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Log out").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                Text("\(unsynced) changes haven't synced yet and will be lost if you log out now.").font(BFont.body(15)).lineSpacing(4).foregroundStyle(Theme.ink2)
+                if unsynced > 0 {
+                    Text("\(unsynced) changes haven't synced yet and will be lost if you log out now.").font(BFont.body(15)).lineSpacing(4).foregroundStyle(Theme.ink2)
+                }
+                if hasMessages {
+                    Text("Your direct messages are end-to-end encrypted and kept only on this device. Logging out deletes them, and they can't be recovered when you sign in again.").font(BFont.body(15)).lineSpacing(4).foregroundStyle(Theme.ink2)
+                }
                 Button("Stay logged in") { dismiss() }.buttonStyle(PrimaryButtonStyle())
                 Button("Log out anyway", action: onConfirm).buttonStyle(SecondaryButtonStyle())
             }

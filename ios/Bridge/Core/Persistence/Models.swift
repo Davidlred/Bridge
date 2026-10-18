@@ -209,6 +209,8 @@ enum Persistence {
     }
 
     static func outboxCount() -> Int { (try? ModelContext(container).fetchCount(FetchDescriptor<OutboxEntity>())) ?? 0 }
+    /// Encrypted DMs live only on this device; logging out deletes them for good.
+    static func dmCount() -> Int { (try? ModelContext(container).fetchCount(FetchDescriptor<DmMessageRow>())) ?? 0 }
 }
 
 enum LocalDay {

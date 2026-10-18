@@ -132,10 +132,15 @@ final class GoalStore {
     }
 
     /// Archived goals leave the daily plan; their images, journal and history are kept.
-    func archive(_ id: UUID) {
+    func archive(_ id: UUID) { setStatus(id, "archived") }
+
+    /// The user says they made it (early, on the day or after the deadline). Earns the "goal" badge on the server.
+    func complete(_ id: UUID) { setStatus(id, "completed") }
+
+    private func setStatus(_ id: UUID, _ status: String) {
         guard let g = goalRow(id) else { return }
-        g.status = "archived"; g.updatedAt = .now
-        enqueue("goal", id, "upsert", ["status": "archived"])
+        g.status = status; g.updatedAt = .now
+        enqueue("goal", id, "upsert", ["status": status])
         commit()
     }
 

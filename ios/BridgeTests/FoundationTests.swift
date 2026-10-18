@@ -156,6 +156,14 @@ final class FoundationSnapshotTests: XCTestCase {
     func testPaywall() {
         verify(PaywallContent(product: .alliancePlus, available: true, loading: false, offers: [PriceOffer(id: "m", price: "$3.99", period: .month, trialDays: 7)], selected: .constant("m")).background(Theme.bg), named: "paywall-alliance")
     }
+    // MARK: Edge cases
+    private var overdue: GoalState {
+        GoalState(id: goal.id, label: "Half marathon", statement: "Run a half marathon in under 2 hours.", startDate: "2026-07-01", deadline: "2026-10-11", colorIndex: 0,
+                  routine: nil, realityNote: nil, feasibility: nil, tasks: [], progress: GoalProgress(day: 105, total: 105, doneToday: 0, tasksToday: 4, fraction: 0.99, streak: 6, drift: -20, overdue: true, activeDays: 6), images: [:])
+    }
+    func testRecap() { verify(RecapCard(goal: overdue, onComplete: {}, onExtend: {}, onArchive: {}).padding(24).background(Theme.bg), named: "today-recap") }
+    func testAway() { verify(AwayCard(onAdjust: {}).padding(24).background(Theme.bg), named: "today-away") }
+    func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }
     func testPaywallUnavailable() { verify(PaywallContent(product: .plus, available: false, loading: false, offers: [], selected: .constant(nil)).background(Theme.bg), named: "paywall-plus-off") }
     func testCreateAlliance() {
         let m = CommunityModel(); m.name = "Dawn Runners"; m.shared = true
