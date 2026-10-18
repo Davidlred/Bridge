@@ -27,6 +27,8 @@ type Phase = 'lobby' | 'role' | 'round' | 'vote' | 'result' | 'cancelled';
 interface Player {
   userId: string; name: string; ready: boolean; begun: boolean; role?: 'builder' | 'drifter';
   actions: number; vote?: string | null; links: number; absent: boolean; recent: number[]; graceTimer?: NodeJS.Timeout;
+  /** "Your game is still on" was sent (once per game). */
+  toldStillOn?: boolean;
 }
 interface Game {
   id: string; allianceId: string; ranked: boolean; wantsRanked: boolean; phase: Phase; players: Map<string, Player>;
@@ -285,7 +287,14 @@ export function socketClosed(userId: string, ctx: SocketCtx) {
     const g = games.get(id), p = g?.players.get(userId);
     if (!g || !p) continue;
     p.links = Math.max(0, p.links - 1);
-    if (p.links === 0) { clearTimeout(p.graceTimer); p.graceTimer = setTimeout(() => markAbsent(g, p), timing.graceMs); }
+    if (p.links === 0) {
+      clearTimeout(p.graceTimer); p.graceTimer = setTimeout(() => markAbsent(g, p), timing.graceMs);
+      // Backgrounded or dropped mid-game: one push, so they can come back within the grace period.
+      if (['role', 'round', 'vote'].includes(g.phase) && !p.toldStillOn) {
+        p.toldStillOn = true;
+        void push(userId, { title: 'Your game is still on', body: 'Come back in the next few seconds to keep playing.', data: { allianceId: g.allianceId }, collapseKey: `game-${g.id}` }, 'system');
+      }
+    }
   }
 }
 

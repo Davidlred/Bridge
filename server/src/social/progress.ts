@@ -20,7 +20,7 @@ export function streakOf(days: Set<string>, today: string): number {
 /** Streak on one goal, computed from the completions the server has (so a device can't claim more). */
 export async function goalStreak(db: Db, userId: string, goalId: string): Promise<number> {
   const rows = await db`select distinct c.local_date::text as d from task_completions c join tasks t on t.id = c.task_id
-                        where t.goal_id = ${goalId} and c.user_id = ${userId} and c.local_date > current_date - 400`;
+                        where t.goal_id = ${goalId} and c.user_id = ${userId} and not c.suspect and c.local_date > current_date - 400`;
   return streakOf(new Set(rows.map(r => r.d as string)), await localToday(db, userId));
 }
 

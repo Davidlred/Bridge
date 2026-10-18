@@ -29,7 +29,7 @@ async function evaluate(userId: string) {
   const today = await localToday(sql, userId);
   for (const g of goals) {
     const rows = await sql`select c.local_date::text as d, count(*)::int as n from task_completions c join tasks t on t.id = c.task_id
-                           where t.goal_id = ${g.id} and c.user_id = ${userId} group by 1`;
+                           where t.goal_id = ${g.id} and c.user_id = ${userId} and not c.suspect group by 1`;
     const [{ tasks }] = await sql`select count(*)::int as tasks from tasks where goal_id = ${g.id} and deleted_at is null` as unknown as [{ tasks: number }];
     const days = rows.map(r => r.d as string);
     bestStreak = Math.max(bestStreak, longestRun(days));

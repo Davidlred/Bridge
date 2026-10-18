@@ -50,7 +50,7 @@ async function compute(allianceId: string): Promise<Score> {
     const [{ tasks }] = await sql`select count(*)::int as tasks from tasks where goal_id = ${m.goal_id} and deleted_at is null` as unknown as [{ tasks: number }];
     scheduled += tasks * days;
     const done = await sql`select c.local_date::text as d, t.time_of_day, extract(hour from c.completed_at at time zone ${m.tz})::int * 60 + extract(minute from c.completed_at at time zone ${m.tz})::int as at
-                           from task_completions c join tasks t on t.id = c.task_id where t.goal_id = ${m.goal_id} and c.local_date between ${m.from_day} and ${today}`;
+                           from task_completions c join tasks t on t.id = c.task_id where t.goal_id = ${m.goal_id} and not c.suspect and c.local_date between ${m.from_day} and ${today}`;
     completed += done.length;
     for (const c of done) {
       activeDays.add(c.d);

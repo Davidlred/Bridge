@@ -152,7 +152,11 @@ async function applyCompletion(tx: Tx, userId: string, m: Mutation) {
   const at = new Date(m.clientTs);
   if (m.op === 'complete') {
     // Set semantics: two devices completing the same task on the same day yield one completion.
-    const done = await tx`insert into task_completions (task_id, user_id, local_date, completed_at) values (${m.entityId}, ${userId}, ${localDate}, ${at})
+    // A local date more than a day away from the server's view of the user's day (receipt time ± 36h) is suspect:
+    // kept for the user, ignored for anything public (docs/EDGE_CASES.md → clock tampering).
+    const [day] = await tx`select ((now() at time zone coalesce(home_timezone, 'UTC')) - interval '3 hours')::date as today from users where id = ${userId}`;
+    const suspect = Math.abs(Date.parse(`${localDate}T00:00:00Z`) - (day!.today as Date).getTime()) > 864e5;
+    const done = await tx`insert into task_completions (task_id, user_id, local_date, completed_at, suspect) values (${m.entityId}, ${userId}, ${localDate}, ${at}, ${suspect})
                           on conflict (task_id, local_date) do nothing returning 1`;
     if (done.length) await log(tx, userId, 'completion', m.entityId, 'upsert', localDate);
   } else if (m.op === 'uncomplete') {

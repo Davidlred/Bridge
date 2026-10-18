@@ -136,7 +136,7 @@ async function summary(allianceId: string, userId: string) {
                             from alliance_members m join users u on u.id = m.user_id where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null order by m.joined_at`;
   const today = await localToday(sql, userId);
   const done = await sql`select t.goal_id, c.local_date::text as d, count(*)::int as n from task_completions c join tasks t on t.id = c.task_id
-                         where t.goal_id in ${sql(members.map(m => m.goal_id as string))} and c.local_date > ${today}::date - 60 group by 1, 2`;
+                         where t.goal_id in ${sql(members.map(m => m.goal_id as string))} and not c.suspect and c.local_date > ${today}::date - 60 group by 1, 2`;
   const days = new Map<string, Map<string, number>>();
   for (const r of done) { const g = days.get(r.goal_id) ?? new Map(); g.set(r.d, r.n); days.set(r.goal_id, g); }
   // Away: no completion in the last 3 days (excluded from the collective streak and Game Night).

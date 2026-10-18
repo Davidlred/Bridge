@@ -56,6 +56,14 @@ run('entitlements and export', () => {
     expect(r.body).toContain('mailto:support@thebridge.app');
   });
 
+  it('ends access at once on a refund', async () => {
+    const u = await signUp();
+    await hook({ type: 'INITIAL_PURCHASE', app_user_id: u.user.id, entitlement_ids: ['plus'], expiration_at_ms: Date.now() + 30 * 864e5, event_timestamp_ms: Date.now() - 1000 });
+    expect((await call(u, 'GET', '/v1/me/entitlements')).json().entitlements).toHaveLength(1);
+    await hook({ type: 'CANCELLATION', cancel_reason: 'CUSTOMER_SUPPORT', app_user_id: u.user.id, entitlement_ids: ['plus'], expiration_at_ms: Date.now() + 30 * 864e5, event_timestamp_ms: Date.now() });
+    expect((await call(u, 'GET', '/v1/me/entitlements')).json().entitlements).toEqual([]);
+  });
+
   it('moves purchases away from the old account on a transfer', async () => {
     const a = await signUp(), b = await signUp();
     await hook({ type: 'INITIAL_PURCHASE', app_user_id: a.user.id, entitlement_ids: ['alliance_plus'], expiration_at_ms: Date.now() + 864e5 });

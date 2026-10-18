@@ -151,6 +151,7 @@ run('game night', () => {
     // The Drifter walking away hands the Builders the win after the grace period
     const role2 = socks.map(s => [...s.frames].reverse().find(f => f.type === 'game:role')!.role);
     socks[role2.indexOf('drifter')]!.ws.terminate();
+    await until(() => pushes.some(p => p.userId === ps[role2.indexOf('drifter')]!.user.id && p.title === 'Your game is still on'));
     await until(() => socks[role2.indexOf('builder')]!.last()?.phase === 'result');
     expect(socks[role2.indexOf('builder')]!.last()).toMatchObject({ buildersWon: true, ejectedId: null });
     socks.forEach(s => s.ws.terminate());

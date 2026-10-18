@@ -55,6 +55,17 @@ run('community, alliances and chat', () => {
       expect((await call(a, 'GET', `/v1/community?goalId=${g}`)).json()).toMatchObject({ unlocked: true, streak: 0 });
     });
 
+    it('keeps completions with an implausible date out of public streaks', async () => {
+      const a = await signUp();
+      const { g, t } = await goalWithStreak(a, 0);
+      const day = (n: number) => new Date(Date.now() - 3 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+      // Today's and a far-future completion arrive now; the future one is suspect
+      await push(a, [mut('completion', t, 'complete', { localDate: day(0) }), mut('completion', t, 'complete', { localDate: day(5) })]);
+      const rows = await sql`select local_date::text as d, suspect from task_completions where task_id = ${t} order by local_date`;
+      expect(rows.map(r => [r.d, r.suspect])).toEqual([[day(0), false], [day(5), true]]);
+      expect((await call(a, 'GET', `/v1/community?goalId=${g}`)).json().streak).toBe(1);
+    });
+
     it('posts progress within the sharing setting, checks streak claims, and widens a quiet feed', async () => {
       const a = await signUp('Jonas Keller'), b = await signUp();
       const ga = await goalWithStreak(a, 9, 'language'), gb = await goalWithStreak(b, 7, 'fitness');

@@ -30,6 +30,7 @@ const Event = z.object({
     grace_period_expiration_at_ms: z.number().nullable().optional(),
     event_timestamp_ms: z.number().optional(),
     store: z.string().optional(),
+    cancel_reason: z.string().nullable().optional(),
   }).passthrough(),
 });
 
@@ -67,7 +68,11 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!uuid.safeParse(e.app_user_id).success) return reply.send({ ok: true, ignored: 'anonymous_user' });
     const grace = e.grace_period_expiration_at_ms ?? null;
     for (const ent of entitlements) {
-      if (GRANT.has(e.type) || e.type === 'CANCELLATION' || e.type === 'BILLING_ISSUE') {
+      // A refund arrives as a cancellation with reason CUSTOMER_SUPPORT: access ends now, not at the period end.
+      const refund = e.type === 'CANCELLATION' && e.cancel_reason === 'CUSTOMER_SUPPORT';
+      if (refund) {
+        await setEntitlement(e.app_user_id, ent, at, e.store ?? null, at);
+      } else if (GRANT.has(e.type) || e.type === 'CANCELLATION' || e.type === 'BILLING_ISSUE') {
         const until = Math.max(e.expiration_at_ms ?? 0, grace ?? 0);
         await setEntitlement(e.app_user_id, ent, until ? new Date(until) : null, e.store ?? null, at);
       } else if (END.has(e.type)) {
