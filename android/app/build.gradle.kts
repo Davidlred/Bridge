@@ -27,7 +27,7 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         buildConfigField("String", "API_BASE", "\"https://api.thebridge.app\"")
         // OAuth *web* client id from Google Cloud (the same value goes in the server's GOOGLE_CLIENT_IDS). Empty = Google sign-in reports unavailable.
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${prop("bridge.googleWebClientId", "846759270213-7fqrlsbacvr065l1732ukhpogoaepb3s.apps.googleusercontent.com")}\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${prop("bridge.googleWebClientId", "846759270213-n831n3thdu07p042vk1cn4q846t22eca.apps.googleusercontent.com")}\"")
         // RevenueCat public SDK key (goog_…). Empty = the paywall shows, but purchases are switched off.
         // PostHog project key (phc_…). Empty = no analytics.
         buildConfigField("String", "POSTHOG_KEY", "\"${prop("bridge.posthogKey", "")}\"")
