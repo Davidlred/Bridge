@@ -353,6 +353,8 @@
 
     <!-- Reminders -->
     <string name="notif_channel_reminders">Reminders</string>
+    <string name="notif_channel_updates">Community and Game Night</string>
+    <string name="notif_channel_updates_desc">Mentions, nudges, game invites and messages</string>
     <string name="notif_channel_reminders_desc">Your daily plan, task times and streak nudges</string>
     <string name="notif_daily">Your plan is ready. Let\'s make progress today.</string>
     <string name="notif_task_body">Planned for %1$s</string>

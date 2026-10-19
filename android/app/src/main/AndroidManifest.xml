@@ -36,6 +36,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Push from the server (FCM): new token → re-register the device; foreground messages are shown here -->
+        <service android:name=".data.PushService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="updates" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_launcher_foreground" />
+
         <!-- Local reminders: fired alarms, plus re-arming after reboot or a clock / time-zone change -->
         <receiver android:name=".data.reminders.ReminderReceiver" android:exported="false">
             <intent-filter>

@@ -1,5 +1,6 @@
 package app.thebridge.data
 
+import kotlinx.coroutines.tasks.await
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -203,7 +204,12 @@ class SocialRepository @Inject constructor(
     suspend fun setBadgesPublic(on: Boolean) { session.user.value?.id?.let { goals.saveSetting(it, "badgesPublic", on) } }
 
     /** Push registration for this install (no token until Firebase is configured), plus the home time zone. */
-    suspend fun registerDevice() { runCatching { api.registerDevice(session.deviceId(), null) } }
+    suspend fun registerDevice() { runCatching { api.registerDevice(session.deviceId(), pushToken()) } }
+
+    /** FCM token for this install, or null when Firebase isn't configured (no google-services.json) or Play services are missing. */
+    private suspend fun pushToken(): String? = runCatching {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+    }.getOrNull()
 
     enum class SendResult { Sent, Queued, Failed, Blocked }
 
