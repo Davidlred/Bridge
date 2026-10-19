@@ -5,7 +5,7 @@ All model calls go through our server. The Replicate token never ships in an app
 ## Model choice
 | Job | Model (Replicate) | Why |
 |---|---|---|
-| Goal → plan, Reality Check, plan edits | **Anthropic Claude, latest Opus or Sonnet-class model on Replicate** (e.g. `anthropic/claude-4-sonnet`; check Replicate for the newest Claude version and pin it) | Best at decomposing vague goals into realistic daily actions, respecting constraints (user deadline, routine), and returning strict JSON |
+| Goal → plan, Reality Check, plan edits | **Anthropic Claude, latest Opus or Sonnet-class model on Replicate** (pinned: `anthropic/claude-opus-4.7`, the newest Opus on Replicate as of 2026-10-19; `MODEL_FAST` for moderation is `anthropic/claude-4.5-haiku`) | Best at decomposing vague goals into realistic daily actions, respecting constraints (user deadline, routine), and returning strict JSON |
 | Coach chat (streaming) | Same Sonnet-class Claude model | Consistent persona with the planner; streaming support |
 | Daily nudges, journal prompts, moderation classification | Smaller/faster Claude (Haiku-class) if available on Replicate, else the same model with short max tokens | Cost and latency |
 | Goal cover art, badge art | Top image model on Replicate: Google Imagen 4 / "nano-banana" (Gemini image), FLUX 1.1 Pro / FLUX Kontext, or Seedream. Pick one after a 20-prompt bake-off on your style | Quality + style consistency; Kontext-style editing models keep a consistent look from a reference image |

@@ -30,7 +30,8 @@ Native goal-coaching app. Read this first, then `README.md` (screens + tokens), 
 - E2E DMs use **vodozemac** (Olm, Apache-2.0) through the `crypto/` Rust crate and its UniFFI bindings. Decided 2026-10-16; `libsignal` (AGPL) is not used.
 
 ## Open decisions (ask before implementing)
-- Exact Claude model version on Replicate (pin the newest available) and image model after a style bake-off.
+- Image model after a style bake-off (currently `flux-1.1-pro` and `flux-kontext-pro` for photo edits).
+- Claude model: decided 2026-10-19, `anthropic/claude-opus-4.7` on Replicate for plans and the coach, `anthropic/claude-4.5-haiku` for chat moderation. Run `npm run check-ai` in `server/` after changing a model.
 - Age-of-consent table per launch country (US, EU, UK, Africa, Asia).
 
 ## Commands

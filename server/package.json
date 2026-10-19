@@ -12,6 +12,7 @@
     "keygen": "node -e \"console.log(require('node:crypto').generateKeyPairSync('ed25519').privateKey.export({type:'pkcs8',format:'pem'}).replace(/\\n/g,'\\\\n'))\"",
     "migrate": "tsx --env-file=.env src/migrate.ts",
     "migrate:prod": "node dist/migrate.js",
+    "check-ai": "tsx --env-file=.env src/checkAi.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
