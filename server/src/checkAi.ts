@@ -48,6 +48,22 @@ async function main() {
     const out = Array.isArray(p.output) ? p.output.join('') : String(p.output ?? '');
     if (res.ok && p.status === 'succeeded') console.log(`✓ live call answered: "${out.trim()}"`);
     else { console.log(`✗ live call failed: ${p.error ?? p.detail ?? p.status ?? res.status}${res.status === 402 ? ' (add billing at https://replicate.com/account/billing)' : ''}`); bad++; }
+
+    // The coach streams its replies (src/coach/routes.ts → streamText).
+    if (!bad) {
+      try {
+        const start = await fetch(`${BASE}/models/${process.env.MODEL_COACH}/predictions`, {
+          method: 'POST', headers, body: JSON.stringify({ stream: true, input: { system_prompt: 'Answer in at most five words.', prompt: 'Say hello.', max_tokens: 20, temperature: 0 } }),
+        });
+        const s = await start.json() as { urls?: { stream?: string }; detail?: string };
+        if (!start.ok || !s.urls?.stream) throw new Error(s.detail ?? 'this model does not offer a stream');
+        const body = await (await fetch(s.urls.stream, { headers: { Accept: 'text/event-stream' } })).text();   // ends at the "done" event
+        if (/^event: error$/m.test(body)) throw new Error(body.split('\n').find(l => l.startsWith('data: '))?.slice(6) ?? 'stream error');
+        const text = body.split('\n\n').filter(b => /^event: output$/m.test(b))
+          .map(b => b.split('\n').filter(l => l.startsWith('data: ')).map(l => l.slice(6)).join('\n')).join('');
+        console.log(`✓ coach streams: "${text.trim()}"`);
+      } catch (e) { console.log(`✗ coach streaming failed: ${(e as Error).message}`); bad++; }
+    }
   }
   process.exit(bad ? 1 : 0);
 }
