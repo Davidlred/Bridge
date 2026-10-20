@@ -70,7 +70,9 @@ export async function buildApp() {
     const body = PlanRequest.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid_request', issues: body.error.issues });
     const ctrl = new AbortController();
-    req.raw.on('close', () => { if (!reply.sent) ctrl.abort(); });
+    // The app gave up (closed the connection) before the plan was ready: stop the model. The request's own 'close'
+    // event fires as soon as its body has been read, so listen on the response instead.
+    reply.raw.on('close', () => { if (!reply.raw.writableFinished) ctrl.abort(); });
     try {
       const plan = await generatePlan(body.data, ctrl.signal);
       return { plan, deadline: body.data.deadline };

@@ -22,10 +22,23 @@ export async function runImage(model: string, input: Record<string, unknown>, si
   return url;
 }
 
+/**
+ * Creates a prediction. Replicate answers 429 when the account is throttled (accounts under $5 of credit allow about one
+ * request at a time), so wait as long as it asks, at most 10s, and try up to twice more.
+ */
+async function create(model: string, body: object, signal?: AbortSignal, extra: Record<string, string> = {}): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${BASE}/models/${model}/predictions`, { method: 'POST', headers: { ...headers(), ...extra }, body: JSON.stringify(body), signal });
+    if (res.status !== 429 || attempt === 2) return res;
+    const wait = Math.min(10, Number(res.headers.get('retry-after')) || 2 * (attempt + 1));
+    await res.body?.cancel();
+    await sleep(wait * 1000);
+    if (signal?.aborted) return res;
+  }
+}
+
 async function runPrediction(model: string, input: Record<string, unknown>, signal?: AbortSignal, timeoutMs = 90_000): Promise<unknown> {
-  const res = await fetch(`${BASE}/models/${model}/predictions`, {
-    method: 'POST', headers: { ...headers(), Prefer: 'wait=60' }, body: JSON.stringify({ input }), signal,
-  });
+  const res = await create(model, { input }, signal, { Prefer: 'wait=60' });
   if (res.status === 429 || res.status >= 500) throw new AIUnavailable(`replicate ${res.status}`);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}: ${await res.text()}`, false);
   let p = (await res.json()) as Prediction;
@@ -44,15 +57,43 @@ async function runPrediction(model: string, input: Record<string, unknown>, sign
   return p.output;
 }
 
-/** Streams tokens from a language model via Replicate's SSE stream URL. */
+/**
+ * Turns Replicate's output events into new text only. Some models (Claude on Replicate) restart the stream partway:
+ * a chunk repeats the reply from its first character, re-split differently, before carrying on. Seen 2026-10-20:
+ * "1. B" · "ridges connect … They come" · " in many designs" · "1. Bridges conn" · "ect places …" · …
+ */
+export class StreamJoiner {
+  private emitted = '';
+  private seg = '';
+
+  push(chunk: string): string {
+    const e = this.emitted;
+    // A replay from the start: a prefix of what was already sent, or a snapshot that runs past it.
+    if (e.length >= 3 && chunk.length >= 3 && (e.startsWith(chunk) || chunk.startsWith(e))) this.seg = chunk;
+    else this.seg += chunk;
+    if (this.seg.startsWith(e)) {
+      const out = this.seg.slice(e.length);
+      this.emitted = this.seg;
+      return out;
+    }
+    if (e.startsWith(this.seg)) return '';           // still catching up with what was already sent
+    // Diverged: the "restart" was an ordinary delta that happened to match the opening. Send everything since then.
+    const out = this.seg;
+    this.emitted = e + out; this.seg = this.emitted;
+    return out;
+  }
+}
+
+/** Streams new text from a language model via Replicate's SSE stream URL. */
 export async function* streamText(model: string, input: Record<string, unknown>, signal?: AbortSignal): AsyncGenerator<string> {
-  const res = await fetch(`${BASE}/models/${model}/predictions`, { method: 'POST', headers: headers(), body: JSON.stringify({ input, stream: true }), signal });
+  const res = await create(model, { input, stream: true }, signal);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}`, res.status >= 500 || res.status === 429);
   const p = (await res.json()) as Prediction;
   if (!p.urls.stream) throw new AIUnavailable('model does not support streaming', false);
   const s = await fetch(p.urls.stream, { headers: { Accept: 'text/event-stream', 'Cache-Control': 'no-store' }, signal });
   if (!s.body) throw new AIUnavailable('no stream body');
   const reader = s.body.pipeThrough(new TextDecoderStream()).getReader();
+  const joiner = new StreamJoiner();
   let buf = '';
   try {
     for (;;) {
@@ -64,7 +105,7 @@ export async function* streamText(model: string, input: Record<string, unknown>,
         const block = buf.slice(0, i); buf = buf.slice(i + 2);
         const event = /^event: (.*)$/m.exec(block)?.[1];
         const data = block.split('\n').filter(l => l.startsWith('data: ')).map(l => l.slice(6)).join('\n');
-        if (event === 'output') yield data;
+        if (event === 'output') { const text = joiner.push(data); if (text) yield text; }
         else if (event === 'error') throw new AIUnavailable(data);
         else if (event === 'done') return;
       }

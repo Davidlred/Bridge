@@ -7,15 +7,16 @@ const token = process.env.REPLICATE_API_TOKEN ?? '';
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
 /** Inputs each role sends (src/ai/goalPlanner.ts, src/coach/routes.ts, src/social/chat.ts, src/goals/routes.ts). */
-const ROLES: [env: string, inputs: string[]][] = [
-  ['MODEL_PLANNER', ['prompt', 'system_prompt', 'max_tokens']],
-  ['MODEL_COACH', ['prompt', 'system_prompt', 'max_tokens']],
-  ['MODEL_FAST', ['prompt', 'system_prompt', 'max_tokens']],
-  ['MODEL_IMAGE', ['prompt', 'aspect_ratio']],
-  ['MODEL_IMAGE_EDIT', ['prompt', 'input_image']],
+// maxTokens: every max_tokens value the server sends to that model (plan 1500, Reality Check 1024; coach 1024; moderation 3).
+const ROLES: [env: string, inputs: string[], maxTokens: number[]][] = [
+  ['MODEL_PLANNER', ['prompt', 'system_prompt', 'max_tokens'], [1500, 1024]],
+  ['MODEL_COACH', ['prompt', 'system_prompt', 'max_tokens'], [1024]],
+  ['MODEL_FAST', ['prompt', 'system_prompt', 'max_tokens'], [3]],
+  ['MODEL_IMAGE', ['prompt', 'aspect_ratio'], []],
+  ['MODEL_IMAGE_EDIT', ['prompt', 'input_image'], []],
 ];
 
-type Prop = { minimum?: number; enum?: string[]; allOf?: { $ref: string }[] };
+type Prop = { minimum?: number; maximum?: number; enum?: string[]; allOf?: { $ref: string }[] };
 
 async function main() {
   if (!token) { console.log('✗ REPLICATE_API_TOKEN is empty in server/.env'); process.exit(1); }
@@ -24,7 +25,7 @@ async function main() {
   console.log(`✓ token works (account: ${(await acct.json() as { username: string }).username})`);
 
   let bad = 0;
-  for (const [name, inputs] of ROLES) {
+  for (const [name, inputs, maxTokens] of ROLES) {
     const model = process.env[name];
     if (!model) { console.log(`✗ ${name} is not set`); bad++; continue; }
     const r = await fetch(`${BASE}/models/${model}`, { headers });
@@ -32,10 +33,11 @@ async function main() {
     const m = await r.json() as { latest_version?: { openapi_schema?: { components?: { schemas?: { Input?: { properties?: Record<string, Prop> } } } } } };
     const props = m.latest_version?.openapi_schema?.components?.schemas?.Input?.properties ?? {};
     const missing = inputs.filter(i => !(i in props));
-    // Moderation asks for a one-word answer (max_tokens 3); some models set a higher floor.
-    const floor = name === 'MODEL_FAST' ? props.max_tokens?.minimum : undefined;
+    // Some models set a floor (Opus 4.7 on Replicate: 1024) or a ceiling on max_tokens.
+    const lo = props.max_tokens?.minimum ?? 0, hi = props.max_tokens?.maximum ?? Infinity;
+    const outOfRange = maxTokens.filter(t => t < lo || t > hi);
     if (missing.length) { console.log(`✗ ${name}=${model}: doesn't accept ${missing.join(', ')}`); bad++; }
-    else if (floor !== undefined && floor > 3) { console.log(`✗ ${name}=${model}: max_tokens must be at least ${floor}; src/social/chat.ts asks for 3`); bad++; }
+    else if (outOfRange.length) { console.log(`✗ ${name}=${model}: max_tokens must be ${lo}–${hi}; the server sends ${outOfRange.join(', ')}`); bad++; }
     else console.log(`✓ ${name}=${model}`);
   }
 

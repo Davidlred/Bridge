@@ -40,8 +40,8 @@ function prompt(kind: Kind, goal: string, routine: string, withFace: boolean): s
   }
   // No photo (or no consent): a scene that suggests the person without showing a face.
   return kind === 'future'
-    ? `A scene that shows someone has achieved this goal: "${goal}". Hands, objects and setting only; no visible faces. ${STYLE}`
-    : `A scene that shows an unchanged daily routine a year from now: "${routine.slice(0, 600)}". The goal "${goal}" is still not reached. Objects and setting only; no visible faces. Honest, neutral, not bleak. ${STYLE}`;
+    ? `The moment this goal is achieved: "${goal}". Show the person doing or having just done the thing itself, with clear visual proof of the achievement in the scene (for example crossing the finish line, holding the certificate, on stage). Seen from behind or at a distance so their face is not visible. ${STYLE}`
+    : `An ordinary weekday a year from now for someone whose routine has not changed: "${routine.slice(0, 600)}". The goal "${goal}" has not happened. Show the person in that routine, seen from behind or at a distance so their face is not visible. Honest and neutral, not bleak. ${STYLE}`;
 }
 
 async function download(url: string): Promise<Buffer> {
@@ -173,7 +173,7 @@ export async function goalRoutes(app: FastifyInstance) {
     try {
       return { feasibility: await assessReality(parsed.data) };
     } catch (e) {
-      if (e instanceof AIUnavailable) return reply.code(503).send({ error: 'reality_unavailable' });
+      if (e instanceof AIUnavailable) { req.log.warn({ err: e.message }, 'reality_unavailable'); return reply.code(503).send({ error: 'reality_unavailable' }); }
       throw e;
     }
   });

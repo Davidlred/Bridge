@@ -148,7 +148,8 @@ export async function coachRoutes(app: FastifyInstance) {
     out.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     const send = (event: string, data: unknown) => out.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     const ctrl = new AbortController();
-    req.raw.on('close', () => ctrl.abort());
+    // The app left mid-reply: stop the model (the response's 'close', not the request's, which fires once the body is read).
+    out.on('close', () => { if (!out.writableFinished) ctrl.abort(); });
 
     // The question is stored before the model runs, so it reaches the user's other devices even if the reply fails.
     const store = r.conversation && r.messageId && r.replyId;
@@ -162,7 +163,7 @@ export async function coachRoutes(app: FastifyInstance) {
         for (const word of CRISIS_REPLY.split(/(?<= )/)) { replyText += word; send('token', { text: word }); }
       } else {
         const splitter = new SuggestionSplitter();
-        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode), prompt: prompt(r, journal), max_tokens: 600, temperature: 0.6 };
+        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode), prompt: prompt(r, journal), max_tokens: 1024, temperature: 0.6 };
         for await (const chunk of streamText(env.MODEL_COACH, input, ctrl.signal)) {
           const text = splitter.push(chunk);
           if (text) { replyText += text; send('token', { text }); }

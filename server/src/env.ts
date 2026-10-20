@@ -42,5 +42,6 @@ const Env = z.object({
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 });
 
-const parsed = Env.parse(process.env);
+// A blank line copied from .env.example (`S3_ENDPOINT=`) means "not set", not an invalid value.
+const parsed = Env.parse(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')));
 export const env = { ...parsed, PUBLIC_URL: (parsed.PUBLIC_URL ?? parsed.JWT_ISSUER).replace(/\/$/, '') };

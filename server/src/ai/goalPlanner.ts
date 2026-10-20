@@ -6,8 +6,12 @@ const SYSTEM = `You are the planning engine for The Bridge, a goal coach app.
 Turn the user's goal into a realistic daily plan.
 Rules:
 - The "deadline" field is authoritative. Ignore any date written in the goal text. If the text contradicts the deadline, say so in feasibility.reason. Never output a different deadline except as feasibility.suggestedDeadline.
+- Use daysUntilDeadline and weeksUntilDeadline for any statement about time left. Never work out durations yourself.
 - If the goal is too vague to plan (fewer than 3 meaningful words, or no clear outcome), set needsClarification to ONE short question and return an empty tasks array.
-- Otherwise return 2 to 6 daily tasks. Each takes 90 minutes or less, fits outside busy blocks and between wake and sleep, and prefers the user's preferred times.
+- Otherwise return 2 to 6 tasks. Every task repeats EVERY day: never write weekly frequencies ("three times a week") in a title or rationale. If an activity shouldn't be daily, make a daily version of it (e.g. "Run or strength session (alternate days)").
+- Each task takes 90 minutes or less, fits outside busy blocks and between wake and sleep, and prefers the user's preferred times.
+- title: specific and doable today, with an amount where it helps (e.g. "Easy run — 5 km at conversational pace"). At most 60 characters.
+- timeOfDay: a clock time like "7:00 AM" or "6:30 PM" whenever the routine allows, so a reminder can fire; otherwise a short anchor in sentence case like "After work" or "Before bed".
 - The routine may be free text written by the user. Read wake and sleep times, work hours and habits from it, and build on the habits they want to change.
 - Week one is deliberately light so the plan sticks.
 - priority: High for the task that most moves the goal, Low for supporting habits.
@@ -17,6 +21,12 @@ Rules:
 - label: 1 to 3 words naming the goal (e.g. "Half marathon").
 - category: one of fitness, study, language, career, money, creative, health, habits, other.
 Output ONLY a JSON object with keys: needsClarification, label, goal, category, feasibility {verdict, reason, suggestedDeadline}, tasks [{title, priority, timeOfDay, minutes, rationale}]. No prose, no code fences.`;
+
+/** Models are unreliable at date arithmetic (one said "16 months" for 4), so the time left is computed here and given to them. */
+export function timeLeft(today: string, deadline: string) {
+  const days = Math.round((Date.parse(`${deadline}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 864e5);
+  return { daysUntilDeadline: days, weeksUntilDeadline: Math.round(days / 7 * 10) / 10 };
+}
 
 function extractJSON(raw: string): unknown {
   const s = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
@@ -32,6 +42,7 @@ Rules:
 - verdict: "realistic", "stretch" (possible with consistent effort) or "unrealistic".
 - reason: at most two plain sentences, specific to this goal. No shaming, no motivational filler.
 - Deadlines more than 3 years away: suggest working in milestones in the reason.
+- Use daysUntilDeadline and weeksUntilDeadline for any statement about time left. Never work out durations yourself.
 Output ONLY a JSON object: {"verdict", "reason", "suggestedDeadline"}. No prose, no code fences.`;
 
 /** Feasibility only: used when the deadline changes, so the plan itself is left alone. */
@@ -41,7 +52,7 @@ export async function assessReality(req: RealityRequest, signal?: AbortSignal): 
     const repair = attempt ? `
 
 Your previous output was invalid: ${lastError}. Return corrected JSON only.` : '';
-    const raw = await runText(env.MODEL_PLANNER, { system_prompt: REALITY, prompt: JSON.stringify(req) + repair, max_tokens: 300, temperature: 0.2 }, signal);
+    const raw = await runText(env.MODEL_PLANNER, { system_prompt: REALITY, prompt: JSON.stringify({ ...req, ...timeLeft(req.today, req.deadline) }) + repair, max_tokens: 1024, temperature: 0.2 }, signal);
     try {
       const f = Feasibility.parse(extractJSON(raw));
       return f.suggestedDeadline && f.suggestedDeadline <= req.today ? { ...f, suggestedDeadline: null } : f;
@@ -53,7 +64,7 @@ Your previous output was invalid: ${lastError}. Return corrected JSON only.` : '
 }
 
 export async function generatePlan(req: PlanRequest, signal?: AbortSignal): Promise<Plan> {
-  const prompt = JSON.stringify(req);
+  const prompt = JSON.stringify({ ...req, ...timeLeft(req.today, req.deadline) });
   let lastError = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     const repair = attempt ? `\n\nYour previous output was invalid: ${lastError}. Return corrected JSON only.` : '';

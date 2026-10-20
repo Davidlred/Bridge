@@ -17,7 +17,10 @@ vi.mock('../src/ai/replicate.js', async orig => {
       if (failImages) throw new real.AIUnavailable('boom');
       return `data:image/jpeg;base64,${JPEG.toString('base64')}`;
     }),
-    runText: vi.fn(async (_model: string, input: Record<string, unknown>) => {
+    runText: vi.fn(async (_model: string, input: Record<string, unknown>, signal?: AbortSignal) => {
+      // Like the real client: a cancelled request stops the model.
+      await new Promise(r => setTimeout(r, 50));
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
       const system = String(input.system_prompt);
       if (system.includes('Reality Check')) return '{"verdict":"stretch","reason":"Possible with four runs a week.","suggestedDeadline":"2020-01-01"}';
       return JSON.stringify({ needsClarification: null, label: 'Half marathon', goal: 'Run a half marathon in under 2 hours', feasibility: { verdict: 'realistic', reason: 'Plenty of time.', suggestedDeadline: null },
@@ -99,7 +102,7 @@ run('goals core', () => {
     const faceCalls = calls.filter(c => c.input.input_image), plain = calls.filter(c => !c.input.input_image);
     expect(faceCalls).toHaveLength(2);
     expect(faceCalls.every(c => c.model === 'black-forest-labs/flux-kontext-pro')).toBe(true);
-    expect(plain.every(c => String(c.input.prompt).includes('no visible faces'))).toBe(true);
+    expect(plain.every(c => String(c.input.prompt).includes('face is not visible'))).toBe(true);
     expect((await fetchMedia(a[0]!.url!)).statusCode).toBe(200);
     // Another user can't read or regenerate them
     expect((await app.inject({ method: 'GET', url: `/v1/ai/images/${g1}`, headers: h(without.accessToken) })).json().images.every((x: { status: string }) => x.status === 'none')).toBe(true);
@@ -171,6 +174,16 @@ run('goals core', () => {
     expect(r.json().rejected).toEqual({});
     const pulled = (await app.inject({ method: 'GET', url: '/v1/sync?since=0', headers: h(a.accessToken) })).json();
     expect(pulled.goals[0]).toMatchObject({ routine: 'Up at 7:30', realityNote: "Because I'm done starting over every January.", feasibility, deadline: '2027-02-09' });
+  });
+
+  it('keeps planning while the app waits on a real connection', async () => {
+    // Over a real socket the request's 'close' event fires once its body is read; that must not cancel the model.
+    const a = await signUp();
+    const base = await app.listen({ port: 0, host: '127.0.0.1' });
+    const r = await fetch(`${base}/v1/ai/plan`, { method: 'POST', headers: { ...h(a.accessToken), 'content-type': 'application/json' }, body: JSON.stringify({
+      goalText: 'Run a half marathon in under 2 hours', deadline: '2027-02-09', today: '2026-10-14', timezone: 'Africa/Lagos', routine: 'Up at 7:30, desk job 9 to 6.' }) });
+    expect(r.status).toBe(200);
+    expect((await r.json()).plan.label).toBe('Half marathon');
   });
 
   it('plans from a free-text routine and gives a Reality Check without touching the deadline', async () => {
