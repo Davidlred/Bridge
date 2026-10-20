@@ -51,5 +51,9 @@ const Env = z.object({
 });
 
 // A blank line copied from .env.example (`S3_ENDPOINT=`) means "not set", not an invalid value.
-const parsed = Env.parse(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')));
+// `fly storage create` (Tigris) sets BUCKET_NAME and AWS_ENDPOINT_URL_S3; use them when ours aren't set.
+const raw = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ''));
+raw.S3_BUCKET ??= raw.BUCKET_NAME;
+raw.S3_ENDPOINT ??= raw.AWS_ENDPOINT_URL_S3;
+const parsed = Env.parse(raw);
 export const env = { ...parsed, PUBLIC_URL: (parsed.PUBLIC_URL ?? parsed.JWT_ISSUER).replace(/\/$/, '') };

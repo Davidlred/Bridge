@@ -1,0 +1,10 @@
+# Never send secrets or local data to the image builder (fly deploy uploads this folder). Secrets go in with `fly secrets set`.
+.env
+.env.*
+!.env.example
+.data
+node_modules
+dist
+coverage
+test
+*.log

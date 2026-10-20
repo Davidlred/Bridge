@@ -25,7 +25,8 @@ android {
         versionName = "1.0.0"
         // The ABIs the Rust crypto library is built for (JNA also ships older ones we don't need).
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        buildConfigField("String", "API_BASE", "\"https://api.thebridge.app\"")
+        // Release API address: -Pbridge.releaseApiBase=https://<app>.fly.dev until the custom domain is set up.
+        buildConfigField("String", "API_BASE", "\"${prop("bridge.releaseApiBase", "https://api.thebridge.app")}\"")
         // OAuth *web* client id from Google Cloud (the same value goes in the server's GOOGLE_CLIENT_IDS). Empty = Google sign-in reports unavailable.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${prop("bridge.googleWebClientId", "846759270213-n831n3thdu07p042vk1cn4q846t22eca.apps.googleusercontent.com")}\"")
         // RevenueCat public SDK key (goog_…). Empty = the paywall shows, but purchases are switched off.
