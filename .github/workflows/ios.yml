@@ -51,6 +51,8 @@ jobs:
         run: |
           set -o pipefail
           export TEST_RUNNER_SNAPSHOT_DIR="$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__"
+          # Failed comparisons write the new image here; published as failures/ on ci-logs to see what changed.
+          export TEST_RUNNER_SNAPSHOT_ARTIFACTS="$RUNNER_TEMP/snapshot-failures"
           if [ -d BridgeTests/__Snapshots__ ]; then MODE=verify; else MODE=record; export TEST_RUNNER_SNAPSHOT_RECORD=1; mkdir -p BridgeTests/__Snapshots__; fi
           echo "mode: $MODE" > "$RUNNER_TEMP/snap.log"
           xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
@@ -65,6 +67,7 @@ jobs:
           mkdir out && cd out
           { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== crypto =="; grep -E "^(error|warning: unused)|Finished|xcframework|-->" ../crypto.log 2>/dev/null | tail -30; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" ../test.log 2>/dev/null | cut -c1-400 | head -200; echo; echo "== snapshots =="; grep -E "mode:|Test Case.*(passed|failed)|Executed [0-9]+ tests|\.swift:[0-9]+: error" ../snap.log 2>/dev/null | cut -c1-300 | head -80; } > ios.txt
           [ -d "$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__" ] && cp -R "$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__" snapshots || true
+          [ -d "$RUNNER_TEMP/snapshot-failures" ] && mkdir -p failures && find "$RUNNER_TEMP/snapshot-failures" -name "*.png" -exec cp {} failures/ \; || true
           tail -400 ../build.log > build-tail.txt 2>/dev/null || true
           git init -q -b ci-logs
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

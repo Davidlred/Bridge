@@ -93,7 +93,8 @@ enum BFont {
 struct BridgeTypeScale: ViewModifier {
     @Environment(\.dynamicTypeSize) private var size
     func body(content: Content) -> some View {
-        let _ = (BFont.traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size)))
+        // Only the text size changes; display scale and the rest stay as the screen has them.
+        let _ = (BFont.traits = UITraitCollection.current.modifyingTraits { $0.preferredContentSizeCategory = UIContentSizeCategory(size) })
         content.id(size)
     }
 }
