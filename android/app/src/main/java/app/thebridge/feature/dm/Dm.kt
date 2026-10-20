@@ -1,5 +1,6 @@
 package app.thebridge.feature.dm
 
+import app.thebridge.ui.components.LiveTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -354,7 +355,7 @@ private fun Composer(text: String, actions: ThreadActions) {
     val focused by interaction.collectIsFocusedAsState()
     val placeholder = stringResource(R.string.dm_placeholder)
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicTextField(text, actions.onInput, Modifier.weight(1f).semantics { contentDescription = placeholder }, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.ok),
+        LiveTextField(text, actions.onInput, Modifier.weight(1f).semantics { contentDescription = placeholder }, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.ok),
             interactionSource = interaction, maxLines = 4, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { actions.send() }),
             decorationBox = { inner ->

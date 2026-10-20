@@ -159,7 +159,7 @@ db('coach and journal', () => {
     const p = await pull(a.accessToken);
     expect(p.chat).toEqual([
       expect.objectContaining({ id: messageId, conversation, role: 'user', text: 'Make tomorrow easier', status: 'sent', createdAt: 1_000 }),
-      expect.objectContaining({ id: replyId, conversation, role: 'coach', text: 'Lay out your kit tonight.\n', status: 'done', suggestionState: 'pending',
+      expect.objectContaining({ id: replyId, conversation, role: 'coach', text: 'Lay out your kit tonight.', status: 'done', suggestionState: 'pending',
         suggestion: expect.objectContaining({ title: 'Lay out running kit' }) }),
     ]);
     const [row] = await sql`select body_ciphertext from coach_messages where id = ${replyId}`;

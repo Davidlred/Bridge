@@ -1,5 +1,6 @@
 package app.thebridge.feature.coach
 
+import app.thebridge.ui.components.LiveTextField
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -160,7 +161,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
         }
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val hint = stringResource(R.string.coach_input_hint)
-            BasicTextField(ui.input, actions.onInput, singleLine = true, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+            LiveTextField(ui.input, actions.onInput, singleLine = true, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { actions.send() }),
                 modifier = Modifier.weight(1f).onFocusChanged { focused = it.isFocused }.semantics { contentDescription = hint },
                 decorationBox = { inner ->
@@ -201,7 +202,7 @@ private fun CoachBubble(item: ChatItem, ui: CoachUi, actions: CoachActions) {
     val c = LocalBridgeColors.current
     val m = item.message
     Column(Modifier.fw(.86f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (m.text.isNotEmpty()) Text(m.text, style = BType.body(15, lineHeight = 1.5f), color = c.ink,
+        if (m.text.isNotBlank()) Text(m.text.trimEnd(), style = BType.body(15, lineHeight = 1.5f), color = c.ink,
             modifier = Modifier.background(c.s1, RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)).border(1.dp, c.line, RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)).padding(horizontal = 14.dp, vertical = 12.dp))
         if (m.status == "interrupted") Text(stringResource(R.string.coach_interrupted), style = BType.body(12, FontWeight.Medium), color = c.bad,
             modifier = Modifier.heightIn(min = 32.dp).clickable(role = Role.Button) { actions.retry(item) }.padding(vertical = 6.dp))
@@ -288,7 +289,7 @@ fun StudyModeScreen(ui: CoachUi, onNotes: (String) -> Unit, onInput: (String) ->
             }
             ui.focus?.let { Text(stringResource(R.string.study_working_toward, it.goal.statement), style = BType.body(12), color = c.mut2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 22.dp)) }
             val hint = stringResource(R.string.study_notes_hint)
-            BasicTextField(ui.studyNotes, onNotes, textStyle = BType.body(18, lineHeight = 1.65f).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+            LiveTextField(ui.studyNotes, onNotes, textStyle = BType.body(18, lineHeight = 1.65f).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 150.dp).semantics { contentDescription = hint },
                 decorationBox = { inner -> Box { if (ui.studyNotes.isEmpty()) Text(hint, style = BType.body(18, lineHeight = 1.65f), color = c.mut2); inner() } })
         }
@@ -318,7 +319,7 @@ fun StudyModeScreen(ui: CoachUi, onNotes: (String) -> Unit, onInput: (String) ->
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CoachMascot(mood, size = 34.dp, reduceMotion = LocalReduceMotion.current)
             val hint = stringResource(R.string.study_ask_hint)
-            BasicTextField(ui.studyInput, onInput, singleLine = true, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+            LiveTextField(ui.studyInput, onInput, singleLine = true, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send() }),
                 modifier = Modifier.weight(1f).semantics { contentDescription = hint },
                 decorationBox = { inner -> Box(Modifier.heightIn(min = 44.dp), contentAlignment = Alignment.CenterStart) { if (ui.studyInput.isEmpty()) Text(hint, style = BType.body(15), color = c.mut2); inner() } })

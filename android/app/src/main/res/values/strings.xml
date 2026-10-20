@@ -253,7 +253,10 @@
     <string name="goal_card_ends">Ends %1$s</string>
     <string name="seg_today">Today</string>
     <string name="seg_reality">Reality Check</string>
-    <string name="streak_a11y">Current streak: %1$d days</string>
+    <plurals name="streak_a11y">
+        <item quantity="one">Current streak: %d day</item>
+        <item quantity="other">Current streak: %d days</item>
+    </plurals>
     <string name="day_of">DAY %1$d OF %2$d</string>
     <string name="across_bridge">across the bridge</string>
     <string name="bridge_a11y">Progress across the bridge: %1$s</string>

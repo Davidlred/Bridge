@@ -184,7 +184,7 @@ export async function coachRoutes(app: FastifyInstance) {
       // Saved before the stream closes, so the reply is already there when the app syncs right after.
       // A partial reply is kept as "interrupted" (the app shows "Reply interrupted · Retry"); an empty one isn't stored.
       if (store && replyText) {
-        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText, suggestion, status, new Date(sentAt.getTime() + 1))
+        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1))
           .catch(e => req.log.error({ err: e.message }, 'coach_save_failed'));
       }
       out.end();

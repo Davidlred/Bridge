@@ -120,7 +120,7 @@ fun BridgeField(
     val focused by interaction.collectIsFocusedAsState()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(label, style = BType.label(11f, 0.12f), color = c.mut)
-        BasicTextField(
+        LiveTextField(
             value = value, onValueChange = onValueChange, singleLine = true, textStyle = BType.body(16).copy(color = c.ink),
             cursorBrush = SolidColor(c.acc), interactionSource = interaction, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
             visualTransformation = visualTransformation,

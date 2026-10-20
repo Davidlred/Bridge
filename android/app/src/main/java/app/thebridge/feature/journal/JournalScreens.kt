@@ -1,5 +1,6 @@
 package app.thebridge.feature.journal
 
+import app.thebridge.ui.components.LiveTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -124,7 +125,7 @@ private fun TodayEntry(ui: JournalUi, actions: JournalActions) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { MOODS.forEachIndexed { i, label -> MoodButton(i, stringResource(label), ui.mood == i, Modifier.weight(1f)) { actions.mood(i) } } }
     }
     val hint = stringResource(R.string.journal_hint)
-    BasicTextField(ui.text, actions.text, textStyle = BType.body(16, lineHeight = 1.65f).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+    LiveTextField(ui.text, actions.text, maxLength = JournalRepository.MAX_LENGTH, textStyle = BType.body(16, lineHeight = 1.65f).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
         modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp).semantics { contentDescription = hint },
         decorationBox = { inner ->

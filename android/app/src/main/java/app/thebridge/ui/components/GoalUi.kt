@@ -85,12 +85,12 @@ fun StepTitle(kicker: String, title: String) {
 
 /** Multi-line field on the surface colour, radius 18. */
 @Composable
-fun BigTextArea(value: String, onChange: (String) -> Unit, placeholder: String, a11y: String, modifier: Modifier = Modifier, large: Boolean = false, minHeight: Int = 118) {
+fun BigTextArea(value: String, onChange: (String) -> Unit, placeholder: String, a11y: String, modifier: Modifier = Modifier, large: Boolean = false, minHeight: Int = 118, maxLength: Int = Int.MAX_VALUE) {
     val c = LocalBridgeColors.current
     var focused by remember { mutableStateOf(false) }
     val style = if (large) BType.body(20, FontWeight.Medium, 1.4f) else BType.body(16, lineHeight = 1.55f)
-    BasicTextField(
-        value = value, onValueChange = onChange, textStyle = style.copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+    LiveTextField(
+        value = value, onValueChange = onChange, textStyle = style.copy(color = c.ink), cursorBrush = SolidColor(c.acc), maxLength = maxLength,
         keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
         modifier = modifier.fillMaxWidth().heightIn(min = minHeight.dp).semantics { contentDescription = a11y }
             .onFocusChanged { focused = it.isFocused },

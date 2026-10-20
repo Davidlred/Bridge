@@ -156,7 +156,7 @@ struct TodayView: View {
                     Text("\(streak)").font(BFont.label(14)).fontWeight(.semibold).foregroundStyle(Theme.ink)
                 }
                 .padding(.leading, 9).padding(.trailing, 12).frame(minHeight: 40).background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
-                .accessibilityElement(children: .ignore).accessibilityLabel("Current streak: \(streak) days")
+                .accessibilityElement(children: .ignore).accessibilityLabel("Current streak: ^[\(streak) day](inflect: true)")
             }
         }
         .padding(.top, 6)

@@ -244,7 +244,7 @@ struct CoachView: View {
 
     @ViewBuilder private func coachMessage(_ m: ChatMessageEntity, focus: GoalState?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !m.text.isEmpty { CoachBubbleText(text: m.text) }
+            if !m.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { CoachBubbleText(text: m.text.trimmingCharacters(in: .whitespacesAndNewlines)) }
             if m.status == "interrupted" {
                 Button("Reply interrupted · Retry") { model.retryInterrupted(m, store: store, focus: focus) }.font(BFont.body(12, .medium)).foregroundStyle(Theme.bad).frame(minHeight: 32)
             }

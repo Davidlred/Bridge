@@ -1,5 +1,6 @@
 package app.thebridge.feature.onboarding
 
+import app.thebridge.ui.components.LiveTextField
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -161,7 +162,7 @@ fun GoalStep(ui: OnboardingUi, onBack: (() -> Unit)?, onGoal: (String) -> Unit, 
         StepHeader(1, onBack)
         StepTitle(stringResource(if (d.adding) R.string.ob_kicker_goal_adding else R.string.ob_kicker_goal), stringResource(R.string.ob_goal_title))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BigTextArea(d.goal, onGoal, stringResource(R.string.ob_goal_hint), stringResource(R.string.ob_goal_a11y), large = true)
+            BigTextArea(d.goal, onGoal, stringResource(R.string.ob_goal_hint), stringResource(R.string.ob_goal_a11y), large = true, maxLength = GoalText.MAX_LENGTH)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 ExampleLink(onExample); Counter(GoalText.MAX_LENGTH - d.goal.length, GoalText.MAX_LENGTH)
             }
@@ -211,7 +212,7 @@ fun RoutineStep(ui: OnboardingUi, onBack: () -> Unit, onRoutine: (String) -> Uni
             Text(stringResource(R.string.ob_routine_kept), style = BType.body(13, lineHeight = 1.45f), color = c.ink2)
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BigTextArea(ui.draft.routine, onRoutine, stringResource(R.string.ob_routine_hint), stringResource(R.string.ob_routine_a11y), minHeight = 200)
+            BigTextArea(ui.draft.routine, onRoutine, stringResource(R.string.ob_routine_hint), stringResource(R.string.ob_routine_a11y), minHeight = 200, maxLength = 1000)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 ExampleLink(onExample); Counter(1000 - ui.draft.routine.length, 1000)
             }
@@ -492,7 +493,7 @@ fun ReviewStep(
 @Composable
 private fun InlineField(value: String, onChange: (String) -> Unit, placeholder: String, a11y: String, modifier: Modifier) {
     val c = LocalBridgeColors.current
-    BasicTextField(value, onChange, singleLine = true, textStyle = BType.body(15, FontWeight.Medium).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+    LiveTextField(value, onChange, singleLine = true, textStyle = BType.body(15, FontWeight.Medium).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
         modifier = modifier.semantics { contentDescription = a11y },
         decorationBox = { inner -> Box(contentAlignment = Alignment.CenterStart) { if (value.isEmpty()) Text(placeholder, style = BType.body(15, FontWeight.Medium), color = c.mut2); inner() } })
 }

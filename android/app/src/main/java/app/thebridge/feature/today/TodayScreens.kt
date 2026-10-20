@@ -142,7 +142,7 @@ private fun Header(ui: TodayUi, now: LocalTime, date: LocalDate) {
             Text(stringResource(greeting, ui.name), style = BType.display(25, 1.15f), color = c.ink, modifier = Modifier.semantics { heading() })
         }
         if (ui.goals.isNotEmpty()) {
-            val a11y = stringResource(R.string.streak_a11y, ui.streak)
+            val a11y = pluralStringResource(R.plurals.streak_a11y, ui.streak, ui.streak)
             Row(Modifier.heightIn(min = 40.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp)).padding(start = 9.dp, end = 12.dp)
                 .semantics(mergeDescendants = true) { contentDescription = a11y }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Icon(painterResource(R.drawable.ic_fire), null, tint = c.acc, modifier = Modifier.size(19.dp))
