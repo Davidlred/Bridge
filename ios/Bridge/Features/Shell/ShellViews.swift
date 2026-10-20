@@ -45,7 +45,8 @@ struct ProfileView: View {
     @State private var exporting = false
     @State private var analyticsOn = Analytics.enabled
     @Environment(GoalStore.self) private var goals
-    enum Sheet: String, Identifiable { case delete, logOut; var id: String { rawValue } }
+    @Environment(BillingStore.self) private var billing
+    enum Sheet: String, Identifiable { case delete, logOut, coachStyle, plus; var id: String { rawValue } }
 
     var body: some View {
         let name = session.user?.displayName ?? ""
@@ -77,6 +78,8 @@ struct ProfileView: View {
             }
             SettingsSection(title: "Coach") {
                 SettingsValue(label: "Coach name", value: session.user?.coachName ?? "Arc") { coachName = session.user?.coachName ?? "Arc"; renaming = true }
+                Divider().overlay(Theme.line)
+                SettingsValue(label: "Coaching style", value: CoachStyle.named(session.user?.coachStyle).label) { sheet = .coachStyle }
                 Divider().overlay(Theme.line)
                 Toggle(isOn: Binding(get: { coachReadsJournal }, set: { on in
                     coachReadsJournal = on
@@ -135,6 +138,16 @@ struct ProfileView: View {
                 switch which {
                 case .delete: DeleteAccountSheet()
                 case .logOut: LogOutSheet(unsynced: unsynced, hasMessages: hasMessages, onConfirm: logOut)
+                case .coachStyle:
+                    CoachStyleSheet(current: CoachStyle.named(session.user?.coachStyle), hasPlus: billing.active.contains("plus")) { style in
+                        if style.plus && !billing.active.contains("plus") { sheet = .plus; return }
+                        sheet = nil
+                        Task {
+                            do { _ = try await APIClient.shared.updateMe(coachStyle: style.rawValue); await session.refreshUser() }
+                            catch { toaster.show(String(localized: "Something went wrong. Try again."), .warn) }
+                        }
+                    }
+                case .plus: PaywallSheet(product: .plus) { sheet = nil }
                 }
             }
             .presentationDetents([.medium]).presentationDragIndicator(.visible).presentationBackground(Theme.bg)

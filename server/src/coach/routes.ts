@@ -6,6 +6,7 @@ import { auth } from '../auth/tokens.js';
 import { HttpError } from '../util.js';
 import { decryptText, encryptText, journalKey } from '../crypto.js';
 import { AIUnavailable, streamText } from '../ai/replicate.js';
+import { STYLE_VOICE, effectiveStyle, type CoachStyle } from './styles.js';
 import { takeQuota } from '../goals/routes.js';
 
 const COACH_DAILY_LIMIT = 30;
@@ -38,8 +39,8 @@ export const Suggestion = z.object({
   timeOfDay: z.string().max(24).nullish(),
 });
 
-const persona = (name: string, mode: string) => `You are ${name}, the coach inside The Bridge, a goal app. You know the user's goals, today's tasks and their streak.
-Voice: warm, direct and short (90 words or fewer unless asked for more). Never shame missed days. Always end with one concrete next step.
+const persona = (name: string, mode: string, style: CoachStyle = 'balanced') => `You are ${name}, the coach inside The Bridge, a goal app. You know the user's goals, today's tasks and their streak.
+${STYLE_VOICE[style]} Never shame missed days. Always end with one concrete next step.
 No medical, legal or financial advice beyond general guidance; for health topics suggest checking with a professional.
 ${mode === 'study' ? 'The user is in Study Mode, focused on work. Keep replies especially brief (40 words or fewer).\n' : ''}If one new daily task would clearly help, append it after your reply as a fenced JSON block, exactly:
 \`\`\`json
@@ -129,7 +130,7 @@ export async function coachRoutes(app: FastifyInstance) {
     const parsed = CoachRequest.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, 'invalid_request');
     const r = parsed.data;
-    const [u] = await sql`select coach_name, settings from users where id = ${req.userId}`;
+    const [u] = await sql`select coach_name, coach_style, settings from users where id = ${req.userId}`;
     const crisis = CRISIS.test(r.message);
     if (!crisis) await takeQuota(req.userId, 'coach', COACH_DAILY_LIMIT);
 
@@ -163,7 +164,8 @@ export async function coachRoutes(app: FastifyInstance) {
         for (const word of CRISIS_REPLY.split(/(?<= )/)) { replyText += word; send('token', { text: word }); }
       } else {
         const splitter = new SuggestionSplitter();
-        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode), prompt: prompt(r, journal), max_tokens: 1024, temperature: 0.6 };
+        const style = await effectiveStyle(req.userId, u?.coach_style as string | undefined);
+        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode, style), prompt: prompt(r, journal), max_tokens: 1024, temperature: 0.6 };
         for await (const chunk of streamText(env.MODEL_COACH, input, ctrl.signal)) {
           const text = splitter.push(chunk);
           if (text) { replyText += text; send('token', { text }); }

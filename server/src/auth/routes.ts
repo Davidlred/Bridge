@@ -9,6 +9,7 @@ import { auth, issueSession, revokeAllSessions, rotateSession } from './tokens.j
 import { verifyIdToken, type Identity } from './oidc.js';
 import { signedUrl, storage, userPrefix } from '../storage.js';
 import { deletePhotoAndFaceImages } from '../goals/routes.js';
+import { COACH_STYLES, effectiveStyle } from '../coach/styles.js';
 import { leave } from '../social/alliances.js';
 
 const ARGON = { type: argon2.argon2id, memoryCost: 64 * 1024, timeCost: 3 } as const;
@@ -33,11 +34,11 @@ const parse = <T extends z.ZodTypeAny>(schema: T, body: unknown): z.infer<T> => 
 
 const userJson = (u: Record<string, unknown>) => ({
   id: u.id, email: u.email, emailVerified: u.email_verified, displayName: u.display_name,
-  coachName: u.coach_name, homeTimezone: u.home_timezone, settings: u.settings, createdAt: (u.created_at as Date).getTime(),
+  coachName: u.coach_name, coachStyle: u.coach_style ?? 'balanced', homeTimezone: u.home_timezone, settings: u.settings, createdAt: (u.created_at as Date).getTime(),
   photoUrl: u.photo_key && u.photo_consent_at ? signedUrl(u.photo_key as string, (u.photo_consent_at as Date).getTime()) : null,
 });
 const loadUser = async (db: Tx | typeof sql, id: string) => {
-  const [u] = await db`select id, email, email_verified, display_name, coach_name, home_timezone, settings, created_at, photo_key, photo_consent_at from users where id = ${id} and deleted_at is null`;
+  const [u] = await db`select id, email, email_verified, display_name, coach_name, coach_style, home_timezone, settings, created_at, photo_key, photo_consent_at from users where id = ${id} and deleted_at is null`;
   if (!u) throw new HttpError(401, 'unauthorized');
   return userJson(u);
 };
@@ -137,9 +138,14 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/v1/me', { onRequest: auth }, async req => ({ user: await loadUser(sql, req.userId) }));
 
-  // Display name and coach name. An empty or offensive coach name falls back to "Arc".
+  // Display name, coach name and coaching style. An empty or offensive coach name falls back to "Arc"; styles other than
+  // balanced need Plus (plus_required, so the app can show the paywall).
   app.patch('/v1/me', { onRequest: auth }, async req => {
-    const b = parse(z.object({ displayName: Name.optional(), coachName: z.string().max(40).optional() }).strict(), req.body);
+    const b = parse(z.object({ displayName: Name.optional(), coachName: z.string().max(40).optional(), coachStyle: z.enum(COACH_STYLES).optional() }).strict(), req.body);
+    if (b.coachStyle) {
+      if (await effectiveStyle(req.userId, b.coachStyle) !== b.coachStyle) throw new HttpError(403, 'plus_required');
+      await sql`update users set coach_style = ${b.coachStyle} where id = ${req.userId}`;
+    }
     if (b.displayName) await sql`update users set display_name = ${b.displayName} where id = ${req.userId}`;
     if (b.coachName !== undefined) await sql`update users set coach_name = ${coachName(b.coachName)} where id = ${req.userId}`;
     return { user: await loadUser(sql, req.userId) };

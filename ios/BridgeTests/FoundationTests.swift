@@ -171,6 +171,7 @@ final class FoundationSnapshotTests: XCTestCase {
         verify(ChooseGoalsView(goals: goals, initial: Set(goals.prefix(2).map(\.id)), max: 3, onSave: { _ in }, onUpgrade: {}).background(Theme.s1), named: "choose-goals")
     }
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }
+    func testCoachStyles() { verify(CoachStyleSheet(current: .balanced, hasPlus: false) { _ in }.background(Theme.s1), named: "coach-styles") }
     func testPaywallUnavailable() { verify(PaywallContent(product: .plus, available: false, loading: false, offers: [], selected: .constant(nil)).background(Theme.bg), named: "paywall-plus-off") }
     func testCreateAlliance() {
         let m = CommunityModel(); m.name = "Dawn Runners"; m.shared = true

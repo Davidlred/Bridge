@@ -121,6 +121,15 @@ class ShellViewModel @Inject constructor(
     fun cycleDaily() = viewModelScope.launch { reminderScheduler.setDaily(next(reminders.first().daily, listOf(7, 8, 9))) }
     fun cycleRisk() = viewModelScope.launch { reminderScheduler.setStreakRisk(next(reminders.first().streakRisk, listOf(19, 20, 21))) }
 
+    val hasPlus = billing.active.map { "plus" in it }
+
+    /** Balanced is free; the other styles need Plus (the server checks too, and answers plus_required). */
+    fun setCoachStyle(style: String) = viewModelScope.launch {
+        try { api2.updateMe(coachStyle = style); session.refreshUser() }
+        catch (e: OfflineException) { toaster.show(UiText.Res(R.string.error_offline), ToastKind.Warn) }
+        catch (e: Exception) { toaster.show(UiText.Res(R.string.error_generic), ToastKind.Warn) }
+    }
+
     /** Empty or offensive names come back as "Arc" from the server. */
     fun renameCoach(name: String) = viewModelScope.launch {
         try { api2.updateMe(coachName = name); session.refreshUser() }

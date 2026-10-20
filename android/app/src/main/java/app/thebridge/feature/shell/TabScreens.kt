@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -82,10 +83,12 @@ fun ProfileScreen(
     reminders: ReminderSettings = ReminderSettings(), onDaily: () -> Unit = {}, onRisk: () -> Unit = {},
     hasPhoto: Boolean = false, onRemovePhoto: () -> Unit = {},
     coachName: String = "Arc", onRenameCoach: (String) -> Unit = {}, coachReadsJournal: Boolean = false, onCoachReadsJournal: (Boolean) -> Unit = {},
+    coachStyle: String = "balanced", hasPlus: Boolean = false, onCoachStyle: (String) -> Unit = {}, onUpgrade: () -> Unit = {},
     share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null, onExport: () -> Unit = {},
     analytics: Boolean = false, onAnalytics: (Boolean) -> Unit = {},
 ) {
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var picking by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val c = LocalBridgeColors.current
     TabPage {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -112,6 +115,8 @@ fun ProfileScreen(
         SettingsSection(stringResource(R.string.settings_coach)) {
             SettingsValue(stringResource(R.string.settings_coach_name), coachName) { renaming = true }
             HorizontalDivider(color = c.line)
+            SettingsValue(stringResource(R.string.coach_style_title), stringResource(COACH_STYLES.firstOrNull { it.id == coachStyle }?.label ?: R.string.coach_style_balanced)) { picking = true }
+            HorizontalDivider(color = c.line)
             SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
         }
         SettingsSection(stringResource(R.string.settings_privacy)) {
@@ -136,6 +141,45 @@ fun ProfileScreen(
         }
     }
     if (renaming) RenameCoachSheet(coachName, onSave = { onRenameCoach(it); renaming = false }, onDismiss = { renaming = false })
+    if (picking) androidx.compose.runtime.key(coachStyle) {
+        BridgeSheet({ picking = false }) {
+            CoachStyleContent(coachStyle, hasPlus, onPick = { s -> picking = false; if (s.plus && !hasPlus) onUpgrade() else onCoachStyle(s.id) })
+        }
+    }
+}
+
+/** How the coach talks. Balanced is free; the rest come with Plus. */
+data class CoachStyleOption(val id: String, val label: Int, val description: Int, val plus: Boolean)
+val COACH_STYLES = listOf(
+    CoachStyleOption("balanced", R.string.coach_style_balanced, R.string.coach_style_balanced_sub, false),
+    CoachStyleOption("strict", R.string.coach_style_strict, R.string.coach_style_strict_sub, true),
+    CoachStyleOption("playful", R.string.coach_style_playful, R.string.coach_style_playful_sub, true),
+    CoachStyleOption("efficient", R.string.coach_style_efficient, R.string.coach_style_efficient_sub, true),
+)
+
+@Composable
+fun CoachStyleContent(current: String, hasPlus: Boolean, onPick: (CoachStyleOption) -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SheetTitle(stringResource(R.string.coach_style_title))
+        Text(stringResource(R.string.coach_style_body), style = BType.body(14, lineHeight = 1.45f), color = c.ink2)
+        COACH_STYLES.forEach { s ->
+            val on = s.id == current
+            val locked = s.plus && !hasPlus
+            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(14.dp)).background(if (on) c.accTint else c.s1).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(14.dp))
+                .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(s) }.padding(horizontal = 16.dp, vertical = 12.dp)
+                .semantics { selected = on },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(stringResource(s.label), style = BType.body(15, androidx.compose.ui.text.font.FontWeight.SemiBold), color = c.ink)
+                    Text(stringResource(s.description), style = BType.body(13, lineHeight = 1.4f), color = c.mut)
+                }
+                if (locked) Text(stringResource(R.string.coach_style_plus), style = BType.label(10f, 0.12f), color = c.accInk,
+                    modifier = Modifier.background(c.accTint, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
+                else if (on) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_check), null, tint = c.acc, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
 }
 
 @Composable

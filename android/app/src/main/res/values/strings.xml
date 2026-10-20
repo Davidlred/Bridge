@@ -781,6 +781,7 @@
     <string name="pw_plus_title">More than three goals</string>
     <string name="pw_plus_f1">Run more goals side by side</string>
     <string name="pw_plus_f2">Join more shared-plan alliances</string>
+    <string name="pw_plus_f4">Coaching styles: strict, playful or efficient</string>
     <string name="pw_plus_f3">Everything you have now stays the same</string>
     <string name="pw_plus_stay">Not now</string>
     <string name="pw_per_month">%1$s / month</string>
@@ -834,4 +835,17 @@
     <string name="choose_title">Choose your active goals</string>
     <string name="choose_body">Up to %1$d goals can be active without Plus. The others stay paused and read-only, with their history kept.</string>
     <string name="choose_count">%1$d OF %2$d CHOSEN</string>
+
+    <!-- Coaching styles (Plus) -->
+    <string name="coach_style_title">Coaching style</string>
+    <string name="coach_style_body">How your coach talks to you. Every style keeps you on track and never shames a missed day.</string>
+    <string name="coach_style_balanced">Balanced</string>
+    <string name="coach_style_balanced_sub">Warm and direct. The default.</string>
+    <string name="coach_style_strict">Strict</string>
+    <string name="coach_style_strict_sub">High standards. Holds you to your plan and calls out excuses.</string>
+    <string name="coach_style_playful">Playful</string>
+    <string name="coach_style_playful_sub">Light and funny, and still practical.</string>
+    <string name="coach_style_efficient">Efficient</string>
+    <string name="coach_style_efficient_sub">Short and to the point. No small talk.</string>
+    <string name="coach_style_plus">PLUS</string>
 </resources>

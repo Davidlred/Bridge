@@ -143,7 +143,7 @@ struct PaywallContent: View {
     var body: some View {
         let plus = product == .plus
         let features: [(String, LocalizedStringKey)] = plus
-            ? [("flag.fill", "Run more goals side by side"), ("person.3.fill", "Join more shared-plan alliances"), ("checkmark.circle.fill", "Everything you have now stays the same")]
+            ? [("flag.fill", "Run more goals side by side"), ("bubble.left.and.text.bubble.right.fill", "Coaching styles: strict, playful or efficient"), ("person.3.fill", "Join more shared-plan alliances"), ("checkmark.circle.fill", "Everything you have now stays the same")]
             : [("person.3.fill", "Up to 50 members per alliance"), ("gamecontroller.fill", "Bigger game nights"), ("trophy.fill", "Seasonal leagues against other alliances")]
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {

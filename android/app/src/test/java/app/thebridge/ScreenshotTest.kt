@@ -315,6 +315,7 @@ class ScreenshotTest {
     @Test fun paywallAlliancePlus() = snap("paywall-alliance") {
         Box(Modifier.padding(24.dp)) { PaywallContent(PaywallUi(Product.AlliancePlus, loading = false, offers = listOf(Offer("m", "$3.99", Period.Month, 7)), selected = "m"), {}, {}, {}, {}) }
     }
+    @Test fun coachStyles() = snap("coach-styles") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { app.thebridge.feature.shell.CoachStyleContent("balanced", hasPlus = false) {} } }
     @Test fun paywallPlusUnavailable() = snap("paywall-plus-off") { Box(Modifier.padding(24.dp)) { PaywallContent(PaywallUi(Product.Plus, available = false, loading = false), {}, {}, {}, {}) } }
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}, onHall = {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }

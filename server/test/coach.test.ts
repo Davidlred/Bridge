@@ -5,12 +5,14 @@ import { uuidv7 } from '../src/util.js';
 // The model is replaced by a scripted stream; the last prompt is kept so tests can check what the coach was told.
 let script: string[] = [];
 let lastPrompt = '';
+let lastSystem = '';
 vi.mock('../src/ai/replicate.js', async orig => {
   const real = await orig<typeof import('../src/ai/replicate.js')>();
   return {
     ...real,
     streamText: vi.fn(async function* (_m: string, input: Record<string, unknown>) {
       lastPrompt = String(input.prompt);
+      lastSystem = String(input.system_prompt);
       for (const c of script) yield c;
     }),
   };
@@ -111,6 +113,27 @@ db('coach and journal', () => {
     expect(await rename('  Nova ')).toBe('Nova');
     expect(await rename('   ')).toBe('Arc');
     expect(await rename('shithead')).toBe('Arc');
+  });
+
+  it('lets Plus members pick a coaching style; without Plus the coach stays balanced', async () => {
+    const a = await signUp();
+    const style = (coachStyle: string) => app.inject({ method: 'PATCH', url: '/v1/me', headers: h(a.accessToken), payload: { coachStyle } });
+    script = ['Go.'];
+    expect((await style('strict')).json().error).toBe('plus_required');
+    expect((await style('loud')).statusCode).toBe(400);
+    expect((await style('balanced')).json().user.coachStyle).toBe('balanced');
+
+    await sql`insert into entitlements (user_id, entitlement, expires_at, store, updated_at) values (${a.user.id}, 'plus', ${new Date(Date.now() + 864e5)}, 'test', now())`;
+    expect((await style('strict')).json().user.coachStyle).toBe('strict');
+    await ask(a.accessToken, 'I skipped my run');
+    expect(lastSystem).toContain('firm and demanding');
+    expect(lastSystem).toContain('Never shame missed days');             // the shared rules hold in every style
+
+    // Plus lapses: the pick is kept for renewal, the coach falls back to balanced meanwhile
+    await sql`update entitlements set expires_at = now() - interval '1 minute' where user_id = ${a.user.id}`;
+    await ask(a.accessToken, 'I skipped my run');
+    expect(lastSystem).toContain('warm, direct and short');
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers: h(a.accessToken) })).json().user.coachStyle).toBe('strict');
   });
 
   it('stores journal bodies encrypted and returns them decrypted', async () => {

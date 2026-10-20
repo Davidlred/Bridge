@@ -114,7 +114,7 @@ fun PaywallSheet(product: Product, onDismiss: () -> Unit, vm: PaywallViewModel =
 fun PaywallContent(ui: PaywallUi, select: (String) -> Unit, buy: () -> Unit, restore: () -> Unit, dismiss: () -> Unit) {
     val c = LocalBridgeColors.current
     val plus = ui.product == Product.Plus
-    val features = if (plus) listOf(R.string.pw_plus_f1, R.string.pw_plus_f2, R.string.pw_plus_f3) else listOf(R.string.pw_alliance_f1, R.string.pw_alliance_f2, R.string.pw_alliance_f3)
+    val features = if (plus) listOf(R.string.pw_plus_f1, R.string.pw_plus_f4, R.string.pw_plus_f2, R.string.pw_plus_f3) else listOf(R.string.pw_alliance_f1, R.string.pw_alliance_f2, R.string.pw_alliance_f3)
     val icons = if (plus) listOf(R.drawable.ic_flag, R.drawable.ic_groups, R.drawable.ic_check_circle) else listOf(R.drawable.ic_groups, R.drawable.ic_shield, R.drawable.ic_fire)
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

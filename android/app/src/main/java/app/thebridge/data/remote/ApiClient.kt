@@ -38,7 +38,7 @@ class OfflineException(cause: IOException) : Exception(cause)
 /** A coach reply stopped part way. The partial text is kept and the user can retry. */
 class StreamInterrupted : Exception()
 
-@Serializable data class UserDto(val id: String, val email: String? = null, val displayName: String, val coachName: String = "Arc", val createdAt: Long = 0, val photoUrl: String? = null)
+@Serializable data class UserDto(val id: String, val email: String? = null, val displayName: String, val coachName: String = "Arc", val coachStyle: String = "balanced", val createdAt: Long = 0, val photoUrl: String? = null)
 /** [isNew]: the account was just created, so the user goes to goal onboarding. */
 @Serializable data class AuthResponse(val user: UserDto, val accessToken: String, val refreshToken: String, val isNew: Boolean = false)
 @Serializable private data class MeResponse(val user: UserDto)
@@ -154,8 +154,8 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun logOut() { call("POST", "/v1/auth/logout", JsonObject(emptyMap()), authed = true) }
     suspend fun deleteAccount() { call("DELETE", "/v1/account", null, authed = true) }
 
-    suspend fun updateMe(coachName: String? = null, displayName: String? = null): UserDto = json.decodeFromString<MeResponse>(call("PATCH", "/v1/me", buildJsonObject {
-        if (coachName != null) put("coachName", coachName); if (displayName != null) put("displayName", displayName)
+    suspend fun updateMe(coachName: String? = null, displayName: String? = null, coachStyle: String? = null): UserDto = json.decodeFromString<MeResponse>(call("PATCH", "/v1/me", buildJsonObject {
+        if (coachName != null) put("coachName", coachName); if (displayName != null) put("displayName", displayName); if (coachStyle != null) put("coachStyle", coachStyle)
     }, authed = true)).user
 
     /**

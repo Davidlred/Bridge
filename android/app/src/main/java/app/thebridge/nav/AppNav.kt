@@ -221,6 +221,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val user by shell.user.collectAsStateWithLifecycle()
     val queued by shell.queued.collectAsStateWithLifecycle()
     val dmMessages by shell.dmMessages.collectAsStateWithLifecycle()
+    val hasPlus by shell.hasPlus.collectAsStateWithLifecycle(false)
     val deleting by shell.deleting.collectAsStateWithLifecycle()
     val deleteError by shell.deleteError.collectAsStateWithLifecycle()
     val c = LocalBridgeColors.current
@@ -290,7 +291,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         onDelete = { shell.clearDeleteError(); sheet = "delete" },
                         reminders = reminders, onDaily = shell::cycleDaily, onRisk = shell::cycleRisk,
                         hasPhoto = user?.photoUrl != null, onRemovePhoto = shell::removePhoto,
-                        coachName = user?.coachName ?: "Arc", onRenameCoach = shell::renameCoach, coachReadsJournal = coachReadsJournal, onCoachReadsJournal = shell::setCoachReadsJournal,
+                        coachName = user?.coachName ?: "Arc", onRenameCoach = shell::renameCoach, coachStyle = user?.coachStyle ?: "balanced", hasPlus = hasPlus, onCoachStyle = shell::setCoachStyle, onUpgrade = { sheet = "plus" }, coachReadsJournal = coachReadsJournal, onCoachReadsJournal = shell::setCoachReadsJournal,
                         share = share, onShare = shell::cycleShare, onHall = { nav.navigate(HallOfFame) }, onExport = { saveExport.launch("the-bridge-export.json") },
                         analytics = analyticsOn, onAnalytics = shell::setAnalytics,
                     )
@@ -303,6 +304,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
 
     when (sheet) {
         "delete" -> DeleteAccountSheet(deleting, deleteError, onConfirm = shell::deleteAccount, onDismiss = { sheet = null })
+        "plus" -> app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.Plus, onDismiss = { sheet = null })
         "logout" -> LogOutSheet(queued, dmMessages > 0, onConfirm = { sheet = null; shell.logOut() }, onDismiss = { sheet = null })
     }
 }

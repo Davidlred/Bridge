@@ -17,6 +17,8 @@ struct UserDTO: Codable, Equatable, Sendable {
     var email: String?
     var displayName: String
     var coachName: String?
+    /// balanced (free) | strict | playful | efficient (Plus)
+    var coachStyle: String?
     var createdAt: Double?
     var photoUrl: String?
 }
@@ -158,11 +160,12 @@ actor APIClient {
         return try await send("POST", "/v1/auth/\(provider)", body)
     }
     /// Coach name (empty or offensive names come back as "Arc") or display name.
-    func updateMe(coachName: String? = nil, displayName: String? = nil) async throws -> UserDTO {
+    func updateMe(coachName: String? = nil, displayName: String? = nil, coachStyle: String? = nil) async throws -> UserDTO {
         struct R: Decodable { let user: UserDTO }
         var body: [String: Any] = [:]
         if let coachName { body["coachName"] = coachName }
         if let displayName { body["displayName"] = displayName }
+        if let coachStyle { body["coachStyle"] = coachStyle }
         return try JSONDecoder().decode(R.self, from: try await raw("PATCH", "/v1/me", body, authed: true)).user
     }
 
