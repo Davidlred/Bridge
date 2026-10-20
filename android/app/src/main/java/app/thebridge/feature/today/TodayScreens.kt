@@ -336,7 +336,7 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat(stringResource(R.string.stat_streak), c.goalCards[0], Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.Bottom) { Text("${p.streak}", style = BType.display(22, 1f), color = c.ink); Text(" " + stringResource(R.string.stat_days), style = BType.body(12), color = c.mut) }
+                Row(verticalAlignment = Alignment.Bottom) { Text("${p.streak}", style = BType.display(22, 1f), color = c.ink); Text(" " + pluralStringResource(R.plurals.stat_days, p.streak), style = BType.body(12), color = c.mut) }
             }
             Stat(stringResource(R.string.stat_days_left), c.goalCards[1], Modifier.weight(1f)) { Text("${p.daysLeft}", style = BType.display(22, 1f), color = c.ink) }
             Stat(stringResource(R.string.stat_drift), c.goalCards[2], Modifier.weight(1f)) {

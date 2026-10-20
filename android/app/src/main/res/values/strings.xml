@@ -264,7 +264,10 @@
     <string name="goal_label">%1$s · GOAL</string>
     <string name="done_today">%1$d of %2$d done today</string>
     <string name="stat_streak">STREAK</string>
-    <string name="stat_days">days</string>
+    <plurals name="stat_days">
+        <item quantity="one">day</item>
+        <item quantity="other">days</item>
+    </plurals>
     <string name="stat_days_left">DAYS LEFT</string>
     <string name="stat_drift">DRIFT</string>
     <string name="drift_behind">behind pace</string>

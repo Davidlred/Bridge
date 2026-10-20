@@ -214,12 +214,12 @@ actor APIClient {
         struct R: Decodable { let plan: PlanDTO }
         let body: [String: Any] = ["goalText": goal, "deadline": deadline, "today": today, "timezone": timezone, "routine": routine,
                                    "locale": Locale.current.identifier(.bcp47), "existingGoals": existingGoals]
-        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/plan", body, authed: true)).plan
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/plan", body, authed: true, timeout: 90)).plan
     }
     func reality(goal: String, deadline: String, today: String, routine: String, tasks: [String]) async throws -> Feasibility {
         struct R: Decodable { let feasibility: Feasibility }
         let body: [String: Any] = ["goalText": goal, "deadline": deadline, "today": today, "routine": routine, "tasks": Array(tasks.prefix(20).map { String($0.prefix(120)) })]
-        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/reality", body, authed: true)).feasibility
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/reality", body, authed: true, timeout: 90)).feasibility
     }
     func startImages(goalId: UUID, goal: String, routine: String, kinds: [String]) async throws -> [GoalImageDTO] {
         struct R: Decodable { let images: [GoalImageDTO] }
@@ -367,16 +367,17 @@ actor APIClient {
         try JSONDecoder().decode(T.self, from: try await raw(method, path, body, authed: false))
     }
 
-    private func raw(_ method: String, _ path: String, _ body: [String: Any]?, authed: Bool, upload: Data? = nil) async throws -> Data {
+    /// `timeout`: plan and Reality Check wait up to 90s (the server answers within 75s); everything else uses the session default.
+    private func raw(_ method: String, _ path: String, _ body: [String: Any]?, authed: Bool, upload: Data? = nil, timeout: TimeInterval? = nil) async throws -> Data {
         let payload = try upload ?? body.map { try JSONSerialization.data(withJSONObject: $0) }
         let jpeg = upload != nil
-        guard authed else { return try check(try await execute(method, path, payload, bearer: nil)) }
+        guard authed else { return try check(try await execute(method, path, payload, bearer: nil, timeout: timeout)) }
         guard let used = TokenStore.read() else { throw APIError.unauthorized }
-        let first = try await execute(method, path, payload, bearer: used.access, jpeg: jpeg)
+        let first = try await execute(method, path, payload, bearer: used.access, jpeg: jpeg, timeout: timeout)
         guard first.1 == 401 else { return try check(first) }
         // Access token expired: refresh once (single flight), then retry.
         let fresh = try await refresh(replacing: used)
-        let second = try await execute(method, path, payload, bearer: fresh.access, jpeg: jpeg)
+        let second = try await execute(method, path, payload, bearer: fresh.access, jpeg: jpeg, timeout: timeout)
         if second.1 == 401 { throw APIError.unauthorized }
         return try check(second)
     }
@@ -406,8 +407,9 @@ actor APIClient {
         throw APIError.server(status: r.1, code: obj?["error"] as? String ?? "http_\(r.1)", provider: obj?["provider"] as? String, retryAfterSec: obj?["retryAfterSec"] as? Int)
     }
 
-    private func execute(_ method: String, _ path: String, _ body: Data?, bearer: String?, jpeg: Bool = false) async throws -> (Data, Int) {
+    private func execute(_ method: String, _ path: String, _ body: Data?, bearer: String?, jpeg: Bool = false, timeout: TimeInterval? = nil) async throws -> (Data, Int) {
         var req = URLRequest(url: URL(string: path, relativeTo: base)!)
+        if let timeout { req.timeoutInterval = timeout }
         req.httpMethod = method
         req.httpBody = body
         if jpeg { req.setValue("image/jpeg", forHTTPHeaderField: "Content-Type"); req.setValue("1", forHTTPHeaderField: "X-Photo-Consent") }

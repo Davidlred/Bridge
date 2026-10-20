@@ -23,6 +23,8 @@ import { generatePlan } from './ai/goalPlanner.js';
 import { AIUnavailable } from './ai/replicate.js';
 import { HttpError } from './util.js';
 
+const PLAN_TIMEOUT_MS = 75_000;
+
 export async function buildApp() {
   const app = Fastify({
     logger: env.NODE_ENV === 'test' ? false : { level: env.NODE_ENV === 'production' ? 'info' : 'debug', redact: ['req.headers.authorization'] },
@@ -74,10 +76,11 @@ export async function buildApp() {
     // event fires as soon as its body has been read, so listen on the response instead.
     reply.raw.on('close', () => { if (!reply.raw.writableFinished) ctrl.abort(); });
     try {
-      const plan = await generatePlan(body.data, ctrl.signal);
+      // At most 75s in total (retries included), inside the apps' 90s wait, so the user gets "Try again" rather than a hang.
+      const plan = await generatePlan(body.data, AbortSignal.any([ctrl.signal, AbortSignal.timeout(PLAN_TIMEOUT_MS)]));
       return { plan, deadline: body.data.deadline };
     } catch (e) {
-      if (e instanceof AIUnavailable) { req.log.warn({ err: e.message }, 'plan_unavailable'); return reply.code(503).send({ error: 'plan_unavailable' }); }
+      if (e instanceof AIUnavailable || (e as Error)?.name === 'TimeoutError') { req.log.warn({ err: (e as Error).message }, 'plan_unavailable'); return reply.code(503).send({ error: 'plan_unavailable' }); }
       throw e;
     }
   });

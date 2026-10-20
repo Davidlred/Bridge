@@ -176,6 +176,22 @@ run('goals core', () => {
     expect(pulled.goals[0]).toMatchObject({ routine: 'Up at 7:30', realityNote: "Because I'm done starting over every January.", feasibility, deadline: '2027-02-09' });
   });
 
+  it('accepts a goal exactly as the apps send it, with no suggested date and null-free JSON', async () => {
+    // Android (explicitNulls = false) and iOS (Codable) both leave nil fields out. Found on the emulator 2026-10-20:
+    // every onboarding goal was rejected as invalid, then its tasks as goal_missing and its ticks as task_missing.
+    const a = await signUp();
+    const g = uuidv7(), t = uuidv7();
+    const r = await app.inject({ method: 'POST', url: '/v1/sync/push', headers: h(a.accessToken), payload: { mutations: [
+      { id: uuidv7(), entity: 'goal', entityId: g, op: 'upsert', clientTs: 1, patch: { label: 'Guitar repertoire', statement: 'Play 10 songs on guitar from memory', startDate: '2026-10-20',
+        deadline: '2027-04-20', colorIndex: 0, routine: 'I wake up at 7', category: 'creative', feasibility: { verdict: 'realistic', reason: '26 weeks is plenty.' } } },
+      { id: uuidv7(), entity: 'task', entityId: t, op: 'upsert', clientTs: 2, patch: { goalId: g, origin: 'ai', minutes: 20, title: 'Guitar practice', priority: 'High', timeOfDay: '4:00 PM', position: 0 } },
+      { id: uuidv7(), entity: 'completion', entityId: t, op: 'complete', clientTs: 3, patch: { localDate: '2026-10-20' } },
+    ] } });
+    expect(r.json().rejected).toEqual({});
+    const pulled = (await app.inject({ method: 'GET', url: '/v1/sync?since=0', headers: h(a.accessToken) })).json();
+    expect(pulled.goals[0].feasibility).toEqual({ verdict: 'realistic', reason: '26 weeks is plenty.', suggestedDeadline: null });
+  });
+
   it('keeps planning while the app waits on a real connection', async () => {
     // Over a real socket the request's 'close' event fires once its body is read; that must not cancel the model.
     const a = await signUp();

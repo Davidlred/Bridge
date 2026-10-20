@@ -133,6 +133,8 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val refreshLock = Mutex()
     /** Coach replies can stream for a while; no read timeout between tokens beyond a minute. */
+    /** Plan and Reality Check: the server answers within 75s (model, retries included). */
+    private val slowHttp = http.newBuilder().readTimeout(90, java.util.concurrent.TimeUnit.SECONDS).build()
     private val streamHttp = http.newBuilder().readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
     /** The realtime socket stays open while a social screen is showing; pings keep proxies from closing it. */
     private val socketHttp = http.newBuilder().readTimeout(0, java.util.concurrent.TimeUnit.SECONDS).pingInterval(25, java.util.concurrent.TimeUnit.SECONDS).build()
@@ -202,12 +204,12 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
         json.decodeFromString<PlanResponse>(call("POST", "/v1/ai/plan", buildJsonObject {
             put("goalText", goalText); put("deadline", deadline); put("today", today); put("timezone", tz); put("routine", routine)
             put("locale", java.util.Locale.getDefault().toLanguageTag()); put("existingGoals", existingGoals)
-        }, authed = true)).plan
+        }, authed = true, slow = true)).plan
     suspend fun reality(goalText: String, deadline: String, today: String, routine: String, tasks: List<String>): Feasibility =
         json.decodeFromString<RealityResponse>(call("POST", "/v1/ai/reality", buildJsonObject {
             put("goalText", goalText); put("deadline", deadline); put("today", today); put("routine", routine)
             put("tasks", kotlinx.serialization.json.JsonArray(tasks.take(20).map { kotlinx.serialization.json.JsonPrimitive(it.take(120)) }))
-        }, authed = true)).feasibility
+        }, authed = true, slow = true)).feasibility
     suspend fun startImages(goalId: String, goalText: String, routine: String, kinds: List<String>): List<GoalImageDto> =
         json.decodeFromString<ImagesResponse>(call("POST", "/v1/ai/images", buildJsonObject {
             put("goalId", goalId); put("goalText", goalText); put("routine", routine); put("kinds", kotlinx.serialization.json.JsonArray(kinds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
@@ -309,10 +311,10 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
 
     private suspend inline fun <reified T> post(path: String, body: JsonObject): T = json.decodeFromString(call("POST", path, body, authed = false))
 
-    private suspend fun call(method: String, path: String, body: JsonObject?, authed: Boolean, raw: okhttp3.RequestBody? = null, extraHeaders: Map<String, String> = emptyMap()): String = withContext(Dispatchers.IO) {
+    private suspend fun call(method: String, path: String, body: JsonObject?, authed: Boolean, raw: okhttp3.RequestBody? = null, extraHeaders: Map<String, String> = emptyMap(), slow: Boolean = false): String = withContext(Dispatchers.IO) {
         val payload = raw ?: body?.toString()?.toRequestBody(JSON)
         val used = if (authed) vault.read() ?: throw UnauthorizedException() else null
-        val first = execute(method, path, payload, used?.access, extraHeaders)
+        val first = execute(method, path, payload, used?.access, extraHeaders, slow)
         if (first.status != 401 || !authed) return@withContext first.orThrow()
         // Access token expired: refresh once (single flight), then retry.
         val fresh = refreshLock.withLock {
@@ -322,7 +324,7 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
             if (r.status == 401) throw UnauthorizedException()
             json.decodeFromString<RefreshResponse>(r.orThrow()).let { Tokens(it.accessToken, it.refreshToken) }.also(vault::write)
         }
-        val second = execute(method, path, payload, fresh.access, extraHeaders)
+        val second = execute(method, path, payload, fresh.access, extraHeaders, slow)
         if (second.status == 401) throw UnauthorizedException()
         second.orThrow()
     }
@@ -336,7 +338,7 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
         throw ApiException(status, runCatching { obj["error"]!!.jsonPrimitive.content }.getOrDefault("http_$status"), obj)
     }
 
-    private fun execute(method: String, path: String, body: okhttp3.RequestBody?, bearer: String?, extraHeaders: Map<String, String> = emptyMap()): Raw {
+    private fun execute(method: String, path: String, body: okhttp3.RequestBody?, bearer: String?, extraHeaders: Map<String, String> = emptyMap(), slow: Boolean = false): Raw {
         val req = Request.Builder().url(BuildConfig.API_BASE + path)
             .method(method, body ?: if (method == "PUT" || method == "POST") ByteArray(0).toRequestBody(null) else null)
             .apply { extraHeaders.forEach { (k, v) -> header(k, v) } }
@@ -344,7 +346,7 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
             .apply { if (bearer != null) header("Authorization", "Bearer $bearer") }
             .build()
         try {
-            http.newCall(req).execute().use { return Raw(it.code, it.body?.string().orEmpty()) }
+            (if (slow) slowHttp else http).newCall(req).execute().use { return Raw(it.code, it.body?.string().orEmpty()) }
         } catch (e: IOException) {
             throw OfflineException(e)
         }

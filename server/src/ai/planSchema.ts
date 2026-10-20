@@ -31,7 +31,8 @@ export const PlanTask = z.object({
 export const Feasibility = z.object({
   verdict: z.enum(['realistic', 'stretch', 'unrealistic']),
   reason: z.string().max(280),
-  suggestedDeadline: ISODate.nullable(),
+  // The apps leave nulls out of their JSON (Android explicitNulls = false, iOS Codable), so missing means none.
+  suggestedDeadline: ISODate.nullish().transform(v => v ?? null),
 });
 
 /** Reality Check after the deadline (or routine) changes: feasibility only, the plan stays as it is. */
@@ -44,7 +45,7 @@ export const RealityRequest = z.object({
 }).refine(r => r.deadline > r.today, { message: 'deadline must be after today', path: ['deadline'] });
 
 export const Plan = z.object({
-  needsClarification: z.string().max(200).nullable(),
+  needsClarification: z.string().max(200).nullish().transform(v => v ?? null),
   label: z.string().min(1).max(24),
   goal: z.string().min(8).max(200),
   category: z.enum(['fitness', 'study', 'language', 'career', 'money', 'creative', 'health', 'habits', 'other']).catch('other').default('other'),

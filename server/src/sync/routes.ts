@@ -295,7 +295,11 @@ export async function syncRoutes(app: FastifyInstance) {
           return e.message;
         }
       });
-      if (result) rejected[m.id] = result; else accepted.push(m.id);
+      if (result) {
+        rejected[m.id] = result;
+        // Entity and code only (never content): a client sending changes the server can't take shows up in the logs.
+        req.log.warn({ entity: m.entity, op: m.op, code: result }, 'sync_rejected');
+      } else accepted.push(m.id);
     }
     // A finished day may open game night for an alliance; checked after the response, never blocking sync.
     if (body.data.mutations.some(m => m.entity === 'completion' && accepted.includes(m.id))) void checkUnlocks(req.userId).catch(e => req.log.warn({ err: String(e) }, 'game_unlock_check'));

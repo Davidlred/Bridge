@@ -171,9 +171,9 @@ export async function goalRoutes(app: FastifyInstance) {
     if (!parsed.success) throw new HttpError(400, 'invalid_request');
     await takeQuota(req.userId, 'reality', REALITY_DAILY_LIMIT);
     try {
-      return { feasibility: await assessReality(parsed.data) };
+      return { feasibility: await assessReality(parsed.data, AbortSignal.timeout(45_000)) };
     } catch (e) {
-      if (e instanceof AIUnavailable) { req.log.warn({ err: e.message }, 'reality_unavailable'); return reply.code(503).send({ error: 'reality_unavailable' }); }
+      if (e instanceof AIUnavailable || (e as Error)?.name === 'TimeoutError') { req.log.warn({ err: (e as Error).message }, 'reality_unavailable'); return reply.code(503).send({ error: 'reality_unavailable' }); }
       throw e;
     }
   });

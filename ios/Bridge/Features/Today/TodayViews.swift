@@ -292,7 +292,7 @@ struct TodayView: View {
             .background(Theme.s1, in: RoundedRectangle(cornerRadius: 24, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Theme.line, lineWidth: 1))
             .padding(.top, 22)
             HStack(spacing: 8) {
-                StatTile(label: "STREAK", bg: Theme.goalCards[0]) { (Text("\(p.streak)").font(BFont.display(22)) + Text(" days").font(BFont.body(12)).foregroundColor(Theme.mut)).foregroundStyle(Theme.ink) }
+                StatTile(label: "STREAK", bg: Theme.goalCards[0]) { (Text("\(p.streak)").font(BFont.display(22)) + Text(p.streak == 1 ? " day" : " days").font(BFont.body(12)).foregroundColor(Theme.mut)).foregroundStyle(Theme.ink) }
                 StatTile(label: "DAYS LEFT", bg: Theme.goalCards[1]) { Text("\(p.daysLeft)").font(BFont.display(22)).foregroundStyle(Theme.ink) }
                 StatTile(label: "DRIFT", bg: Theme.goalCards[2]) {
                     let d = p.drift
