@@ -129,7 +129,7 @@ sealed interface CoachEvent {
 
 /** All HTTP goes through here. Repositories call it; ViewModels never do. */
 @Singleton
-class ApiClient @Inject constructor(private val http: OkHttpClient, private val vault: TokenVault) {
+class ApiClient @Inject constructor(private val http: OkHttpClient, private val vault: TokenVault, private val network: app.thebridge.data.NetworkMonitor) {
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val refreshLock = Mutex()
     /** Coach replies can stream for a while; no read timeout between tokens beyond a minute. */
@@ -346,8 +346,11 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
             .apply { if (bearer != null) header("Authorization", "Bearer $bearer") }
             .build()
         try {
-            (if (slow) slowHttp else http).newCall(req).execute().use { return Raw(it.code, it.body?.string().orEmpty()) }
+            (if (slow) slowHttp else http).newCall(req).execute().use { network.reported(true); return Raw(it.code, it.body?.string().orEmpty()) }
         } catch (e: IOException) {
+            // Couldn't connect at all (not a slow reply): the server is unreachable from this network.
+            if (e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.NoRouteToHostException ||
+                (e is java.net.SocketTimeoutException && e.message.orEmpty().contains("connect", ignoreCase = true))) network.reported(false)
             throw OfflineException(e)
         }
     }

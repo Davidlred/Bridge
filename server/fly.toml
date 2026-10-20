@@ -13,9 +13,11 @@ primary_region = "iad"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 2
+  # One machine: Game Night keeps each live game in that process (src/social/game.ts). Before running more, route an
+  # alliance's game to one machine (fly-replay) or move game state into Redis.
+  min_machines_running = 1
 
   [http_service.concurrency]
     type = "requests"

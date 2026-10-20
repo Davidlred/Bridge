@@ -326,8 +326,8 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(R.string.start_label, start.format(md).uppercase()), style = BType.label(9.5f, 0.1f), color = c.mut, maxLines = 1)
-                Text(stringResource(R.string.goal_label, end.format(md).uppercase()), style = BType.label(9.5f, 0.1f), color = c.accInk, maxLines = 1)
+                Text(stringResource(R.string.start_label, start.format(md).uppercase()), style = BType.label(9.5f, 0.1f), color = c.mut, modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp))
+                Text(stringResource(R.string.goal_label, end.format(md).uppercase()), style = BType.label(9.5f, 0.1f), color = c.accInk, textAlign = TextAlign.End, modifier = Modifier.weight(1f, fill = false))
             }
             Row(Modifier.background(c.okTint, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(7.dp).background(c.okFill, CircleShape))
@@ -369,7 +369,7 @@ private fun Stat(label: String, bg: Color, modifier: Modifier, value: @Composabl
     val c = LocalBridgeColors.current
     Column(modifier.background(if (c.isDark) c.s1 else bg, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(12.dp).semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = BType.label(9.5f, 0.12f), color = c.mut, maxLines = 1)
+        Text(label, style = BType.label(9.5f, 0.12f), color = c.mut)
         value()
     }
 }
