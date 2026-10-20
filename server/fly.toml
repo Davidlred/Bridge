@@ -1,5 +1,7 @@
 app = "bridge-api"
 primary_region = "iad"
+# Time to finish requests in flight on deploy (src/index.ts waits up to 55s).
+kill_timeout = 60
 
 [build]
 
