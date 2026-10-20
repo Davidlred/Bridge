@@ -69,7 +69,8 @@ async function accountFor(tx: Tx, id: Identity, displayName: string | undefined,
   return { id: userId, created: true };
 }
 
-const page = (title: string, body: string) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · The Bridge</title>
+/** Small public pages (email links, account deletion, invites). Light and dark. */
+export const page = (title: string, body: string) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · The Bridge</title>
 <style>body{margin:0;background:#FBFAF7;color:#23262B;font:400 16px/1.5 system-ui,sans-serif}main{max-width:380px;margin:12vh auto;padding:0 24px}h1{font-size:28px;line-height:1.1;margin:0 0 8px}p{color:#7A7D83;margin:0 0 20px}
 input{box-sizing:border-box;width:100%;height:52px;border-radius:14px;border:1px solid #E3E0D8;padding:0 16px;font:inherit;margin-bottom:14px}button{width:100%;height:54px;border-radius:16px;border:0;background:#2F3A33;color:#fff;font:600 16px system-ui;cursor:pointer}
 @media(prefers-color-scheme:dark){body{background:#0C0C0C;color:#F2F2F2}p{color:#8C8C8C}input{background:#151515;color:#F2F2F2;border-color:rgba(255,255,255,.12)}button{background:#E8643A;color:#1A0C06}}</style><main><h1>${title}</h1>${body}</main></html>`;

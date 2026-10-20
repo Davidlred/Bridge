@@ -73,6 +73,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.install.referrer)
     implementation(libs.coroutines.play.services)
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)

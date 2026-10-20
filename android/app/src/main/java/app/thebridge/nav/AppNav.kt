@@ -227,6 +227,8 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val reduce = LocalReduceMotion.current
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     // Hide the bar on full-screen flows
+    // Installed from an invite page: open that invite once the app is signed in.
+    LaunchedEffect(Unit) { shell.installInvite()?.let { nav.navigate(InvitePreview(it)) } }
     val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true || dest?.hasRoute<DmThread>() == true
     val name = user?.displayName.orEmpty()
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())

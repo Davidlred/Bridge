@@ -18,6 +18,7 @@ import { badgeRoutes } from './social/badges.js';
 import { billingRoutes } from './billing.js';
 import { exportRoutes } from './export.js';
 import { dmRoutes } from './social/dm.js';
+import { linkRoutes } from './links.js';
 import { PlanRequest } from './ai/planSchema.js';
 import { generatePlan } from './ai/goalPlanner.js';
 import { AIUnavailable } from './ai/replicate.js';
@@ -42,7 +43,13 @@ export async function buildApp() {
 
   // Global limit keys by IP (runs before auth). Per-user AI quotas are enforced in Redis inside the AI routes.
   // (Injected WebSocket upgrades in tests have no socket, so there's no IP to read.)
-  await app.register(rateLimit, { max: env.NODE_ENV === 'test' ? 10_000 : 120, timeWindow: '1 minute', keyGenerator: req => (req.raw.socket ? req.ip : 'local') });
+  // Limits count per account once signed in (they run after the auth check), and per IP otherwise. Mobile carriers put
+  // thousands of people behind one IP (very common across Africa and Asia), so per-IP limits on signed-in routes would
+  // let strangers use up each other's daily plans.
+  await app.register(rateLimit, {
+    hook: 'preHandler', max: env.NODE_ENV === 'test' ? 10_000 : 120, timeWindow: '1 minute',
+    keyGenerator: req => (req.userId ? `u:${req.userId}` : req.raw.socket ? req.ip : 'local'),
+  });
 
   app.addHook('onRequest', async (req, reply) => {
     const min = { ios: '1.0.0', android: '1.0.0' }[String(req.headers['x-platform'])];
@@ -67,6 +74,7 @@ export async function buildApp() {
   await app.register(billingRoutes);
   await app.register(exportRoutes);
   await app.register(dmRoutes);
+  await app.register(linkRoutes);
 
   app.post('/v1/ai/plan', { onRequest: auth, config: { rateLimit: { max: 5, timeWindow: '1 day' } } }, async (req, reply) => {
     const body = PlanRequest.safeParse(req.body);

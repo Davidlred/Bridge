@@ -11,4 +11,5 @@ Object.assign(process.env, {
   REPLICATE_API_TOKEN: 'test',
   MODEL_PLANNER: 'test/model', MODEL_COACH: 'test/model', MODEL_FAST: 'test/model', MODEL_IMAGE: 'test/model',
   REVENUECAT_WEBHOOK_SECRET: 'rc-test-secret',
+  ANDROID_CERT_SHA256: 'AA:BB:CC', APNS_TEAM_ID: 'TEAM123456', APP_STORE_ID: '1234567890',
 });

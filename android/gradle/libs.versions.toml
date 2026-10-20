@@ -21,6 +21,7 @@ googleid = "1.1.1"
 coroutines = "1.9.0"
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
+installReferrer = "2.2"
 junit = "4.13.2"
 coil = "2.7.0"
 sqlcipher = "4.6.1"
@@ -60,6 +61,7 @@ coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", ve
 coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+install-referrer = { module = "com.android.installreferrer:installreferrer", version.ref = "installReferrer" }
 sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 sqlite = { module = "androidx.sqlite:sqlite-ktx", version.ref = "sqlite" }
 coil = { module = "io.coil-kt:coil-compose", version.ref = "coil" }

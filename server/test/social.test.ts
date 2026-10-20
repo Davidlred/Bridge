@@ -118,6 +118,25 @@ run('community, alliances and chat', () => {
       expect(r.alliance.inviteCode).toMatch(/^DAWN-\d{4}$/);
     });
 
+    it('serves invite links: app-link files and a landing page for people without the app', async () => {
+      const a = await signUp();
+      const open = await goalWithStreak(a, 7);
+      const code = (await call(a, 'POST', '/v1/alliances', { name: 'Lagos <Runners>', planMode: 'own', goalId: open.g })).json().alliance.inviteCode as string;
+      const links = (await app.inject({ method: 'GET', url: '/.well-known/assetlinks.json' })).json();
+      expect(links[0].target).toEqual({ namespace: 'android_app', package_name: 'app.thebridge', sha256_cert_fingerprints: ['AA:BB:CC'] });
+      const aasa = (await app.inject({ method: 'GET', url: '/.well-known/apple-app-site-association' })).json();
+      expect(aasa.applinks.details[0]).toMatchObject({ appIDs: ['TEAM123456.app.thebridge.Bridge'], components: [{ '/': '/join/*' }] });
+
+      const pageRes = await app.inject({ method: 'GET', url: `/join/${code.toLowerCase()}` });
+      expect(pageRes.statusCode).toBe(200);
+      expect(pageRes.body).toContain('Lagos &lt;Runners&gt;');                     // escaped, never raw HTML
+      expect(pageRes.body).toContain(code);
+      expect(pageRes.body).toContain(`referrer=${encodeURIComponent(`join=${code}`)}`);   // Android opens the preview after install
+      expect(pageRes.body).toContain('apps.apple.com/app/id1234567890');
+      expect(pageRes.body).not.toContain(open.g);                                    // nothing about the owner's goal
+      expect((await app.inject({ method: 'GET', url: '/join/NOPE-0000' })).statusCode).toBe(404);
+    });
+
     it('shares a plan: preview, join (goal and tasks arrive by sync), read-only tasks, next-morning updates, apply now', async () => {
       const lead = await signUp('Ms Okafor'), kid = await signUp('Tunde');
       const lg = await goalWithStreak(lead, 7, 'study');

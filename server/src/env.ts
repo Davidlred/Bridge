@@ -36,6 +36,14 @@ const Env = z.object({
   APNS_BUNDLE_ID: z.string().default('app.thebridge.Bridge'),
   // Where people write when they can't open the app (shown on the public account-deletion page).
   SUPPORT_EMAIL: z.string().email().default('support@thebridge.app'),
+  // Transactional email through Resend: an API key with sending access, and a sender on a domain verified there,
+  // e.g. "The Bridge <hello@thebridge.app>".
+  // Invite links: SHA-256 fingerprints of the Android signing certificates (upload key and Play app signing key, comma
+  // separated) for assetlinks.json, and the App Store id for the invite page. iOS uses APNS_TEAM_ID + APNS_BUNDLE_ID.
+  ANDROID_CERT_SHA256: list,
+  APP_STORE_ID: z.string().regex(/^\d+$/).optional(),
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
   // RevenueCat webhook: the Authorization header value set in the RevenueCat dashboard.
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
   // Signs short-lived media links. Defaults to a value derived from the JWT key.

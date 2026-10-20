@@ -72,7 +72,8 @@ Images are generated in the API process after the request returns. That is fine 
 Sync rules enforced here: per-field last-writer-wins for tasks, deletes win, completions are a set (an uncomplete only wins if newer), 3 active goals without `plus` (`goal_limit`); when `plus` ends (expiration or refund webhook, or the next pull) the goals beyond 3 become `paused`, keeping the 3 worked on most recently, and paused goals reject task, completion and field edits (`goal_paused`) until the user resumes them within the limit; shared-plan tasks are read-only (`shared_task_readonly`), the goal deadline is only ever what the client sent.
 
 ## Before launch
-- **Email provider**: `src/mailer.ts` prints links in development and throws in production. Wire a transactional sender (Resend, Postmark, SES).
+- **Email**: set `RESEND_API_KEY` and `MAIL_FROM` (a sender on a domain verified in Resend). Without them development prints the message and production refuses to send.
+- **Invite links** (`https://thebridge.app/join/CODE`): point `thebridge.app` at this app too. Set `ANDROID_CERT_SHA256` (upload key and Play app signing key fingerprints) and `APNS_TEAM_ID` so `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` let the apps open the links, and `APP_STORE_ID` for the landing page. The Play link on that page carries the code, so Android opens the invite after install; iPhone users type the code (Community → Join).
 - **Apple token revocation** on account deletion needs the Sign in with Apple private key (not configured yet).
 - **Age gate** at sign-up is waiting on the per-country age-of-consent table (open decision in `CLAUDE.md`).
 
@@ -91,4 +92,4 @@ Storage: set `S3_BUCKET` (+ `S3_ENDPOINT`, credentials) in production, e.g. Fly 
 
 Game state lives in the API process. With more than one machine, route each alliance's game to one machine or move the state to Redis (results are already in Postgres).
 
-Next to build: RevenueCat webhook and paywall, E2E DMs, account export (milestone 6). Chat moderation and pushes run in the API process; move them to the worker queue with the image jobs.
+Rate limits count per account on signed-in routes and per IP otherwise (mobile carriers share one IP across many people). Chat moderation and pushes run in the API process; move them to the worker queue with the image jobs.

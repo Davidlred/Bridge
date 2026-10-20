@@ -44,7 +44,10 @@ class ShellViewModel @Inject constructor(
     private val social: app.thebridge.data.SocialRepository,
     private val billing: app.thebridge.data.BillingRepository,
     private val analytics: app.thebridge.data.Analytics,
+    private val inviteReferrer: app.thebridge.data.InviteReferrer,
 ) : ViewModel() {
+    /** Invite code from a Play Store install that started on thebridge.app/join (once per install). */
+    suspend fun installInvite(): String? = inviteReferrer.takeCode()
     val analyticsOn = analytics.enabled
     fun setAnalytics(on: Boolean) = viewModelScope.launch { analytics.setEnabled(on) }
     private companion object { val COACH_READS_JOURNAL = androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal") }

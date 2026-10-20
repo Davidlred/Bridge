@@ -192,6 +192,15 @@ run('goals core', () => {
     expect(pulled.goals[0].feasibility).toEqual({ verdict: 'realistic', reason: '26 weeks is plenty.', suggestedDeadline: null });
   });
 
+  it('counts the daily plan limit per account, not per IP (carriers share one IP across many people)', async () => {
+    const a = await signUp(), b = await signUp();
+    const body = { goalText: 'Run a half marathon in under 2 hours', deadline: '2027-02-09', today: '2026-10-14', timezone: 'Africa/Lagos', routine: 'Up at 7:30, desk job 9 to 6.' };
+    const plan = (u: { accessToken: string }) => app.inject({ method: 'POST', url: '/v1/ai/plan', headers: h(u.accessToken), payload: body });
+    for (let i = 0; i < 5; i++) expect((await plan(a)).statusCode).toBe(200);
+    expect((await plan(a)).statusCode).toBe(429);
+    expect((await plan(b)).statusCode).toBe(200);     // same IP, different person
+  });
+
   it('keeps planning while the app waits on a real connection', async () => {
     // Over a real socket the request's 'close' event fires once its body is read; that must not cancel the model.
     const a = await signUp();
