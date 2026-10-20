@@ -37,6 +37,8 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
     var notificationsOn by rememberSaveable { mutableStateOf(true) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(Unit) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { notificationsOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled() } }
+    val goalIds = ui.goals.map { it.goal.id }
+    LaunchedEffect(goalIds) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { vm.refreshImages(goalIds) } }
 
     // Android 13+: ask for notifications once the first plan exists (the moment reminders make sense), never again automatically.
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationsOn = it }

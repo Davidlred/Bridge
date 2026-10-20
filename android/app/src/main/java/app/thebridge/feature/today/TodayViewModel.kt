@@ -77,14 +77,27 @@ class TodayViewModel @Inject constructor(
         TodayUi(true, name, goals, openId?.takeIf { id -> goals.any { it.goal.id == id } }, v, cel, r.first, r.second, paused)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUi())
 
-    private val refreshed = mutableSetOf<String>()
+    private val imagesRefreshedAt = mutableMapOf<String, Long>()
 
     fun openGoal(id: String?) {
         open.value = id; saved["open"] = id; view.value = GoalView.Today
-        // Signed image links last an hour; renew them when a goal is opened.
-        if (id != null && refreshed.add(id)) viewModelScope.launch { ai.refreshImages(id) }
+        if (id != null) refreshImages(listOf(id))
     }
     fun showView(v: GoalView) { view.value = v }
+
+    /**
+     * Signed image links last an hour, and after a new login or reinstall there are no image rows at all. Renewed for every
+     * active goal when Today is shown or the app comes back, at most every 30 minutes per goal. (Only renewing on "open goal"
+     * missed people with a single goal, who never open one: their images read "couldn't be made".)
+     */
+    fun refreshImages(goalIds: List<String>) {
+        val now = System.currentTimeMillis()
+        for (id in goalIds) {
+            if (now - (imagesRefreshedAt[id] ?: 0L) < 30 * 60_000L) continue
+            imagesRefreshedAt[id] = now
+            viewModelScope.launch { ai.refreshImages(id) }
+        }
+    }
 
     fun toggle(taskId: String, done: Boolean) = viewModelScope.launch {
         repo.setDone(taskId, done)

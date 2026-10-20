@@ -13,16 +13,25 @@ final class TodayModel {
     var realityBusy = false
     var realityError = false
     @ObservationIgnored private var noteTask: Task<Void, Never>?
-    @ObservationIgnored private var refreshed: Set<UUID> = []
+    @ObservationIgnored private var imagesRefreshedAt: [UUID: Date] = [:]
 
     func open(_ id: UUID?) {
         openGoalId = id; view = .today
-        // Signed image links last an hour; renew them when a goal is opened.
-        if let id, refreshed.insert(id).inserted { Task { await refreshImages(id) } }
+        if let id { refreshImages(for: [id]) }
     }
 
     @ObservationIgnored weak var store: GoalStore?
     @ObservationIgnored weak var social: SocialStore?
+
+    /// Signed image links last an hour, and after a new login or reinstall there are no image rows at all. Renewed for every
+    /// active goal when Today is shown or the app comes back, at most every 30 minutes per goal. (Only renewing on "open goal"
+    /// missed people with a single goal, who never open one.)
+    func refreshImages(for ids: [UUID]) {
+        for id in ids where Date.now.timeIntervalSince(imagesRefreshedAt[id] ?? .distantPast) > 30 * 60 {
+            imagesRefreshedAt[id] = .now
+            Task { await refreshImages(id) }
+        }
+    }
 
     func refreshImages(_ id: UUID) async {
         guard let dtos = try? await APIClient.shared.images(goalId: id) else { return }
@@ -112,7 +121,8 @@ struct TodayView: View {
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { model.store = store; model.social = social }
-        .task(id: scenePhase) { if scenePhase == .active { store.reload(); notificationsOff = !(await NotificationScheduler.shared.authorized()) } }
+        .task(id: scenePhase) { if scenePhase == .active { store.reload(); model.refreshImages(for: store.goals.map(\.id)); notificationsOff = !(await NotificationScheduler.shared.authorized()) } }
+        .onChange(of: store.goals.map(\.id)) { _, ids in model.refreshImages(for: ids) }
         .sheet(item: $sheet) { s in sheetView(s).presentationDetents([.large]).presentationDragIndicator(.visible).presentationBackground(Theme.s1) }
         .fullScreenCover(item: Binding(get: { model.celebrate.flatMap { id in goals.first { $0.id == id } } }, set: { if $0 == nil { model.celebrate = nil } })) { g in
             let next = goals.first { $0.id != g.id && $0.progress.tasksToday > $0.progress.doneToday }
