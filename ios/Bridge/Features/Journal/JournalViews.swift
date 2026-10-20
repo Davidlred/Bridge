@@ -17,6 +17,7 @@ struct MoodRing: View {
 /// Journal tab, or the journal pushed from Today (`goalId` set, with a back link to Today).
 struct JournalView: View {
     var goalId: UUID?
+    @Environment(\.dynamicTypeSize) private var typeSize
     var onBack: (() -> Void)?
     @Environment(GoalStore.self) private var store
     @Environment(NetworkStatus.self) private var network
@@ -99,14 +100,21 @@ struct JournalView: View {
         if let current = store.journalEntry(goalId: goal?.id, date: today), let other = store.journalConflict(of: current.id) { conflictBanner(current, other) }
         VStack(alignment: .leading, spacing: 10) {
             (Text("How are you feeling? ").foregroundColor(Theme.ink2) + Text("Optional").foregroundColor(Theme.mut2)).font(BFont.body(13, .medium))
-            HStack(spacing: 6) {
-                ForEach(0..<5, id: \.self) { i in
-                    Button { mood = mood == i ? nil : i; scheduleSave(0) } label: {
-                        VStack(spacing: 8) { MoodRing(index: i, on: mood == i, size: 24); Text(moodLabels[i]).font(BFont.body(11, .medium)).foregroundStyle(mood == i ? Theme.ink : Theme.mut).lineLimit(1) }
-                            .frame(maxWidth: .infinity, minHeight: 70).background(mood == i ? Theme.accTint : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 1))
+            // Accessibility text sizes: two rows (3 + 2, same widths) so "Drained" and "Strong" aren't cut off.
+            let rows: [[Int]] = typeSize.isAccessibilitySize ? [[0, 1, 2], [3, 4]] : [[0, 1, 2, 3, 4]]
+            VStack(spacing: 6) {
+                ForEach(rows, id: \.self) { row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { i in
+                            Button { mood = mood == i ? nil : i; scheduleSave(0) } label: {
+                                VStack(spacing: 8) { MoodRing(index: i, on: mood == i, size: 24); Text(moodLabels[i]).font(BFont.body(11, .medium)).foregroundStyle(mood == i ? Theme.ink : Theme.mut).lineLimit(1) }
+                                    .frame(maxWidth: .infinity, minHeight: 70).background(mood == i ? Theme.accTint : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                            }
+                            .accessibilityLabel(moodLabels[i]).accessibilityAddTraits(mood == i ? [.isSelected] : [])
+                        }
+                        ForEach(0..<(rows[0].count - row.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
                     }
-                    .accessibilityLabel(moodLabels[i]).accessibilityAddTraits(mood == i ? [.isSelected] : [])
                 }
             }
         }

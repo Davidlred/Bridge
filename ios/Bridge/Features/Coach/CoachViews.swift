@@ -160,10 +160,23 @@ private struct StatusLine: View {
 
 struct CoachView: View {
     @Environment(SessionStore.self) private var session
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(GoalStore.self) private var store
     @Environment(AppRouter.self) private var router
     @Environment(CoachModel.self) private var model
     @FocusState private var focused: Bool
+
+    private var headerButtons: some View {
+        HStack(spacing: 6) {
+            Button { model.enterStudy(); router.coach.append(Route.study) } label: {
+                Label("Study", systemImage: "viewfinder").font(BFont.body(13, .medium)).foregroundStyle(Theme.ink).padding(.horizontal, 14).frame(minHeight: 44)
+                    .background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+            }
+            // Fixed size: the icon has to stay inside its 44pt circle at every text size.
+            Button(action: model.newConversation) { Image(systemName: "plus.bubble").font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.ink).frame(width: 44, height: 44).background(Theme.s1, in: Circle()).overlay(Circle().stroke(Theme.line, lineWidth: 1)) }
+                .accessibilityLabel("New conversation")
+        }
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -173,6 +186,8 @@ struct CoachView: View {
             let mood = model.mood(now: tl.date, typing: focused && !model.input.isEmpty)
             VStack(spacing: 0) {
                 VStack(spacing: 4) {
+                    // Accessibility text sizes: the buttons get their own row instead of sitting over the mascot.
+                    if typeSize.isAccessibilitySize { headerButtons.frame(maxWidth: .infinity, alignment: .trailing) }
                     CoachMascot(mood: mood).padding(.top, 6).accessibilityLabel("\(name), your coach")
                     Text(name).font(BFont.display(21)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                     StatusLine(mood: mood)
@@ -182,15 +197,7 @@ struct CoachView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 14)
                 .overlay(alignment: .topTrailing) {
-                    HStack(spacing: 6) {
-                        Button { model.enterStudy(); router.coach.append(Route.study) } label: {
-                            Label("Study", systemImage: "viewfinder").font(BFont.body(13, .medium)).foregroundStyle(Theme.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                                .background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
-                        }
-                        Button(action: model.newConversation) { Image(systemName: "plus.bubble").foregroundStyle(Theme.ink).frame(width: 44, height: 44).background(Theme.s1, in: Circle()).overlay(Circle().stroke(Theme.line, lineWidth: 1)) }
-                            .accessibilityLabel("New conversation")
-                    }
-                    .padding(.trailing, 16).padding(.top, 4)
+                    if !typeSize.isAccessibilitySize { headerButtons.padding(.trailing, 16).padding(.top, 4) }
                 }
                 Divider().overlay(Theme.line)
                 ScrollViewReader { proxy in
