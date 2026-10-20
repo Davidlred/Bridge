@@ -30,6 +30,8 @@ import javax.inject.Inject
 data class ChatItem(val message: ChatMessageEntity, val suggestion: SuggestionDto?, val dividerBefore: Boolean)
 
 data class CoachUi(
+    /** False until the goals, messages and coach name have been read once: no empty state or default name flashes. */
+    val loaded: Boolean = false,
     val coachName: String = "Arc",
     val goals: List<GoalState> = emptyList(),
     val focus: GoalState? = null,
@@ -74,7 +76,7 @@ class CoachViewModel @Inject constructor(
     val state: StateFlow<CoachUi> = combine(local, coach.messages, coach.conversation, goalsRepo.activeGoals(), combine(session.user.map { it?.coachName ?: "Arc" }, showEarlier, ::Pair)) { l, msgs, conv, goals, (name, earlier) ->
         val shown = if (earlier || conv == null) msgs else msgs.filter { it.conversation == conv }
         l.copy(
-            coachName = name, goals = goals, focus = goals.firstOrNull { it.goal.id == focusId } ?: goals.firstOrNull(),
+            loaded = true, coachName = name, goals = goals, focus = goals.firstOrNull { it.goal.id == focusId } ?: goals.firstOrNull(),
             hasEarlier = !earlier && msgs.any { it.conversation != conv },
             items = shown.mapIndexed { i, m -> ChatItem(m, coach.suggestion(m), i > 0 && shown[i - 1].conversation != m.conversation) },
         )

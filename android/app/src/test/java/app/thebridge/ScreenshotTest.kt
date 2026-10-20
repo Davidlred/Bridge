@@ -200,11 +200,11 @@ class ScreenshotTest {
             suggestion = SuggestionDto("Prep tomorrow's breakfast before 9 PM", "Frees 15 minutes and protects your bedtime.", "Medium", "8:30 PM"), state = "pending"),
         msg("m4", "user", "And if I miss a run?", status = "failed"),
     )
-    @Test fun coachChat() = snap("coach") { CoachScreen(CoachUi(goals = listOf(marathon), focus = marathon, items = chat), CoachActions()) }
-    @Test fun coachEmpty() = snap("coach-empty") { CoachScreen(CoachUi(goals = listOf(marathon), focus = marathon), CoachActions()) }
-    @Test fun coachThinking() = snap("coach-thinking") { CoachScreen(CoachUi(goals = listOf(marathon, spanish), focus = marathon, items = chat.take(2), awaiting = true), CoachActions()) }
+    @Test fun coachChat() = snap("coach") { CoachScreen(CoachUi(loaded = true, goals = listOf(marathon), focus = marathon, items = chat), CoachActions()) }
+    @Test fun coachEmpty() = snap("coach-empty") { CoachScreen(CoachUi(loaded = true, goals = listOf(marathon), focus = marathon), CoachActions()) }
+    @Test fun coachThinking() = snap("coach-thinking") { CoachScreen(CoachUi(loaded = true, goals = listOf(marathon, spanish), focus = marathon, items = chat.take(2), awaiting = true), CoachActions()) }
     @Test fun studyMode() = snap("study") {
-        StudyModeScreen(CoachUi(goals = listOf(marathon), focus = marathon, items = chat, studySeconds = 754, studyNotes = "Hill repeats on Thursday, keep the long run easy.", studyReply = "m3"),
+        StudyModeScreen(CoachUi(loaded = true, goals = listOf(marathon), focus = marathon, items = chat, studySeconds = 754, studyNotes = "Hill repeats on Thursday, keep the long run easy.", studyReply = "m3"),
             {}, {}, {}, {}, {}, {}, {}, {}, {})
     }
     private val entry = JournalEntity("j1", "g1", "2026-10-13", 3, "Long run felt easier than last week. Legs got heavy around km 9 but I held pace.")

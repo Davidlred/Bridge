@@ -116,7 +116,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 val label = stringResource(R.string.coach_mascot, ui.coachName)
                 Box(Modifier.padding(top = 6.dp).semantics { contentDescription = label }) { CoachMascot(mood, reduceMotion = LocalReduceMotion.current) }
-                Text(ui.coachName, style = BType.display(21), color = c.ink, modifier = Modifier.semantics { heading() })
+                Text(if (ui.loaded) ui.coachName else "", style = BType.display(21), color = c.ink, modifier = Modifier.semantics { heading() })
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                     Box(Modifier.size(6.dp).background(dot, CircleShape)); Text(status, style = BType.body(12, FontWeight.Medium), color = c.mut)
                 }
@@ -144,7 +144,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
                         modifier = Modifier.heightIn(min = 36.dp).border(1.dp, c.line, RoundedCornerShape(18.dp)).clickable(role = Role.Button, onClick = actions.showEarlier).padding(horizontal = 14.dp, vertical = 9.dp))
                 }
             }
-            if (ui.items.isEmpty()) item { Greeting(ui) }
+            if (ui.loaded && ui.items.isEmpty()) item { Greeting(ui) }
             items(ui.items, key = { it.message.id }) { item ->
                 if (item.dividerBefore) Divider()
                 if (item.message.role == "coach") CoachBubble(item, ui, actions) else UserBubble(item, actions)

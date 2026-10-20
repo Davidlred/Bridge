@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -122,7 +123,16 @@ private fun TodayEntry(ui: JournalUi, actions: JournalActions) {
     ui.conflict?.let { ConflictBanner(it, actions.keep) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row { Text(stringResource(R.string.journal_feeling) + " ", style = BType.body(13, FontWeight.Medium), color = c.ink2); Text(stringResource(R.string.field_optional), style = BType.body(13, FontWeight.Medium), color = c.mut2) }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { MOODS.forEachIndexed { i, label -> MoodButton(i, stringResource(label), ui.mood == i, Modifier.weight(1f)) { actions.mood(i) } } }
+        // Large text: two rows (3 + 2, same widths) so "Drained" and "Strong" aren't cut off.
+        val rows = if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f) listOf(0..2, 3..4) else listOf(0..4)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            rows.forEach { range ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    range.forEach { i -> MoodButton(i, stringResource(MOODS[i]), ui.mood == i, Modifier.weight(1f)) { actions.mood(i) } }
+                    repeat(rows.first().count() - range.count()) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
     val hint = stringResource(R.string.journal_hint)
     LiveTextField(ui.text, actions.text, maxLength = JournalRepository.MAX_LENGTH, textStyle = BType.body(16, lineHeight = 1.65f).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
