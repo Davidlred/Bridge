@@ -65,7 +65,8 @@ enum Theme {
 }
 
 /// Typography. The bundled files are variable fonts (SIL OFL); each weight is an instance on the wght axis.
-/// Sizes scale with Dynamic Type; display sizes stop growing at 1.3× so headings never crowd out the content.
+/// Sizes scale with Dynamic Type up to 2× (the largest size the app is designed and tested for, like Android at 200%).
+/// Display sizes stop at 1.6×: still above body text at every size, without headings crowding out the content.
 enum BFont {
     /// The text size the screen is drawn at, set by `.bridgeTypeScale()` at the root from SwiftUI's environment. Without it
     /// fonts followed only the app-wide setting at the moment they were made: a change while the app was open didn't
@@ -77,14 +78,14 @@ enum BFont {
         return UIFont(descriptor: d, size: size)
     }
     static func display(_ size: CGFloat) -> Font {
-        Font(UIFontMetrics(forTextStyle: .title1).scaledFont(for: variable("Bricolage Grotesque", 600, size), maximumPointSize: size * 1.3, compatibleWith: traits))
+        Font(UIFontMetrics(forTextStyle: .title1).scaledFont(for: variable("Bricolage Grotesque", 600, size), maximumPointSize: size * 1.6, compatibleWith: traits))
     }
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         let w: CGFloat = switch weight { case .semibold: 600; case .medium: 500; default: 400 }
-        return Font(UIFontMetrics(forTextStyle: .body).scaledFont(for: variable("Geist", w, size), compatibleWith: traits))
+        return Font(UIFontMetrics(forTextStyle: .body).scaledFont(for: variable("Geist", w, size), maximumPointSize: size * 2, compatibleWith: traits))
     }
     static func label(_ size: CGFloat = 10) -> Font {
-        Font(UIFontMetrics(forTextStyle: .caption2).scaledFont(for: variable("Geist Mono", 500, size), compatibleWith: traits))
+        Font(UIFontMetrics(forTextStyle: .caption2).scaledFont(for: variable("Geist Mono", 500, size), maximumPointSize: size * 2, compatibleWith: traits))
     }
 }
 
