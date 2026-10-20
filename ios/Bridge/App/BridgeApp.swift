@@ -20,6 +20,7 @@ struct BridgeApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .bridgeTypeScale()
                 .environment(session)
                 .environment(router)
                 .environment(network)

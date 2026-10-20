@@ -67,24 +67,40 @@ enum Theme {
 /// Typography. The bundled files are variable fonts (SIL OFL); each weight is an instance on the wght axis.
 /// Sizes scale with Dynamic Type; display sizes stop growing at 1.3× so headings never crowd out the content.
 enum BFont {
+    /// The text size the screen is drawn at, set by `.bridgeTypeScale()` at the root from SwiftUI's environment. Without it
+    /// fonts followed only the app-wide setting at the moment they were made: a change while the app was open didn't
+    /// redraw, and snapshot tests at the largest size rendered normal-size text.
+    nonisolated(unsafe) static var traits = UITraitCollection(preferredContentSizeCategory: .large)
     private static let wghtAxis = 2003265652   // 'wght'
     private static func variable(_ family: String, _ weight: CGFloat, _ size: CGFloat) -> UIFont {
         let d = UIFontDescriptor(fontAttributes: [.family: family, kCTFontVariationAttribute as UIFontDescriptor.AttributeName: [wghtAxis: weight]])
         return UIFont(descriptor: d, size: size)
     }
     static func display(_ size: CGFloat) -> Font {
-        Font(UIFontMetrics(forTextStyle: .title1).scaledFont(for: variable("Bricolage Grotesque", 600, size), maximumPointSize: size * 1.3))
+        Font(UIFontMetrics(forTextStyle: .title1).scaledFont(for: variable("Bricolage Grotesque", 600, size), maximumPointSize: size * 1.3, compatibleWith: traits))
     }
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         let w: CGFloat = switch weight { case .semibold: 600; case .medium: 500; default: 400 }
-        return Font(UIFontMetrics(forTextStyle: .body).scaledFont(for: variable("Geist", w, size)))
+        return Font(UIFontMetrics(forTextStyle: .body).scaledFont(for: variable("Geist", w, size), compatibleWith: traits))
     }
     static func label(_ size: CGFloat = 10) -> Font {
-        Font(UIFontMetrics(forTextStyle: .caption2).scaledFont(for: variable("Geist Mono", 500, size)))
+        Font(UIFontMetrics(forTextStyle: .caption2).scaledFont(for: variable("Geist Mono", 500, size), compatibleWith: traits))
+    }
+}
+
+/// Applied once at the root (and around each snapshot): hands the environment's text size to BFont and redraws everything
+/// when it changes.
+struct BridgeTypeScale: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var size
+    func body(content: Content) -> some View {
+        let _ = (BFont.traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size)))
+        content.id(size)
     }
 }
 
 extension View {
+    func bridgeTypeScale() -> some View { modifier(BridgeTypeScale()) }
+
     /// Geist Mono uppercase label with design tracking (0.13em).
     func bridgeLabel(_ size: CGFloat = 10, color: Color = Theme.mut) -> some View {
         font(BFont.label(size)).tracking(size * 0.13).textCase(.uppercase).foregroundStyle(color)

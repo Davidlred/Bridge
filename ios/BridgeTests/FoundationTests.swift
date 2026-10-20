@@ -41,7 +41,7 @@ final class FoundationTests: XCTestCase {
 final class FoundationSnapshotTests: XCTestCase {
     private func verify(_ view: some View, named name: String, file: StaticString = #file, line: UInt = #line) {
         let session = SessionStore(); session.user = UserDTO(id: UUID(uuidString: "018b0000-0000-7000-8000-000000000001")!, email: "sharon@example.com", displayName: "Sharon", coachName: "Arc", createdAt: 1_760_000_000_000)
-        let root = view.environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore()).environment(DmStore()).environment(BillingStore())
+        let root = view.bridgeTypeScale().environment(session).environment(AuthModel()).environment(Toaster()).environment(AppRouter()).environment(GoalStore()).environment(CoachModel()).environment(NetworkStatus()).environment(SocialStore()).environment(DmStore()).environment(BillingStore())
         let variants: [(String, UITraitCollection)] = [
             ("light", .init(userInterfaceStyle: .light)), ("dark", .init(userInterfaceStyle: .dark)),
             ("xxxl", .init(traitsFrom: [.init(userInterfaceStyle: .light), .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)])),
