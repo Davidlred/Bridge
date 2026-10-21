@@ -529,10 +529,11 @@ struct FeasibilityCard: View {
     var onUseDate: ((String) -> Void)?
     var note: String?
     var body: some View {
-        let (tint, fg, label): (Color, Color, LocalizedStringKey) = switch f.verdict {
-            case "realistic": (Theme.okTint, Theme.ok, "REALISTIC")
-            case "unrealistic": (Theme.badTint, Theme.bad, "UNREALISTIC AS PLANNED")
-            default: (Theme.warnTint, Theme.warn, "A STRETCH")
+        // A plain card: only the verdict word carries its colour.
+        let (fg, label): (Color, LocalizedStringKey) = switch f.verdict {
+            case "realistic": (Theme.ok, "REALISTIC")
+            case "unrealistic": (Theme.bad, "UNREALISTIC AS PLANNED")
+            default: (Theme.warn, "A STRETCH")
         }
         VStack(alignment: .leading, spacing: 8) {
             if !compact, let deadline, let date = Day.parse(deadline) {
@@ -543,15 +544,14 @@ struct FeasibilityCard: View {
             if let s = f.suggestedDeadline, s != deadline, let onUseDate, let date = Day.parse(s) {
                 HStack(spacing: 10) {
                     Button("Use \(date.formatted(date: .abbreviated, time: .omitted))") { onUseDate(s) }.font(BFont.body(13, .semibold)).foregroundStyle(Theme.ink)
-                        .padding(.horizontal, 14).frame(minHeight: 40).background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
-                    Text("Your date stays unless you change it.").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                        .padding(.horizontal, 14).frame(minHeight: 40).background(Theme.bg, in: Capsule()).overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
                 }
             }
             if let note { Text(note).font(BFont.body(12)).foregroundStyle(Theme.mut) }
         }
         .padding(compact ? 14 : 16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(fg.opacity(0.5), lineWidth: 1))
+        .background(Theme.s1, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
     }
 }
 

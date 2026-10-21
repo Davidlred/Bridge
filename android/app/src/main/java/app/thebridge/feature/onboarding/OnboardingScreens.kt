@@ -501,12 +501,13 @@ private fun InlineField(value: String, onChange: (String) -> Unit, placeholder: 
 @Composable
 fun FeasibilityCard(f: Feasibility, deadline: LocalDate?, compact: Boolean = false, onUseDate: ((LocalDate) -> Unit)? = null, note: String? = null) {
     val c = LocalBridgeColors.current
-    val (tint, fg, label) = when (f.verdict) {
+    val (_, fg, label) = when (f.verdict) {
         "realistic" -> Triple(c.okTint, c.ok, R.string.verdict_realistic)
         "unrealistic" -> Triple(c.badTint, c.bad, R.string.verdict_unrealistic)
         else -> Triple(c.warnTint, c.warn, R.string.verdict_stretch)
     }
-    Column(Modifier.fillMaxWidth().background(tint, RoundedCornerShape(16.dp)).border(1.dp, fg.copy(alpha = .5f), RoundedCornerShape(16.dp)).padding(if (compact) 14.dp else 16.dp),
+    // A plain card: only the verdict word carries its colour.
+    Column(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(if (compact) 14.dp else 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!compact && deadline != null) Text(stringResource(R.string.reality_verdict_kicker, shortDate(deadline).uppercase()), style = BType.label(10f, 0.14f), color = c.mut)
         Text(stringResource(label), style = BType.label(11f, 0.14f), color = fg)
@@ -514,10 +515,9 @@ fun FeasibilityCard(f: Feasibility, deadline: LocalDate?, compact: Boolean = fal
         val suggested = f.suggestedDeadline?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.takeIf { it != deadline }
         if (suggested != null && onUseDate != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.heightIn(min = 40.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { onUseDate(suggested) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.heightIn(min = 40.dp).background(c.bg, RoundedCornerShape(20.dp)).border(1.dp, c.line2, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { onUseDate(suggested) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.verdict_use_date, shortDate(suggested)), style = BType.body(13, FontWeight.SemiBold), color = c.ink)
                 }
-                Text(stringResource(R.string.verdict_keep_date), style = BType.body(12), color = c.mut, modifier = Modifier.weight(1f))
             }
         }
         if (note != null) Text(note, style = BType.body(12), color = c.mut)

@@ -231,7 +231,6 @@
     <string name="verdict_stretch">A STRETCH</string>
     <string name="verdict_unrealistic">UNREALISTIC AS PLANNED</string>
     <string name="verdict_use_date">Use %1$s</string>
-    <string name="verdict_keep_date">Your date stays unless you change it.</string>
     <string name="verdict_refresh_failed">Couldn\'t refresh the check. Showing the last one.</string>
     <string name="verdict_checking">Checking your date…</string>
 
