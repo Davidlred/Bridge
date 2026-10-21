@@ -17,7 +17,7 @@ final class TodayModel {
 
     func open(_ id: UUID?) {
         openGoalId = id; view = .today
-        if let id { refreshImages(for: [id]) }
+        if let id { refreshImages(for: [id]); CoachFocus.set(id, goalIds: store?.goals.map(\.id) ?? []) }
     }
 
     @ObservationIgnored weak var store: GoalStore?
@@ -119,6 +119,11 @@ struct TodayView: View {
             .padding(.horizontal, Theme.Space.screen).padding(.top, 12).padding(.bottom, 32)
         }
         .background(Theme.bg)
+        // Swipe from the left edge (or the VoiceOver escape gesture) goes back like a pushed screen would.
+        .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { v in
+            if v.startLocation.x < 30 && v.translation.width > 80 && abs(v.translation.height) < 60 { goBack(goals) }
+        })
+        .accessibilityAction(.escape) { goBack(goals) }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { model.store = store; model.social = social }
         .task(id: scenePhase) { if scenePhase == .active { store.reload(); model.refreshImages(for: store.goals.map(\.id)); notificationsOff = !(await NotificationScheduler.shared.authorized()) } }
@@ -130,6 +135,13 @@ struct TodayView: View {
         }
         .fullScreenCover(item: $model.finished) { g in
             GoalCrossedView(goal: g, onNext: { model.finished = nil; addGoal() }, onClose: { model.finished = nil })
+        }
+    }
+
+    /// Inside a goal: Reality Check → the goal's Today view → all goals.
+    private func goBack(_ goals: [GoalState]) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            if model.view != .today { model.view = .today } else if model.openGoalId != nil && goals.count > 1 { model.open(nil) }
         }
     }
 
@@ -236,7 +248,7 @@ struct TodayView: View {
                             Text("\(g.progress.doneToday)/\(g.progress.tasksToday)").font(BFont.label(11)).foregroundStyle(Theme.mut)
                             Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(Theme.mut)
                         }
-                        .padding(.leading, 12).padding(.trailing, 14).frame(minHeight: 46).background(Theme.accTint, in: Capsule()).overlay(Capsule().stroke(Theme.acc, lineWidth: 1))
+                        .padding(.leading, 12).padding(.trailing, 14).frame(minHeight: 46).background(Theme.accTint, in: Capsule()).overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
                     }
                     .accessibilityHint("Edit goal")
                     Button(action: addGoal) {
@@ -252,8 +264,9 @@ struct TodayView: View {
             ForEach([(GoalView.today, "Today"), (GoalView.reality, "Reality Check")] as [(GoalView, LocalizedStringKey)], id: \.0) { v, label in
                 let on = model.view == v
                 Button { withAnimation(.easeOut(duration: 0.2)) { model.view = v } } label: {
-                    Text(label).font(BFont.body(14, .semibold)).foregroundStyle(!on ? Theme.mut : v == .today ? Theme.onAcc : Theme.bg).frame(maxWidth: .infinity, minHeight: 40)
-                        .background(!on ? Color.clear : v == .today ? Theme.acc : Theme.ink, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Text(label).font(BFont.body(14, .semibold)).foregroundStyle(on ? Theme.ink : Theme.mut).frame(maxWidth: .infinity, minHeight: 40)
+                        .background(on ? Theme.segOn : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(on ? Theme.line2 : .clear, lineWidth: 1))
                 }
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
@@ -281,22 +294,16 @@ struct TodayView: View {
                     VStack(spacing: 6) {
                         Text("DAY \(p.day) OF \(p.total)").bridgeLabel(10)
                         Text(p.fraction, format: .percent.precision(.fractionLength(1))).font(BFont.display(44)).tracking(-1.3).foregroundStyle(Theme.ink)
-                        Text("across the bridge").font(BFont.body(12)).foregroundStyle(Theme.mut)
                     }
                     .padding(.top, 70)
                 }
                 .accessibilityElement(children: .ignore).accessibilityLabel(Text("Progress across the bridge: \(p.fraction.formatted(.percent.precision(.fractionLength(1))))"))
                 HStack {
-                    Text("\(Day.parse(g.startDate)!.formatted(md).uppercased()) · START").bridgeLabel(9.5)
+                    Text(Day.parse(g.startDate)!.formatted(md).uppercased()).bridgeLabel(9.5)
                     Spacer()
-                    Text("\(Day.parse(g.deadline)!.formatted(md).uppercased()) · GOAL").bridgeLabel(9.5, color: Theme.accInk)
+                    Text(Day.parse(g.deadline)!.formatted(md).uppercased()).bridgeLabel(9.5)
                 }
                 .padding(.horizontal, 12)
-                HStack(spacing: 8) {
-                    Circle().fill(Theme.okFill).frame(width: 7, height: 7)
-                    Text("\(p.doneToday) of \(p.tasksToday) done today").font(BFont.body(13, .medium)).foregroundStyle(Theme.ok)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 8).background(Theme.okTint, in: Capsule())
             }
             .padding(.horizontal, 10).padding(.top, 18).padding(.bottom, 16).frame(maxWidth: .infinity)
             .background(Theme.s1, in: RoundedRectangle(cornerRadius: 24, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Theme.line, lineWidth: 1))
@@ -310,6 +317,7 @@ struct TodayView: View {
                     Text(d == nil || d == 0 ? "on pace" : d! < 0 ? "behind pace" : "ahead of pace").font(BFont.body(11)).foregroundStyle(Theme.mut)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             if p.allDone {
                 HStack(spacing: 14) {
                     RemoteImage(url: g.images["future"]?.url).frame(width: 56, height: 68).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)).accessibilityHidden(true)
@@ -440,11 +448,10 @@ private struct StatTile<V: View>: View {
     let label: LocalizedStringKey
     let bg: Color
     @ViewBuilder var value: V
-    @Environment(\.colorScheme) private var scheme
     var body: some View {
         VStack(alignment: .leading, spacing: 6) { Text(label).bridgeLabel(9.5).lineLimit(1); value }
-            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(scheme == .dark ? Theme.s1 : bg, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Theme.s1, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
             .accessibilityElement(children: .combine)
     }
@@ -474,7 +481,7 @@ struct BridgeArc: View {
     }
 }
 
-/// Checkbox (with pop + light haptic), title, AI tag, priority pill and time. Tapping the row opens the details sheet.
+/// Checkbox (with pop + light haptic), title, priority pill and time. Tapping the row opens the details sheet.
 struct TaskRow: View {
     let task: PlanTask
     var onToggle: () -> Void
@@ -499,7 +506,6 @@ struct TaskRow: View {
             Button(action: onOpen) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        if task.isAI { HStack(spacing: 4) { Circle().fill(Theme.acc).frame(width: 5, height: 5); Text("AI").bridgeLabel(9.5, color: Theme.acc) } }
                         Text(task.title).font(BFont.body(15, .medium)).foregroundStyle(task.done ? Theme.mut : Theme.ink).strikethrough(task.done).multilineTextAlignment(.leading)
                         HStack(spacing: 8) {
                             if let p = Theme.Priority(rawValue: task.priority) { PriorityPill(priority: p) }
@@ -532,7 +538,6 @@ struct RealityView: View {
             ZStack(alignment: .bottomLeading) {
                 RemoteImage(url: img?.status == "done" ? img?.url : nil).frame(maxWidth: .infinity).frame(height: 430).clipped()
                 LinearGradient(stops: [.init(color: .clear, location: 0.5), .init(color: Theme.bg.opacity(0.92), location: 1)], startPoint: .top, endPoint: .bottom)
-                Text("REALITY CHECK · AI-GENERATED").bridgeLabel(10).padding(18).frame(maxHeight: .infinity, alignment: .top)
                 VStack(alignment: .leading, spacing: 6) {
                     if img?.status == "running" { Text("Your image is still being made.").font(BFont.body(13)).foregroundStyle(Theme.mut) }
                     if img == nil || img?.status == "failed" {
@@ -583,10 +588,6 @@ struct TaskSheet: View {
                 HStack {
                     Text(task == nil ? "Add a task" : "Task details").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                     Spacer()
-                    if task?.isAI == true {
-                        HStack(spacing: 5) { Circle().fill(Theme.acc).frame(width: 5, height: 5); Text("AI-SUGGESTED").bridgeLabel(10, color: Theme.accInk) }
-                            .padding(.horizontal, 10).frame(height: 26).background(Theme.accTint, in: Capsule())
-                    }
                 }
                 if task?.readOnly == true { Text("Set by your alliance lead. Only they can change it.").font(BFont.body(13)).foregroundStyle(Theme.mut) }
                 BridgeField(label: "TITLE", placeholder: "e.g. Stretch for 10 minutes", text: Binding(get: { title }, set: { title = String($0.prefix(120)); error = false }),
@@ -604,12 +605,7 @@ struct TaskSheet: View {
                     BridgeField(label: "WHEN", placeholder: "Any time", text: Binding(get: { time }, set: { time = String($0.prefix(24)) })).frame(maxWidth: 140)
                 }
                 if let r = task?.rationale {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("WHY THIS TASK").bridgeLabel(10, color: Theme.acc)
-                        Text(r).font(BFont.body(14)).foregroundStyle(Theme.ink2)
-                    }
-                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.accTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accLine, lineWidth: 1))
+                    Text(r).font(BFont.body(13)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time) } }
                 if task == nil {
@@ -631,7 +627,7 @@ struct TaskSheet: View {
                             Button(task.done ? "Mark not done" : "Mark done") { onToggle(!task.done) }.buttonStyle(SecondaryButtonStyle())
                             if !task.readOnly {
                                 Button("Delete") { confirm = true }.font(BFont.body(14, .medium)).foregroundStyle(Theme.bad).frame(maxWidth: .infinity, minHeight: 48)
-                                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.bad, lineWidth: 1))
+                                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.line, lineWidth: 1))
                             }
                         }
                     }
@@ -681,7 +677,7 @@ struct EditGoalSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.ok, lineWidth: 1))
                     }
                     Button("Archive goal") { confirm = true }.font(BFont.body(14, .medium)).foregroundStyle(Theme.bad).frame(maxWidth: .infinity, minHeight: 48)
-                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.bad, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(Theme.line, lineWidth: 1))
                 }
             }
             .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
@@ -696,7 +692,7 @@ struct LimitSheet: View {
     var onUpgrade: (() -> Void)?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("3").font(BFont.display(22)).foregroundStyle(Theme.acc).frame(width: 48, height: 48).background(Theme.accTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            Text("3").font(BFont.display(22)).foregroundStyle(Theme.ink).frame(width: 48, height: 48).background(Theme.accTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text("Three goals at a time").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             Text("Each goal adds tasks to every day. Finish or archive one to make room for the next.").font(BFont.body(15)).foregroundStyle(Theme.ink2)
             Button("Manage my goals", action: onManage).buttonStyle(PrimaryButtonStyle())
@@ -747,7 +743,7 @@ struct ChooseGoalsView: View {
                         let enabled = on || chosen.count < max
                         Button { keep = on ? chosen.subtracting([g.id]) : chosen.union([g.id]) } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: on ? "checkmark.square.fill" : "square").font(.system(size: 22)).foregroundStyle(on ? Theme.acc : Theme.mut2)
+                                Image(systemName: on ? "checkmark.square.fill" : "square").font(.system(size: 22)).foregroundStyle(on ? Theme.ink : Theme.mut2)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(g.label).font(BFont.body(15, .semibold)).foregroundStyle(enabled ? Theme.ink : Theme.mut)
                                     Text(g.statement).font(BFont.body(12)).foregroundStyle(Theme.mut).lineLimit(2)
@@ -756,7 +752,7 @@ struct ChooseGoalsView: View {
                             }
                             .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 56)
                             .background(on ? Theme.accTint : Theme.s1, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Theme.acc : Theme.line, lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Theme.line2 : Theme.line, lineWidth: 1))
                         }
                         .buttonStyle(.plain).disabled(!enabled)
                         .accessibilityAddTraits(on ? [.isSelected] : [])
@@ -799,7 +795,7 @@ struct AwayCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Welcome back.").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            Text("Your bridge is where you left it. Here's today's plan, with nothing to catch up on.").font(BFont.body(14)).foregroundStyle(Theme.ink2)
+            Text("Here's today's plan. Nothing to catch up on.").font(BFont.body(14)).foregroundStyle(Theme.ink2)
             Button(action: onAdjust) {
                 HStack(spacing: 6) { Text("Adjust the plan in Reality Check"); Image(systemName: "arrow.right").font(.system(size: 14)) }
                     .font(BFont.body(14, .medium)).foregroundStyle(Theme.accInk).frame(minHeight: 44)

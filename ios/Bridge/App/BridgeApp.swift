@@ -31,7 +31,8 @@ struct BridgeApp: App {
                 .environment(dms)
                 .environment(billing)
                 .task { billing.configure(); Analytics.setup() }
-                .preferredColorScheme(themeOverride == "light" ? .light : themeOverride == "dark" ? .dark : nil)
+                .onAppear { Appearance.apply(themeOverride) }
+                .onChange(of: themeOverride) { _, mode in Appearance.apply(mode) }
                 .tint(Theme.acc)
                 .onOpenURL { router.handle(url: $0) }
         }
@@ -151,6 +152,7 @@ struct RootView: View {
     @State private var auth = AuthModel()
     @State private var mustUpgrade = false
     @State private var queued = 0
+    @State private var splashHeld = false
 
     var body: some View {
         Group {
@@ -166,9 +168,15 @@ struct RootView: View {
                 }
             }
         }
+        .overlay {
+            if !splashHeld || session.phase == .launching {
+                SplashView().transition(reduceMotion ? .opacity : .move(edge: .top)).zIndex(1)
+            }
+        }
         .environment(auth)
         .background(Theme.bg)
         .animation(.easeOut(duration: 0.2), value: session.phase)
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.56), value: splashHeld)
         .animation(.easeOut(duration: 0.2), value: network.online)
         .overlay(alignment: .bottom) {
             if let toast = toaster.current {
@@ -178,6 +186,7 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.22), value: toaster.current)
         .task { auth.attach(session: session, toaster: toaster); await session.bootstrap() }
+        .task { try? await Task.sleep(for: .milliseconds(1300)); splashHeld = true }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in session.expired() }
         .onReceive(NotificationCenter.default.publisher(for: .upgradeRequired)) { _ in mustUpgrade = true }
         .onChange(of: session.phase) { _, phase in

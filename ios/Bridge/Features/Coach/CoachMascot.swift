@@ -114,7 +114,7 @@ struct CoachHeader: View {
         switch mood {
         case .idle: ("Here when you need me", Theme.mut2)
         case .listening: ("Listening…", Theme.acc)
-        case .thinking: ("Thinking it through…", Theme.warn)
+        case .thinking: ("Thinking…", Theme.warn)
         case .talking: ("Talking", Theme.ok)
         case .happy: ("Added. Nice one.", Theme.ok)
         }

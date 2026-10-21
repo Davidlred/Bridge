@@ -439,8 +439,8 @@ private struct AllianceSection: View {
         let t = now.timeIntervalSince1970 * 1000, h = 3_600_000.0
         return AllianceDTO(id: "sample", name: "Dawn Runners", planMode: "own", inviteCode: "DAWN-4821", startDate: LocalDay.today(now: today.addingTimeInterval(-20 * 86_400)), streak: 14,
                            members: ["Sam", "Mia", "Ana", "Rui", "Tom", "Kai"].enumerated().map { MemberDTO(userId: "m\($0.offset)", name: $0.element, role: $0.offset == 0 ? "owner" : "member") },
-                           memberCount: 6, feed: [AllianceFeedDTO(name: "Sam", what: "completed", title: String(localized: "Long run — 12 km"), at: t - h),
-                                                  AllianceFeedDTO(name: "Ana", what: "completed", at: t - 3 * h), AllianceFeedDTO(what: "completed", title: String(localized: "Easy run — 5 km"), at: t - 6 * h)])
+                           memberCount: 6, feed: [AllianceFeedDTO(name: "Sam", what: "completed", title: String(localized: "Long run, 12 km"), at: t - h),
+                                                  AllianceFeedDTO(name: "Ana", what: "completed", at: t - 3 * h), AllianceFeedDTO(what: "completed", title: String(localized: "Easy run, 5 km"), at: t - 6 * h)])
     }
 
     var body: some View {

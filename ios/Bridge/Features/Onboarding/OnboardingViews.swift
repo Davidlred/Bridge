@@ -47,20 +47,17 @@ struct StepHeader: View {
                     .padding(.leading, -10).accessibilityLabel("Back")
             } else { Color.clear.frame(width: 34, height: 44) }
             HStack(spacing: 6) { ForEach(1...4, id: \.self) { i in Capsule().fill(i <= step ? Theme.acc : Theme.track).frame(height: 3) } }
-                .accessibilityHidden(true)
-            Text("\(step) OF 4").bridgeLabel(11)
+                .padding(.trailing, 10)
+                .accessibilityElement().accessibilityLabel(Text("Step \(step) of 4"))
         }
     }
 }
 
 struct StepTitle: View {
-    let kicker: LocalizedStringKey, title: LocalizedStringKey
+    let title: LocalizedStringKey
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(kicker).bridgeLabel(11, color: Theme.acc)
-            Text(title).font(BFont.display(30)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text(title).font(BFont.display(30)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -77,7 +74,7 @@ struct BigTextArea: View {
             .focused($focused)
             .padding(18).frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
             .background(Theme.s1, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(focused ? Theme.acc : Theme.line, lineWidth: focused ? 1.5 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(focused ? Theme.mut : Theme.line, lineWidth: focused ? 1.5 : 1))
             .onTapGesture { focused = true }
     }
 }
@@ -130,7 +127,7 @@ struct DeadlineMessage: View {
                 Text(Deadlines.message(p)).font(BFont.body(13)).foregroundStyle(Theme.bad)
             } else {
                 let n = Day.between(today, deadline)
-                Text("\(n) days from today · about \(Int((Double(n) / 7).rounded())) weeks").font(BFont.body(13)).foregroundStyle(Theme.ok)
+                Text("\(n) days from today").font(BFont.body(13)).foregroundStyle(Theme.mut)
             }
         }
     }
@@ -155,7 +152,7 @@ private struct ExampleRow: View {
         HStack {
             Button("Use an example", action: onExample).font(BFont.body(13, .medium)).foregroundStyle(Theme.ink).frame(minHeight: 44)
             Spacer()
-            Text("\(left)").font(BFont.label(12)).foregroundStyle(left < max / 10 ? Theme.warn : Theme.mut)
+            if left <= max / 10 { Text("\(left)").font(BFont.label(12)).foregroundStyle(Theme.warn) }
         }
     }
 }
@@ -168,12 +165,12 @@ struct GoalStepView: View {
     var body: some View {
         StepPage {
             StepHeader(step: 1, onBack: onBack)
-            StepTitle(kicker: model.draft.adding ? "NEW GOAL · RUNS ALONGSIDE YOUR OTHERS" : "YOUR GOAL", title: "What is the one goal you are committed to achieving?")
+            StepTitle(title: "What is the one goal you are committed to achieving?")
             VStack(spacing: 10) {
                 BigTextArea(text: $model.draft.goal, placeholder: "Type your goal", large: true, limit: GoalText.maxLength).accessibilityLabel("Your goal")
                 ExampleRow(left: GoalText.maxLength - model.draft.goal.count, max: GoalText.maxLength) { model.draft.goal = String(localized: "Run a half marathon in under 2 hours.") }
             }
-            Text("Be specific. Not 'get fit' — try 'Run a half marathon in under 2 hours.' You'll pick the date below.").font(BFont.body(14)).lineSpacing(3).foregroundStyle(Theme.mut)
+            Text("Make it specific and measurable.").font(BFont.body(14)).lineSpacing(3).foregroundStyle(Theme.mut)
             if GoalText.hasDate(model.draft.goal) { WarnNote(text: "Leave the timing out of your goal. We'll use the target date below.", icon: "calendar.badge.exclamationmark") }
             else if GoalText.needsNumber(model.draft.goal) { WarnNote(text: "Add a number (a distance, a time, an amount) so progress is measurable.", icon: "ruler") }
             VStack(alignment: .leading, spacing: 10) {
@@ -184,8 +181,8 @@ struct GoalStepView: View {
                             let value = Day.addMonths(months, to: model.today)
                             let on = model.draft.deadline == value
                             Button { model.draft.deadline = value } label: {
-                                Text(label).font(BFont.body(12, .medium)).foregroundStyle(on ? Theme.accInk : Theme.ink2).padding(.horizontal, 12).frame(minHeight: 36)
-                                    .background(on ? Theme.accTint : .clear, in: Capsule()).overlay(Capsule().stroke(on ? Theme.acc : Theme.line, lineWidth: 1))
+                                Text(label).font(BFont.body(12, .medium)).foregroundStyle(on ? Theme.ink : Theme.ink2).padding(.horizontal, 12).frame(minHeight: 36)
+                                    .background(on ? Theme.accTint : .clear, in: Capsule()).overlay(Capsule().stroke(on ? Theme.accLine : Theme.line, lineWidth: 1))
                             }
                         }
                     }
@@ -204,10 +201,10 @@ struct RoutineStepView: View {
     var body: some View {
         StepPage {
             StepHeader(step: 2, onBack: model.back)
-            StepTitle(kicker: "YOUR CURRENT ROUTINE", title: "Walk us through a typical day, from morning to night.")
+            StepTitle(title: "Walk us through a typical day, from morning to night.")
             if model.draft.routineFromSetup {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.acc).accessibilityHidden(true)
+                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.mut).accessibilityHidden(true)
                     Text("We kept your routine from setup. Update anything this goal touches.").font(BFont.body(13)).foregroundStyle(Theme.ink2)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
@@ -219,7 +216,7 @@ struct RoutineStepView: View {
                     model.draft.routine = String(localized: "Up at 7:30, phone in bed until 8. Coffee, no breakfast. Desk job 9 to 6, mostly sitting. I run maybe twice a week if I'm not tired. Dinner around 9, usually takeaway. Scroll until 12:30, asleep by 1. Weekends have no structure.")
                 }
             }
-            Text("Include sleep times, work hours, exercise, diet, and any habits — good or bad — you want us to know about.").font(BFont.body(14)).lineSpacing(3).foregroundStyle(Theme.mut)
+            Text("Include when you sleep, work, exercise and eat, and any habits you want to change.").font(BFont.body(14)).lineSpacing(3).foregroundStyle(Theme.mut)
             Button("Continue", action: model.toPhoto).buttonStyle(PrimaryButtonStyle()).disabled(!model.routineReady).opacity(model.routineReady ? 1 : 0.35)
         }
     }
@@ -239,22 +236,22 @@ struct PhotoStepView: View {
         StepPage {
             StepHeader(step: 3, onBack: model.back)
             VStack(alignment: .leading, spacing: 10) {
-                StepTitle(kicker: "YOUR PHOTO", title: "Let us show you, you.")
-                Text("One clear, front-facing photo. We use it to picture both of your futures.").font(BFont.body(15)).foregroundStyle(Theme.mut)
+                StepTitle(title: "Add a photo of yourself")
+                Text("One clear photo, facing the camera. It's used to make your two images.").font(BFont.body(15)).foregroundStyle(Theme.mut)
             }
             frame.frame(maxWidth: .infinity).frame(height: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "lock").foregroundStyle(Theme.mut).accessibilityHidden(true)
-                Text("Your photo is used only to personalise your goal visualisations and is never shared.").font(BFont.body(13)).foregroundStyle(Theme.mut)
+                Text("Your photo is only used for your images and is never shared.").font(BFont.body(13)).foregroundStyle(Theme.mut)
             }
             VStack(spacing: 8) {
-                Button("Generate My Plan", action: model.generate).buttonStyle(PrimaryButtonStyle()).disabled(model.draft.photo != .done).opacity(model.draft.photo == .done ? 1 : 0.35)
+                Button("Make my plan", action: model.generate).buttonStyle(PrimaryButtonStyle()).disabled(model.draft.photo != .done).opacity(model.draft.photo == .done ? 1 : 0.35)
                 Button(action: model.generate) {
                     VStack(spacing: 2) {
                         Text("Skip for now").font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2)
-                        Text("Your images will be conceptual, without your face").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                        Text("Your images won't show your face").font(BFont.body(12)).foregroundStyle(Theme.mut)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
@@ -278,9 +275,9 @@ struct PhotoStepView: View {
             VStack(spacing: 14) {
                 Button { consentFor = .library } label: {
                     VStack(spacing: 14) {
-                        Circle().fill(Theme.accTint).frame(width: 64, height: 64).overlay(Image(systemName: "camera").font(.system(size: 26)).foregroundStyle(Theme.acc))
+                        Circle().fill(Theme.accTint).frame(width: 64, height: 64).overlay(Image(systemName: "camera").font(.system(size: 26)).foregroundStyle(Theme.ink2))
                         Text("Take or upload a photo").font(BFont.display(16)).foregroundStyle(Theme.ink)
-                        Text("JPG or PNG · face clearly visible").font(BFont.body(13)).foregroundStyle(Theme.mut)
+                        Text("JPG or PNG, face clearly visible").font(BFont.body(13)).foregroundStyle(Theme.mut)
                     }
                 }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -373,7 +370,7 @@ struct GeneratingStepView: View {
         if d.plan == .clarify {
             StepPage {
                 StepHeader(step: 4)
-                Text("One question first").bridgeLabel(11, color: Theme.acc).padding(.top, 24)
+                Text("One question first").bridgeLabel(11, color: Theme.mut).padding(.top, 24)
                 Text(d.clarification ?? "").font(BFont.display(26)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Button("Edit my goal", action: model.cancelGeneration).buttonStyle(PrimaryButtonStyle())
             }
@@ -396,10 +393,10 @@ struct GeneratingStepView: View {
                         .frame(maxWidth: .infinity).padding(.top, 8).accessibilityHidden(true)
                         .onAppear { scan = !reduceMotion }
                     VStack(spacing: 10) {
-                        Text(failed ? "We couldn't generate your plan right now." : done ? "Your bridge is ready." : "Building your bridge").font(BFont.display(26)).multilineTextAlignment(.center).foregroundStyle(Theme.ink)
+                        Text(failed ? "We couldn't generate your plan right now." : done ? "Your plan is ready." : "Making your plan").font(BFont.display(26)).multilineTextAlignment(.center).foregroundStyle(Theme.ink)
                         Group {
-                            if d.plan == .quota { Text("You've used today's AI plans. Try again tomorrow, or write your own tasks.") }
-                            else if failed { Text("One part failed. Everything else is saved — retry just that piece.") }
+                            if d.plan == .quota { Text("You've reached today's limit for new plans. Try again tomorrow, or write your own tasks.") }
+                            else if failed { Text("One part failed. The rest is saved, so you can retry just that part.") }
                             else if done { Text("Opening your plan…") }
                             else { Text("About \(max(1, Int((20 * (1 - pct)).rounded()))) seconds left") }
                         }
@@ -408,9 +405,9 @@ struct GeneratingStepView: View {
                     .frame(maxWidth: .infinity)
                     GeometryReader { g in Capsule().fill(Theme.track).overlay(alignment: .leading) { Capsule().fill(Theme.acc).frame(width: g.size.width * pct) } }.frame(height: 3)
                     VStack(spacing: 0) {
-                        GenRow(label: "Daily action plan", sub: "Structured tasks from your routine", status: { switch d.plan { case .done: "done"; case .running: "running"; case .pending: "pending"; default: "failed" } }())
+                        GenRow(label: "Daily action plan", sub: "Built from your routine", status: { switch d.plan { case .done: "done"; case .running: "running"; case .pending: "pending"; default: "failed" } }())
                         Divider().overlay(Theme.line)
-                        GenRow(label: "Future Self image", sub: d.photo == .done ? "Personalised from your photo" : "Conceptual, no face", status: model.imageStatus("future"))
+                        GenRow(label: "Future Self image", sub: d.photo == .done ? "Made from your photo" : "Without your face", status: model.imageStatus("future"))
                         Divider().overlay(Theme.line)
                         GenRow(label: "Reality Check image", sub: "Where your current routine leads", status: model.imageStatus("reality"))
                     }
@@ -464,7 +461,6 @@ struct ReviewStepView: View {
                     RemoteImage(url: model.images["future"]?.url).frame(height: 340).clipped()
                     LinearGradient(stops: [.init(color: .clear, location: 0.45), .init(color: Theme.bg, location: 1)], startPoint: .top, endPoint: .bottom)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("FUTURE SELF · AI-GENERATED").bridgeLabel(11, color: Theme.accInk)
                         Text(d.goal).font(BFont.display(24)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                     }
                     .padding(.horizontal, 24).padding(.bottom, 22)
@@ -490,11 +486,11 @@ struct ReviewStepView: View {
                         Text("\(d.tasks.count) TASKS").bridgeLabel(11)
                     }
                     .padding(.top, 8)
-                    Text("Edit anything. You can change it later from your dashboard.").font(BFont.body(14)).foregroundStyle(Theme.mut)
+                    Text("Edit anything now or later.").font(BFont.body(14)).foregroundStyle(Theme.mut)
                     VStack(spacing: 8) {
                         ForEach(Array($model.draft.tasks.enumerated()), id: \.element.id) { i, $task in
                             HStack(spacing: 6) {
-                                Text(String(format: "%02d", i + 1)).font(BFont.label(11)).foregroundStyle(Theme.acc).frame(width: 20)
+                                Text(String(format: "%02d", i + 1)).font(BFont.label(11)).foregroundStyle(Theme.mut).frame(width: 20)
                                 TextField("New task", text: Binding(get: { task.title }, set: { task.title = String($0.prefix(80)) })).font(BFont.body(15, .medium)).frame(minHeight: 48)
                                     .accessibilityLabel("Task title")
                                 Button { model.deleteTask(task.id) } label: { Image(systemName: "trash").foregroundStyle(Theme.mut).frame(width: 44, height: 44) }.accessibilityLabel("Delete task")
@@ -504,7 +500,7 @@ struct ReviewStepView: View {
                         }
                     }
                     if d.tasks.isEmpty {
-                        Text("Add at least one task to start your journey.").font(BFont.body(13)).foregroundStyle(Theme.warn).padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Add at least one task.").font(BFont.body(13)).foregroundStyle(Theme.warn).padding(14).frame(maxWidth: .infinity, alignment: .leading)
                             .background(Theme.warnTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.warn, lineWidth: 1))
                     }
                     if d.adding && total > 9 { WarnNote(text: "That's \(total) tasks a day across \(model.otherGoals + 1) goals. Consider trimming a few.", icon: "scalemass") }
@@ -519,7 +515,7 @@ struct ReviewStepView: View {
         .ignoresSafeArea(edges: .top)
         .background(Theme.bg)
         .safeAreaInset(edge: .bottom) {
-            Button(d.adding ? "Add This Goal" : "Start My Journey", action: onStart).buttonStyle(PrimaryButtonStyle()).disabled(!model.canStart).opacity(model.canStart ? 1 : 0.35)
+            Button(d.adding ? "Add goal" : "Start", action: onStart).buttonStyle(PrimaryButtonStyle()).disabled(!model.canStart).opacity(model.canStart ? 1 : 0.35)
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8).background(Theme.bg)
         }
     }

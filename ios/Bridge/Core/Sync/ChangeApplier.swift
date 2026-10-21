@@ -52,10 +52,10 @@ enum ChangeApplier {
         for c in page.chat ?? [] {
             let id = c.id
             let row = try ctx.fetch(FetchDescriptor<ChatMessageEntity>(predicate: #Predicate { $0.id == id })).first ?? {
-                let fresh = ChatMessageEntity(id: c.id, conversation: c.conversation, role: c.role, text: c.text, status: c.status, createdAt: date(c.createdAt) ?? .now)
+                let fresh = ChatMessageEntity(id: c.id, conversation: c.conversation, role: c.role, text: c.text, status: c.status, createdAt: date(c.createdAt) ?? .now, goalId: c.goalId)
                 ctx.insert(fresh); return fresh
             }()
-            row.text = c.text; row.status = c.status; row.suggestionState = c.suggestionState
+            row.text = c.text; row.status = c.status; row.suggestionState = c.suggestionState; if let g = c.goalId { row.goalId = g }
             row.suggestionJSON = try c.suggestion.map { try JSONEncoder().encode($0) }
         }
         if let on = page.settings?.coachReadsJournal { UserDefaults.standard.set(on, forKey: "coachReadsJournal") }

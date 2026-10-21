@@ -168,7 +168,7 @@ struct JournalView: View {
         if items.isEmpty {
             VStack(spacing: 16) {
                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.system(size: 36)).foregroundStyle(Theme.accLine).accessibilityHidden(true)
-                Text("Your story starts today. Log your first reflection.").font(BFont.display(20)).multilineTextAlignment(.center).foregroundStyle(Theme.ink)
+                Text("No entries yet.").font(BFont.display(20)).multilineTextAlignment(.center).foregroundStyle(Theme.ink)
                 Button("Write today's entry") { tab = 0 }.font(BFont.body(14, .semibold)).foregroundStyle(Theme.onAcc).padding(.horizontal, 22).frame(minHeight: 48).background(Theme.acc, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .padding(.vertical, 60).padding(.horizontal, 24).frame(maxWidth: .infinity)

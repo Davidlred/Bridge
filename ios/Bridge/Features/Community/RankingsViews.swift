@@ -191,7 +191,7 @@ struct HallOfFameContent: View {
 
     private static let defs: [(key: String, glyph: String, name: LocalizedStringKey, hint: LocalizedStringKey)] = [
         ("first", "I", "First Step", "Complete your first task"), ("s7", "7", "7-Day Streak", "Complete a 7-day streak to earn this"),
-        ("s21", "21", "21-Day Streak", "Keep a 21-day streak"), ("arch", "A", "Plan Architect", "Edit your AI plan"),
+        ("s21", "21", "21-Day Streak", "Keep a 21-day streak"), ("arch", "A", "Plan Architect", "Edit your plan"),
         ("s30", "30", "30-Day Streak", "Keep a 30-day streak"), ("week", "W", "Perfect Week", "Finish every task 7 days running"),
         ("ref", "J", "Reflector", "Write 30 journal entries"), ("ally", "Δ", "Alliance Founder", "Create an alliance"), ("goal", "∞", "Crossed", "Achieve your goal"),
     ]

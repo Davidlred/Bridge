@@ -209,7 +209,7 @@ final class OnboardingModel {
                          tasks: d.tasks.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }.map { NewTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: $0.ai) })
         UserDefaults.standard.removeObject(forKey: Self.key)
         if d.adding { toaster?.show(String(localized: "\(d.label.trimmingCharacters(in: .whitespaces)) added. \(otherGoals) goals running."), .ok) }
-        else { session?.onboardingDone(); toaster?.show(String(localized: "Day 1. Let's build the first span."), .ok) }
+        else { session?.onboardingDone(); toaster?.show(String(localized: "Day 1 starts now."), .ok) }
         Task { await NotificationScheduler.shared.requestProvisional(); await NotificationScheduler.shared.reschedule() }
         return true
     }

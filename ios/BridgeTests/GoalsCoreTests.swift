@@ -77,4 +77,14 @@ final class GoalsCoreTests: XCTestCase {
         XCTAssertNil(TaskTime.parse("25:00"))
         XCTAssertNil(TaskTime.parse(nil))
     }
+    /// Each goal has its own coach conversation (same cases as the Android CoachThreadsTest).
+    func testCoachFocusFollowsANewGoal() {
+        let older = UUID(uuidString: "0190A000-0000-7000-8000-000000000001")!, newer = UUID(uuidString: "0190B000-0000-7000-8000-000000000002")!
+        let newest = UUID(uuidString: "0190C000-0000-7000-8000-000000000003")!
+        XCTAssertEqual(CoachFocus.focus([older, newer, newest], pick: older, newestAtPick: newer), newest)
+        XCTAssertEqual(CoachFocus.focus([older, newer], pick: older, newestAtPick: newer), older)
+        XCTAssertEqual(CoachFocus.focus([older, newer], pick: nil, newestAtPick: nil), newer)
+        XCTAssertEqual(CoachFocus.focus([older, newer], pick: UUID(), newestAtPick: newer), newer)
+        XCTAssertNil(CoachFocus.focus([], pick: older, newestAtPick: older))
+    }
 }

@@ -16,10 +16,17 @@ struct BridgeMark: View {
     }
 }
 
-/// First frame: mark on black in both themes.
+/// First frame: mark on black in both themes. The mark rises in gently (still when motion is reduced).
 struct SplashView: View {
+    var animate = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
     var body: some View {
-        Color.black.ignoresSafeArea().overlay(BridgeMark(color: .white)).accessibilityLabel("The Bridge")
+        let on = shown || !animate || reduceMotion
+        Color.black.ignoresSafeArea()
+            .overlay(BridgeMark(color: .white).opacity(on ? 1 : 0).scaleEffect(on ? 1 : 0.86).offset(y: on ? 0 : 24))
+            .accessibilityLabel("The Bridge")
+            .onAppear { withAnimation(.easeOut(duration: 0.65)) { shown = true } }
     }
 }
 
@@ -151,7 +158,7 @@ struct BridgeField: View {
                 .focused($focused)
                 .padding(.horizontal, 16).frame(minHeight: 52)
                 .background(Theme.s1, in: RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(error != nil ? Theme.bad : focused ? Theme.acc : Theme.line, lineWidth: focused ? 1.5 : 1))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(error != nil ? Theme.bad : focused ? Theme.mut : Theme.line, lineWidth: focused ? 1.5 : 1))
                 .accessibilityLabel(label).accessibilityHint(error ?? "")
             if let error { Text(error).font(BFont.body(13)).foregroundStyle(Theme.bad) }
         }

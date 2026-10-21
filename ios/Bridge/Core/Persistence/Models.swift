@@ -87,8 +87,10 @@ import SwiftData
     var suggestionJSON: Data?
     var suggestionState: String?   // pending | added | dismissed
     var createdAt: Date
-    init(id: UUID = UUIDv7.next(), conversation: UUID, role: String, text: String, status: String, createdAt: Date = .now) {
-        self.id = id; self.conversation = conversation; self.role = role; self.text = text; self.status = status; self.createdAt = createdAt
+    /// The goal this conversation is about (each goal has its own thread). Nil for messages from before that.
+    var goalId: UUID?
+    init(id: UUID = UUIDv7.next(), conversation: UUID, role: String, text: String, status: String, createdAt: Date = .now, goalId: UUID? = nil) {
+        self.id = id; self.conversation = conversation; self.role = role; self.text = text; self.status = status; self.createdAt = createdAt; self.goalId = goalId
     }
 }
 

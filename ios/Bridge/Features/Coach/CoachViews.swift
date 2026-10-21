@@ -22,21 +22,42 @@ final class CoachModel {
     @ObservationIgnored private var background: Task<Void, Never>?
     @ObservationIgnored private var ctx: ModelContext { Persistence.container.mainContext }
 
-    /// The current conversation. On a fresh device it continues the newest conversation pulled from the account.
-    var conversation: UUID {
-        if let s = UserDefaults.standard.string(forKey: "coachConversation"), let id = UUID(uuidString: s) { return id }
-        let id = messages.last?.conversation ?? UUIDv7.next(); UserDefaults.standard.set(id.uuidString, forKey: "coachConversation"); return id
-    }
+    /// Bumped when the goal in focus changes elsewhere (Today), so the coach redraws.
+    private var focusVersion = 0
     var busy: Bool { awaiting || streaming }
 
     init() {
         reload()
         NotificationCenter.default.addObserver(forName: .syncApplied, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.reload() } }
+        NotificationCenter.default.addObserver(forName: .coachFocusChanged, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.showEarlier = false; self?.focusVersion += 1 } }
     }
     func reload() { messages = (try? ctx.fetch(FetchDescriptor<ChatMessageEntity>(sortBy: [SortDescriptor(\.createdAt)]))) ?? [] }
 
-    var shown: [ChatMessageEntity] { showEarlier ? messages : messages.filter { $0.conversation == conversation } }
-    var hasEarlier: Bool { !showEarlier && messages.contains { $0.conversation != conversation } }
+    /// The goal in focus, its thread and what is on screen. Within a goal's thread the current conversation shows,
+    /// unless "Show earlier conversation" was tapped.
+    func thread(_ goals: [GoalState]) -> CoachThread {
+        _ = focusVersion
+        let ids = goals.map(\.id)
+        let focusId = CoachFocus.focus(ids, pick: CoachFocus.pick, newestAtPick: CoachFocus.newestAtPick)
+        let oldest = ids.min { CoachFocus.key($0) < CoachFocus.key($1) }
+        let thread = messages.filter { CoachFocus.thread(of: $0, oldest: oldest) == focusId }
+        let conv = Self.storedConversation(focusId) ?? thread.last?.conversation
+        let shown = showEarlier || conv == nil ? thread : thread.filter { $0.conversation == conv }
+        return CoachThread(focus: goals.first { $0.id == focusId }, oldest: oldest, shown: shown, hasEarlier: !showEarlier && thread.contains { $0.conversation != conv })
+    }
+
+    private static func conversationKey(_ goalId: UUID?) -> String { "coachConversation_" + (goalId.map(CoachFocus.key) ?? "none") }
+    private static func storedConversation(_ goalId: UUID?) -> UUID? { UserDefaults.standard.string(forKey: conversationKey(goalId)).flatMap(UUID.init(uuidString:)) }
+
+    /// The conversation a new message joins: the "New conversation" pick, else the goal's newest (also on a fresh device).
+    private func conversation(for goalId: UUID?, oldest: UUID?) -> UUID {
+        if let id = Self.storedConversation(goalId) { return id }
+        if let last = messages.last(where: { CoachFocus.thread(of: $0, oldest: oldest) == goalId }) { return last.conversation }
+        let id = UUIDv7.next(); UserDefaults.standard.set(id.uuidString, forKey: Self.conversationKey(goalId)); return id
+    }
+
+    /// Switch the coach to another goal's conversation.
+    func setFocus(_ goalId: UUID, goals: [GoalState]) { showEarlier = false; CoachFocus.set(goalId, goalIds: goals.map(\.id)) }
 
     /// typing → listening, awaiting → thinking, streaming → talking, card added → happy for 1.3 s.
     func mood(now: Date, typing: Bool) -> MascotMood {
@@ -46,7 +67,8 @@ final class CoachModel {
         return typing ? .listening : .idle
     }
 
-    func newConversation() { showEarlier = false; UserDefaults.standard.set(UUIDv7.next().uuidString, forKey: "coachConversation"); reload() }
+    /// Starts a fresh conversation for this goal; earlier ones stay on the device behind "Show earlier conversation".
+    func newConversation(goalId: UUID?) { showEarlier = false; UserDefaults.standard.set(UUIDv7.next().uuidString, forKey: Self.conversationKey(goalId)); reload() }
 
     static func suggestion(_ m: ChatMessageEntity) -> Suggestion? { m.suggestionJSON.flatMap { try? JSONDecoder().decode(Suggestion.self, from: $0) } }
 
@@ -55,16 +77,17 @@ final class CoachModel {
         guard !text.isEmpty, !busy else { return }
         if study { studyInput = ""; studyReplyId = nil } else if retry == nil { input = "" }
         if retry == nil { Analytics.track(.coachMessageSent, ["study": study]) }
-        let conv = conversation
-        let history = shown.filter { $0.status != "failed" && !$0.text.isEmpty && $0.id != retry?.id }.suffix(20).map { ["role": $0.role, "text": String($0.text.prefix(4000))] }
-        let user = retry ?? ChatMessageEntity(conversation: conv, role: "user", text: text, status: "sending")
+        let t = thread(store.goals)
+        let conv = conversation(for: focus?.id, oldest: t.oldest)
+        let history = t.shown.filter { $0.status != "failed" && !$0.text.isEmpty && $0.id != retry?.id }.suffix(20).map { ["role": $0.role, "text": String($0.text.prefix(4000))] }
+        let user = retry ?? ChatMessageEntity(conversation: conv, role: "user", text: text, status: "sending", goalId: focus?.id)
         if retry == nil { ctx.insert(user) } else { user.status = "sending" }
         try? ctx.save(); reload()
         let goals: [[String: Any]] = store.goals.prefix(3).map { g in
             ["id": g.id.uuidString.lowercased(), "label": g.label, "statement": g.statement, "deadline": g.deadline, "day": g.progress.day, "total": g.progress.total, "streak": g.progress.streak,
              "tasks": g.tasks.prefix(20).map { t -> [String: Any] in ["title": t.title, "done": t.done, "priority": t.priority, "timeOfDay": t.timeOfDay as Any? ?? NSNull()] }]
         }
-        let reply = ChatMessageEntity(conversation: conv, role: "coach", text: "", status: "streaming", createdAt: .now.addingTimeInterval(0.001))
+        let reply = ChatMessageEntity(conversation: conv, role: "coach", text: "", status: "streaming", createdAt: .now.addingTimeInterval(0.001), goalId: focus?.id)
         // Ids let the server store this exchange so it follows the account to other devices.
         let body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
                                    "focusGoalId": focus?.id.uuidString.lowercased() ?? NSNull(),
@@ -143,13 +166,39 @@ final class CoachModel {
 
 @MainActor final class StreamState { var started = false }
 
+struct CoachThread { let focus: GoalState?; let oldest: UUID?; let shown: [ChatMessageEntity]; let hasEarlier: Bool }
+
+extension Notification.Name { static let coachFocusChanged = Notification.Name("coachFocusChanged") }
+
+/// Each goal has its own coach conversation, so a new goal never continues another goal's chat. The goal the coach is on
+/// is the one picked in Coach or opened on Today, unless a newer goal has been created since: then the new one.
+enum CoachFocus {
+    /// UUIDv7 ids sort by creation time as lowercase strings.
+    static func key(_ id: UUID) -> String { id.uuidString.lowercased() }
+    static var pick: UUID? { UserDefaults.standard.string(forKey: "coachFocus").flatMap(UUID.init(uuidString:)) }
+    static var newestAtPick: UUID? { UserDefaults.standard.string(forKey: "coachFocusNewest").flatMap(UUID.init(uuidString:)) }
+    @MainActor static func set(_ goalId: UUID, goalIds: [UUID]) {
+        UserDefaults.standard.set(goalId.uuidString, forKey: "coachFocus")
+        if let newest = goalIds.max(by: { key($0) < key($1) }) { UserDefaults.standard.set(newest.uuidString, forKey: "coachFocusNewest") }
+        NotificationCenter.default.post(name: .coachFocusChanged, object: nil)
+    }
+    /// The pick if it is still active and no goal was created after it; otherwise the newest goal.
+    static func focus(_ goalIds: [UUID], pick: UUID?, newestAtPick: UUID?) -> UUID? {
+        guard let newest = goalIds.max(by: { key($0) < key($1) }) else { return nil }
+        if let pick, goalIds.contains(pick), (newestAtPick.map(key) ?? "") >= key(newest) { return pick }
+        return newest
+    }
+    /// The goal whose thread a message is in. Messages from before per-goal threads belong to the oldest goal.
+    static func thread(of m: ChatMessageEntity, oldest: UUID?) -> UUID? { m.goalId ?? oldest }
+}
+
 private struct StatusLine: View {
     let mood: MascotMood
     var body: some View {
         let (text, dot): (LocalizedStringKey, Color) = switch mood {
             case .idle: ("Here when you need me", Theme.mut2)
             case .listening: ("Listening…", Theme.acc)
-            case .thinking: ("Thinking it through…", Theme.warn)
+            case .thinking: ("Thinking…", Theme.warn)
             case .talking: ("Talking", Theme.ok)
             case .happy: ("Added. Nice one.", Theme.ok)
         }
@@ -166,50 +215,64 @@ struct CoachView: View {
     @Environment(CoachModel.self) private var model
     @FocusState private var focused: Bool
 
-    private var headerButtons: some View {
+    private func headerButtons(_ focus: GoalState?) -> some View {
         HStack(spacing: 6) {
             Button { model.enterStudy(); router.coach.append(Route.study) } label: {
                 Label("Study", systemImage: "viewfinder").font(BFont.body(13, .medium)).foregroundStyle(Theme.ink).padding(.horizontal, 14).frame(minHeight: 44)
                     .background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
             }
             // Fixed size: the icon has to stay inside its 44pt circle at every text size.
-            Button(action: model.newConversation) { Image(systemName: "plus.bubble").font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.ink).frame(width: 44, height: 44).background(Theme.s1, in: Circle()).overlay(Circle().stroke(Theme.line, lineWidth: 1)) }
+            Button { model.newConversation(goalId: focus?.id) } label: { Image(systemName: "plus.bubble").font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.ink).frame(width: 44, height: 44).background(Theme.s1, in: Circle()).overlay(Circle().stroke(Theme.line, lineWidth: 1)) }
                 .accessibilityLabel("New conversation")
         }
     }
 
     var body: some View {
         @Bindable var model = model
-        let focus = store.goals.first
+        let t = model.thread(store.goals)
+        let focus = t.focus
         let name = session.user?.coachName ?? "Arc"
         TimelineView(.periodic(from: .now, by: 0.2)) { tl in
             let mood = model.mood(now: tl.date, typing: focused && !model.input.isEmpty)
             VStack(spacing: 0) {
                 VStack(spacing: 4) {
                     // Accessibility text sizes: the buttons get their own row instead of sitting over the mascot.
-                    if typeSize.isAccessibilitySize { headerButtons.frame(maxWidth: .infinity, alignment: .trailing) }
+                    if typeSize.isAccessibilitySize { headerButtons(focus).frame(maxWidth: .infinity, alignment: .trailing) }
                     CoachMascot(mood: mood).padding(.top, 6).accessibilityLabel("\(name), your coach")
                     Text(name).font(BFont.display(21)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                     StatusLine(mood: mood)
-                    if let f = focus {
-                        Text(store.goals.count > 1 ? "\(store.goals.count) GOALS IN CONTEXT · FOCUS: \(f.label.uppercased())" : "KNOWS YOUR GOAL · DAY \(f.progress.day)").bridgeLabel(9.5, color: Theme.mut2)
-                    }
                 }
                 .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 14)
                 .overlay(alignment: .topTrailing) {
-                    if !typeSize.isAccessibilitySize { headerButtons.padding(.trailing, 16).padding(.top, 4) }
+                    if !typeSize.isAccessibilitySize { headerButtons(focus).padding(.trailing, 16).padding(.top, 4) }
+                }
+                if store.goals.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(store.goals.sorted { CoachFocus.key($0.id) < CoachFocus.key($1.id) }) { g in
+                                let on = g.id == focus?.id
+                                Button { model.setFocus(g.id, goals: store.goals) } label: {
+                                    Text(g.label).font(BFont.body(13, .semibold)).lineLimit(1).foregroundStyle(on ? Theme.ink : Theme.mut).padding(.horizontal, 16).frame(minHeight: 40)
+                                        .background(on ? Theme.accTint : .clear, in: Capsule()).overlay(Capsule().stroke(on ? Theme.line2 : Theme.line, lineWidth: 1))
+                                }
+                                .accessibilityAddTraits(on ? [.isSelected] : [])
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    .padding(.bottom, 12)
                 }
                 Divider().overlay(Theme.line)
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
-                            if model.hasEarlier {
+                            if t.hasEarlier {
                                 Button("Show earlier conversation") { model.showEarlier = true }.font(BFont.body(12, .medium)).foregroundStyle(Theme.mut).padding(.horizontal, 14).frame(minHeight: 36)
                                     .overlay(Capsule().stroke(Theme.line, lineWidth: 1)).frame(maxWidth: .infinity)
                             }
-                            if model.shown.isEmpty { CoachBubbleText(text: store.goals.isEmpty ? String(localized: "Once you have a goal, ask anything about your plan.") : String(localized: "I've read your goal and your routine. Week one is deliberately light so it sticks. Ask me anything, or tell me what's getting in the way.")) }
-                            ForEach(Array(model.shown.enumerated()), id: \.element.id) { i, m in
-                                if i > 0 && model.shown[i - 1].conversation != m.conversation {
+                            if t.shown.isEmpty { CoachBubbleText(text: store.goals.isEmpty ? String(localized: "Once you have a goal, ask anything about your plan.") : String(localized: "Ask me anything about your plan, or tell me what's getting in the way.")) }
+                            ForEach(Array(t.shown.enumerated()), id: \.element.id) { i, m in
+                                if i > 0 && t.shown[i - 1].conversation != m.conversation {
                                     HStack(spacing: 10) { Rectangle().fill(Theme.track).frame(height: 1); Text("NEW CONVERSATION").bridgeLabel(10, color: Theme.mut2).fixedSize(); Rectangle().fill(Theme.track).frame(height: 1) }
                                 }
                                 if m.role == "coach" { coachMessage(m, focus: focus) } else { userMessage(m, focus: focus) }
@@ -238,7 +301,7 @@ struct CoachView: View {
                 }
                 HStack(spacing: 8) {
                     TextField("Message your coach", text: $model.input).focused($focused).font(BFont.body(15)).submitLabel(.send).onSubmit { model.send(store: store, focus: focus) }
-                        .padding(.horizontal, 18).frame(minHeight: 48).background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(focused ? Theme.acc : Theme.line, lineWidth: 1))
+                        .padding(.horizontal, 18).frame(minHeight: 48).background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(focused ? Theme.mut : Theme.line, lineWidth: 1))
                     SendButton(enabled: !model.input.trimmingCharacters(in: .whitespaces).isEmpty && !model.busy, size: 48) { model.send(store: store, focus: focus) }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 12)
@@ -342,7 +405,7 @@ struct StudyModeView: View {
 
     var body: some View {
         @Bindable var model = model
-        let focus = store.goals.first
+        let focus = model.thread(store.goals).focus
         ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
@@ -357,7 +420,7 @@ struct StudyModeView: View {
                 }
                 .padding(.leading, 22).padding(.trailing, 16).padding(.vertical, 6)
                 if let f = focus { Text("Working toward: \(f.statement)").font(BFont.body(12)).foregroundStyle(Theme.mut2).lineLimit(1).padding(.horizontal, 22) }
-                TextField("Start writing, or just think. Your coach is one tap away below.", text: $model.studyNotes, axis: .vertical)
+                TextField("Notes for this session", text: $model.studyNotes, axis: .vertical)
                     .font(BFont.body(18)).lineSpacing(8).foregroundStyle(Theme.ink).padding(.horizontal, 22).padding(.top, 22)
                 Spacer(minLength: 150)
             }

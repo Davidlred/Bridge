@@ -39,6 +39,7 @@ struct ProfileView: View {
     @State private var renaming = false
     @State private var coachName = ""
     @AppStorage("coachReadsJournal") private var coachReadsJournal = false
+    @AppStorage("themeOverride") private var themeOverride = "system"
     @Environment(SocialStore.self) private var social
     @Environment(AppRouter.self) private var router
     @State private var export: JSONExport?
@@ -46,7 +47,7 @@ struct ProfileView: View {
     @State private var analyticsOn = Analytics.enabled
     @Environment(GoalStore.self) private var goals
     @Environment(BillingStore.self) private var billing
-    enum Sheet: String, Identifiable { case delete, logOut, coachStyle, plus; var id: String { rawValue } }
+    enum Sheet: String, Identifiable { case delete, logOut, coachStyle, plus, appearance; var id: String { rawValue } }
     /// Without Plus the coach speaks Balanced (the server keeps a Plus pick for renewal): show what the coach actually uses.
     private var styleInUse: CoachStyle {
         let picked = CoachStyle.named(session.user?.coachStyle)
@@ -96,6 +97,9 @@ struct ProfileView: View {
                     }
                 }
                 .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)
+            }
+            SettingsSection(title: "Display") {
+                SettingsValue(label: "Appearance", value: Appearance.title(themeOverride)) { sheet = .appearance }
             }
             SettingsSection(title: "Privacy") {
                 SettingsValue(label: "Community sharing", value: social.share.settingsLabel) { social.cycleShare(userId: session.user?.id, goals: goals) }
@@ -153,6 +157,7 @@ struct ProfileView: View {
                         }
                     }
                 case .plus: PaywallSheet(product: .plus) { sheet = nil }
+                case .appearance: AppearanceSheet(current: themeOverride) { themeOverride = $0; sheet = nil }
                 }
             }
             .presentationDetents([.medium]).presentationDragIndicator(.visible).presentationBackground(Theme.bg)
@@ -248,7 +253,7 @@ struct DeleteAccountSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Delete your account?").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                Text("Your plan, both AI images, your photo and every journal entry will be permanently removed.").font(BFont.body(15)).lineSpacing(4).foregroundStyle(Theme.ink2)
+                Text("Your plan, your photo, your images and every journal entry will be permanently removed.").font(BFont.body(15)).lineSpacing(4).foregroundStyle(Theme.ink2)
                 Text("Deleting your account doesn't cancel a subscription. Manage it in your Apple ID settings.").font(BFont.body(13)).foregroundStyle(Theme.mut)
                 if let error { Text(error).font(BFont.body(13)).foregroundStyle(Theme.bad) }
                 Button(action: delete) {

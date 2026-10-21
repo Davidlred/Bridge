@@ -129,7 +129,7 @@ struct AllianceChatContent: View {
                 .font(BFont.body(15)).foregroundStyle(Theme.ink).focused($focused).submitLabel(.send).onSubmit(actions.send)
                 .padding(.horizontal, 18).padding(.vertical, 12).frame(minHeight: 48)
                 .background(Theme.s1, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(focused ? Theme.acc : Theme.line, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(focused ? Theme.mut : Theme.line, lineWidth: 1))
             Button(action: actions.send) {
                 Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.onAcc).frame(width: 48, height: 48)
                     .background(Theme.acc.opacity(canSend ? 1 : 0.35), in: Circle())

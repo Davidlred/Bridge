@@ -18,10 +18,10 @@ enum Theme {
     static let line2  = Color(light: 0xD6D2C8, dark: 0xFFFFFF, darkAlpha: 0.22)
     static let track  = Color(light: 0xEEEBE4, dark: 0x262626)
     static let acc    = Color(light: 0x2F3A33, dark: 0xE8643A)
-    static let accInk = Color(light: 0x4F8A3A, dark: 0xF08A62)
+    static let accInk = Color(light: 0x4F8A3A, dark: 0xE4D9CF)
     static let onAcc  = Color(light: 0xFFFFFF, dark: 0x1A0C06)
-    static let accTint = Color(light: 0xE4F2D9, dark: 0xE8643A, darkAlpha: 0.12)
-    static let accLine = Color(light: 0xA9D38F, dark: 0xE8643A, darkAlpha: 0.5)
+    static let accTint = Color(light: 0xEFEDE7, dark: 0xFFFFFF, darkAlpha: 0.07)
+    static let accLine = Color(light: 0xC4BFB4, dark: 0xFFFFFF, darkAlpha: 0.28)
     static let prog   = Color(light: 0x9FD17F, dark: 0xE8643A)
     static let today  = Color(light: 0xF2A97E, dark: 0x8FD17A)
     static let pill   = Color(light: 0xDDEFD0, dark: 0x3A2016)
@@ -33,6 +33,8 @@ enum Theme {
     static let badTint = Color(light: 0xFCEDE8, dark: 0xE5533D, darkAlpha: 0.1)
     static let warn   = Color(light: 0xB8741C, dark: 0xE9A23B)
     static let warnTint = Color(light: 0xFCF1E2, dark: 0xE9A23B, darkAlpha: 0.1)
+    /// The selected option in a segmented control.
+    static let segOn = Color(light: 0xFFFFFF, dark: 0x1F1F1F)
 
     /// Avatar circles and the four feature tiles (Community preview).
     static let av = Color(light: 0xFCE7D9, dark: 0x1F1F1F)
@@ -136,11 +138,10 @@ struct PriorityPill: View {
     var body: some View {
         HStack(spacing: 5) {
             Circle().fill(priority.fg).frame(width: 6, height: 6)
-            Text(priority.rawValue).font(BFont.body(11, .semibold))
+            Text(priority.rawValue).font(BFont.body(11, .semibold)).foregroundStyle(Theme.ink2)
         }
-        .foregroundStyle(priority.fg)
         .padding(.horizontal, 9).frame(height: 22)
-        .background(priority.bg, in: Capsule())
+        .background(Theme.accTint, in: Capsule())
         .accessibilityLabel("\(priority.rawValue) priority")
     }
 }

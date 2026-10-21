@@ -57,10 +57,10 @@ actor NotificationScheduler {
                 content.sound = .default
                 requests.append(UNNotificationRequest(identifier: "\(id)|\(day)", content: content, trigger: UNCalendarNotificationTrigger(dateMatching: c, repeats: false)))
             }
-            if let d = settings.daily { at(d, id: "daily", title: String(localized: "Your plan is ready. Let's make progress today."), body: nil) }
+            if let d = settings.daily { at(d, id: "daily", title: String(localized: "Today's plan is ready."), body: nil) }
             // Today: skip the nudge if something is already done. Later days are re-evaluated on the next reschedule.
             if let r = settings.streakRisk, !(offset == 0 && snapshot.anyDoneToday) {
-                at(r, id: "risk", title: String(localized: "Don't break your streak — one task is better than none."), body: nil)
+                at(r, id: "risk", title: String(localized: "One task today keeps your streak going."), body: nil)
             }
             for t in snapshot.tasks where !(offset == 0 && t.doneToday) {
                 guard let (h, m) = TaskTime.parse(t.time) else { continue }
