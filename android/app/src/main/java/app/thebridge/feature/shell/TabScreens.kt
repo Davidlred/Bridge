@@ -166,11 +166,11 @@ fun AppearanceContent(current: String, onPick: (String) -> Unit) {
         SheetTitle(stringResource(R.string.settings_appearance))
         APPEARANCES.forEach { (id, label) ->
             val on = id == current
-            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp)).background(if (on) c.accTint else c.s1).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(14.dp))
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp)).background(if (on) c.accTint else c.s1).border(1.dp, if (on) c.line2 else c.line, RoundedCornerShape(14.dp))
                 .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(id) }.semantics { selected = on }.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(label), style = BType.body(15, androidx.compose.ui.text.font.FontWeight.SemiBold), color = c.ink, modifier = Modifier.weight(1f))
-                if (on) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_check), null, tint = c.acc, modifier = Modifier.size(20.dp))
+                if (on) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_check), null, tint = c.ink, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -194,7 +194,7 @@ fun CoachStyleContent(current: String, hasPlus: Boolean, onPick: (CoachStyleOpti
         COACH_STYLES.forEach { s ->
             val on = s.id == current
             val locked = s.plus && !hasPlus
-            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(14.dp)).background(if (on) c.accTint else c.s1).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(14.dp))
+            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(14.dp)).background(if (on) c.accTint else c.s1).border(1.dp, if (on) c.line2 else c.line, RoundedCornerShape(14.dp))
                 .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(s) }.padding(horizontal = 16.dp, vertical = 12.dp)
                 .semantics { selected = on },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -204,7 +204,7 @@ fun CoachStyleContent(current: String, hasPlus: Boolean, onPick: (CoachStyleOpti
                 }
                 if (locked) Text(stringResource(R.string.coach_style_plus), style = BType.label(10f, 0.12f), color = c.accInk,
                     modifier = Modifier.background(c.accTint, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
-                else if (on) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_check), null, tint = c.acc, modifier = Modifier.size(20.dp))
+                else if (on) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_check), null, tint = c.ink, modifier = Modifier.size(20.dp))
             }
         }
     }

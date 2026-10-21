@@ -292,7 +292,7 @@ private fun Round(ui: GameUi, g: GameDto, actions: GameActions) {
                     val a11y = stringResource(if (cracked) R.string.game_plank_cracked else R.string.game_plank_solid, n + 1)
                     Column(Modifier.weight(1f).height(74.dp).clip(RoundedCornerShape(10.dp)).background(c.s1)
                         .then(if (cracked) Modifier.dashed(c.warn, 10.dp) else Modifier.border(1.5.dp, c.ink, RoundedCornerShape(10.dp)))
-                        .clickable(role = Role.Button) { actions.act(n) }.semantics { contentDescription = a11y },
+                        .clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button) { actions.act(n) }.semantics { contentDescription = a11y },
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                         if (cracked) Icon(painterResource(R.drawable.ic_warning), null, tint = c.warn, modifier = Modifier.size(22.dp))
                         Text("${n + 1}", style = BType.label(12f, 0f).copy(fontWeight = FontWeight.SemiBold), color = if (cracked) c.warn else c.ink)

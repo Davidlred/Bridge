@@ -48,7 +48,7 @@ val LightColors = BridgeColors(
     page = Color(0xFFEFEDE7), bg = Color(0xFFFBFAF7), s0 = Color(0xFFF3F1EB), s1 = Color(0xFFFFFFFF), s2 = Color(0xFFF5F3EE), bubble = Color(0xFFEAF3E2),
     ink = Color(0xFF23262B), ink2 = Color(0xFF4A4E55), mut = Color(0xFF7A7D83), mut2 = Color(0xFFA7A9AD),
     line = Color(0xFFE3E0D8), line2 = Color(0xFFD6D2C8), track = Color(0xFFEEEBE4),
-    acc = Color(0xFF2F3A33), accInk = Color(0xFF4F8A3A), onAcc = Color(0xFFFFFFFF), accTint = Color(0xFFE4F2D9), accLine = Color(0xFFA9D38F),
+    acc = Color(0xFF2F3A33), accInk = Color(0xFF4F8A3A), onAcc = Color(0xFFFFFFFF), accTint = Color(0xFFEFEDE7), accLine = Color(0xFFC4BFB4),
     prog = Color(0xFF9FD17F), today = Color(0xFFF2A97E), pill = Color(0xFFDDEFD0),
     ok = Color(0xFF4F8A3A), okFill = Color(0xFFBFE3A6), onOk = Color(0xFF23262B), okTint = Color(0xFFEEF7E8),
     bad = Color(0xFFD2553F), badTint = Color(0xFFFCEDE8), warn = Color(0xFFB8741C), warnTint = Color(0xFFFCF1E2),
@@ -63,7 +63,7 @@ val DarkColors = BridgeColors(
     page = Color(0xFF050505), bg = Color(0xFF0C0C0C), s0 = Color(0xFF000000), s1 = Color(0xFF151515), s2 = Color(0xFF1F1F1F), bubble = Color(0xFF262626),
     ink = Color(0xFFF2F2F2), ink2 = Color(0xFFC8C8C8), mut = Color(0xFF8C8C8C), mut2 = Color(0xFF5E5E5E),
     line = Color.White.copy(alpha = .12f), line2 = Color.White.copy(alpha = .22f), track = Color(0xFF262626),
-    acc = Color(0xFFE8643A), accInk = Color(0xFFF08A62), onAcc = Color(0xFF1A0C06), accTint = Color(0xFFE8643A).copy(alpha = .12f), accLine = Color(0xFFE8643A).copy(alpha = .5f),
+    acc = Color(0xFFE8643A), accInk = Color(0xFFE4D9CF), onAcc = Color(0xFF1A0C06), accTint = Color.White.copy(alpha = .07f), accLine = Color.White.copy(alpha = .28f),
     prog = Color(0xFFE8643A), today = Color(0xFF8FD17A), pill = Color(0xFF3A2016),
     ok = Color(0xFF8FD17A), okFill = Color(0xFF8FD17A), onOk = Color(0xFF0C0C0C), okTint = Color(0xFF8FD17A).copy(alpha = .1f),
     bad = Color(0xFFE5533D), badTint = Color(0xFFE5533D).copy(alpha = .1f), warn = Color(0xFFE9A23B), warnTint = Color(0xFFE9A23B).copy(alpha = .1f),
@@ -106,6 +106,7 @@ val LocalBridgeColors = staticCompositionLocalOf { LightColors }
 /** True when the system has animations turned off; screens cross-fade instead of sliding and the mascot holds still. */
 val LocalReduceMotion = staticCompositionLocalOf { false }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun BridgeTheme(override: String = "system", content: @Composable () -> Unit) {
     val dark = when (override) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
@@ -118,7 +119,16 @@ fun BridgeTheme(override: String = "system", content: @Composable () -> Unit) {
         surface = c.s1, onSurface = c.ink, onSurfaceVariant = c.mut, outline = c.line, error = c.bad,
         surfaceContainerLow = c.s1, scrim = Color.Black.copy(alpha = .5f),
     )
-    CompositionLocalProvider(LocalBridgeColors provides c, LocalReduceMotion provides reduce) {
-        MaterialTheme(colorScheme = scheme, content = content)
+    val ripple = androidx.compose.material3.RippleConfiguration(
+        color = c.ink,
+        rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = .08f, focusedAlpha = .08f, hoveredAlpha = .04f, pressedAlpha = if (dark) .10f else .07f),
+    )
+    val selection = androidx.compose.foundation.text.selection.TextSelectionColors(handleColor = c.ink2, backgroundColor = c.ink.copy(alpha = .2f))
+    MaterialTheme(colorScheme = scheme) {
+        CompositionLocalProvider(
+            LocalBridgeColors provides c, LocalReduceMotion provides reduce, androidx.compose.material3.LocalRippleConfiguration provides ripple,
+            androidx.compose.foundation.text.selection.LocalTextSelectionColors provides selection, androidx.compose.material3.LocalContentColor provides c.ink,
+            content = content,
+        )
     }
 }

@@ -137,7 +137,7 @@ fun PaywallContent(ui: PaywallUi, select: (String) -> Unit, buy: () -> Unit, res
                 ui.offers.forEach { o ->
                     val on = o.id == ui.selected
                     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(if (on) c.accTint else c.s1)
-                        .border(if (on) 1.5.dp else 1.dp, if (on) c.acc else c.line, RoundedCornerShape(16.dp)).clickable(role = Role.RadioButton) { select(o.id) }
+                        .border(if (on) 1.5.dp else 1.dp, if (on) c.acc else c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable(role = Role.RadioButton) { select(o.id) }
                         .semantics(mergeDescendants = true) { selected = on }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(when (o.period) { Period.Year -> stringResource(R.string.pw_per_year, o.price); Period.Month -> stringResource(R.string.pw_per_month, o.price); Period.Other -> o.price },

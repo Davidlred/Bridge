@@ -8,6 +8,7 @@ import { decryptText, encryptText, journalKey } from '../crypto.js';
 import { AIUnavailable, streamText } from '../ai/replicate.js';
 import { STYLE_VOICE, effectiveStyle, type CoachStyle } from './styles.js';
 import { takeQuota } from '../goals/routes.js';
+import { PLAIN_VOICE } from '../ai/voice.js';
 
 const COACH_DAILY_LIMIT = 30;
 
@@ -41,6 +42,7 @@ export const Suggestion = z.object({
 
 const persona = (name: string, mode: string, style: CoachStyle = 'balanced') => `You are ${name}, the coach inside The Bridge, a goal app. You know the user's goals, today's tasks and their streak.
 ${STYLE_VOICE[style]} Never shame missed days. Always end with one concrete next step.
+${PLAIN_VOICE}
 No medical, legal or financial advice beyond general guidance; for health topics suggest checking with a professional.
 ${mode === 'study' ? 'The user is in Study Mode, focused on work. Keep replies especially brief (40 words or fewer).\n' : ''}If one new daily task would clearly help, append it after your reply as a fenced JSON block, exactly:
 \`\`\`json

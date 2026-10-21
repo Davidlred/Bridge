@@ -304,7 +304,7 @@ fun ThreadScreen(ui: ThreadUi, actions: ThreadActions, now: Long = System.curren
                 }
             }
             if (ui.verification == Verification.Changed) item {
-                Row(Modifier.fillMaxWidth().background(c.warnTint, RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = actions.safety).padding(12.dp)
+                Row(Modifier.fillMaxWidth().background(c.warnTint, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = actions.safety).padding(12.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(painterResource(R.drawable.ic_warning), null, tint = c.warn, modifier = Modifier.size(16.dp))
                     Text(stringResource(R.string.dm_key_changed, ui.name), style = BType.body(12, lineHeight = 1.4f), color = c.warn)

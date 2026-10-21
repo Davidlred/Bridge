@@ -122,13 +122,13 @@ fun BridgeField(
         Text(label, style = BType.label(11f, 0.12f), color = c.mut)
         LiveTextField(
             value = value, onValueChange = onValueChange, singleLine = true, textStyle = BType.body(16).copy(color = c.ink),
-            cursorBrush = SolidColor(c.acc), interactionSource = interaction, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
+            cursorBrush = SolidColor(c.ink), interactionSource = interaction, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
             visualTransformation = visualTransformation,
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = label; if (error != null) error(error) },
             decorationBox = { inner ->
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 52.dp).background(c.s1, RoundedCornerShape(Radius.input))
-                        .border(if (focused) 1.5.dp else 1.dp, if (error != null) c.bad else if (focused) c.acc else c.line, RoundedCornerShape(Radius.input))
+                        .border(if (focused) 1.5.dp else 1.dp, if (error != null) c.bad else if (focused) c.mut else c.line, RoundedCornerShape(Radius.input))
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {

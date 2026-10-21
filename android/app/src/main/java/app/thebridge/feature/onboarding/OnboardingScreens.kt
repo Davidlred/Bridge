@@ -146,7 +146,7 @@ private fun StepPage(scroll: Boolean = true, content: @Composable ColumnScope.()
 @Composable
 private fun Counter(left: Int, max: Int) {
     val c = LocalBridgeColors.current
-    Text("$left", style = BType.label(12f, 0f), color = if (left < max / 10) c.warn else c.mut)
+    if (left <= max / 10) Text("$left", style = BType.label(12f, 0f), color = c.warn)
 }
 
 @Composable
@@ -160,7 +160,7 @@ fun GoalStep(ui: OnboardingUi, onBack: (() -> Unit)?, onGoal: (String) -> Unit, 
     val d = ui.draft
     StepPage {
         StepHeader(1, onBack)
-        StepTitle(stringResource(if (d.adding) R.string.ob_kicker_goal_adding else R.string.ob_kicker_goal), stringResource(R.string.ob_goal_title))
+        StepTitle(stringResource(R.string.ob_goal_title))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             BigTextArea(d.goal, onGoal, stringResource(R.string.ob_goal_hint), stringResource(R.string.ob_goal_a11y), large = true, maxLength = GoalText.MAX_LENGTH)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -177,7 +177,7 @@ fun GoalStep(ui: OnboardingUi, onBack: (() -> Unit)?, onGoal: (String) -> Unit, 
                     val value = ui.today.plusMonths(m)
                     val on = ui.deadline == value
                     Box(Modifier.heightIn(min = 36.dp).background(if (on) c.accTint else Color.Transparent, RoundedCornerShape(18.dp))
-                        .border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(18.dp)).clickable(role = Role.Button) { onDeadline(value) }.padding(horizontal = 12.dp),
+                        .border(1.dp, if (on) c.accLine else c.line, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).clickable(role = Role.Button) { onDeadline(value) }.padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center) { Text(stringResource(label), style = BType.body(12, FontWeight.Medium), color = if (on) c.accInk else c.ink2, maxLines = 1) }
                 }
             }
@@ -193,7 +193,7 @@ fun DeadlineMessage(deadline: LocalDate?, today: LocalDate, minDays: Int) {
     val c = LocalBridgeColors.current
     if (deadline == null) return
     when (Deadlines.check(deadline, today, minDays)) {
-        null -> { val n = ChronoUnit.DAYS.between(today, deadline).toInt(); Text(stringResource(R.string.date_info, n, (n / 7f).roundToInt()), style = BType.body(13), color = c.ok) }
+        null -> { val n = ChronoUnit.DAYS.between(today, deadline).toInt(); Text(stringResource(R.string.date_info, n), style = BType.body(13), color = c.mut) }
         Deadlines.Problem.TooSoonWeek -> Text(stringResource(R.string.date_err_week), style = BType.body(13), color = c.bad)
         Deadlines.Problem.TooSoonDay -> Text(stringResource(R.string.date_err_day), style = BType.body(13), color = c.bad)
         Deadlines.Problem.TooFar -> Text(stringResource(R.string.date_err_far), style = BType.body(13), color = c.bad)
@@ -206,9 +206,9 @@ fun RoutineStep(ui: OnboardingUi, onBack: () -> Unit, onRoutine: (String) -> Uni
     val c = LocalBridgeColors.current
     StepPage {
         StepHeader(2, onBack)
-        StepTitle(stringResource(R.string.ob_kicker_routine), stringResource(R.string.ob_routine_title))
+        StepTitle(stringResource(R.string.ob_routine_title))
         if (ui.draft.routineFromSetup) Row(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(painterResource(R.drawable.ic_history), null, tint = c.acc, modifier = Modifier.size(18.dp))
+            Icon(painterResource(R.drawable.ic_history), null, tint = c.mut, modifier = Modifier.size(18.dp))
             Text(stringResource(R.string.ob_routine_kept), style = BType.body(13, lineHeight = 1.45f), color = c.ink2)
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -242,13 +242,13 @@ fun PhotoStep(ui: OnboardingUi, onBack: () -> Unit, onUpload: (Uri) -> Unit, onR
     StepPage(scroll = true) {
         StepHeader(3, onBack)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            StepTitle(stringResource(R.string.ob_kicker_photo), stringResource(R.string.ob_photo_title))
+            StepTitle(stringResource(R.string.ob_photo_title))
             Text(stringResource(R.string.ob_photo_body), style = BType.body(15, lineHeight = 1.5f), color = c.mut)
         }
         Box(Modifier.fillMaxWidth().heightIn(min = 300.dp).clip(RoundedCornerShape(24.dp)).background(c.s1).dashedBorder(c.line)) {
             when (ui.draft.photo) {
                 PhotoState.None -> Column(Modifier.matchParentSize().background(c.bg).clickable(role = Role.Button) { consent = "picker" }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)) {
-                    Box(Modifier.size(64.dp).background(c.accTint, CircleShape), contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_photo_camera), null, tint = c.acc, modifier = Modifier.size(30.dp)) }
+                    Box(Modifier.size(64.dp).background(c.accTint, CircleShape), contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_photo_camera), null, tint = c.ink2, modifier = Modifier.size(30.dp)) }
                     Text(stringResource(R.string.ob_photo_pick), style = BType.display(16), color = c.ink)
                     Text(stringResource(R.string.ob_photo_pick_sub), style = BType.body(13), color = c.mut)
                     Text(stringResource(R.string.ob_photo_camera), style = BType.body(13, FontWeight.SemiBold), color = c.ink,
@@ -265,12 +265,12 @@ fun PhotoStep(ui: OnboardingUi, onBack: () -> Unit, onUpload: (Uri) -> Unit, onR
                             Icon(painterResource(R.drawable.ic_check), null, tint = c.ok, modifier = Modifier.size(15.dp))
                             Text(stringResource(R.string.ob_photo_uploaded), style = BType.label(11f, 0.08f), color = c.ok)
                         }
-                        Box(Modifier.size(44.dp).offset(8.dp, (-8).dp).background(c.s1.copy(alpha = .8f), CircleShape).clickable(role = Role.Button, onClick = onRemove), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(44.dp).offset(8.dp, (-8).dp).background(c.s1.copy(alpha = .8f), CircleShape).clip(CircleShape).clickable(role = Role.Button, onClick = onRemove), contentAlignment = Alignment.Center) {
                             Icon(painterResource(R.drawable.ic_close), stringResource(R.string.ob_photo_remove), tint = c.ink, modifier = Modifier.size(22.dp))
                         }
                     }
                     Box(Modifier.align(Alignment.BottomCenter).padding(16.dp).heightIn(min = 40.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp))
-                        .clickable(role = Role.Button) { consent = "picker" }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        .clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { consent = "picker" }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.ob_photo_replace), style = BType.body(13, FontWeight.Medium), color = c.ink)
                     }
                 }
@@ -278,7 +278,7 @@ fun PhotoStep(ui: OnboardingUi, onBack: () -> Unit, onUpload: (Uri) -> Unit, onR
                     Icon(painterResource(R.drawable.ic_error), null, tint = c.bad, modifier = Modifier.size(34.dp))
                     Text(stringResource(R.string.ob_photo_failed), style = BType.display(17), color = c.ink, textAlign = TextAlign.Center)
                     Text(stringResource(R.string.ob_photo_failed_sub), style = BType.body(13, lineHeight = 1.45f), color = c.mut, textAlign = TextAlign.Center)
-                    Box(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(22.dp)).clickable(role = Role.Button) { consent = "picker" }.padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { consent = "picker" }.padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.ob_photo_retry), style = BType.body(14, FontWeight.SemiBold), color = c.ink)
                     }
                 }
@@ -419,7 +419,7 @@ private fun Clarify(question: String, onEdit: () -> Unit) {
     StepPage {
         StepHeader(4, null)
         Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.gen_clarify_title), style = BType.label(11f, 0.14f), color = c.acc)
+        Text(stringResource(R.string.gen_clarify_title), style = BType.label(11f, 0.14f), color = c.mut)
         Text(question, style = BType.display(26, 1.15f), color = c.ink, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.weight(1f))
         PrimaryButton(stringResource(R.string.gen_edit_goal), onEdit)
@@ -441,7 +441,6 @@ fun ReviewStep(
                 GoalImage(ui.images["future"]?.url, d.goal, Modifier.matchParentSize())
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.bg)))
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, end = 24.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.review_kicker), style = BType.label(11f, 0.14f), color = c.accInk)
                     Text(d.goal, style = BType.display(24, 1.2f), color = c.ink, modifier = Modifier.semantics { heading() })
                 }
             }
@@ -466,7 +465,7 @@ fun ReviewStep(
                     tasks.forEachIndexed { i, t ->
                         Row(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("%02d".format(i + 1), style = BType.label(11f, 0f), color = c.acc, modifier = Modifier.width(20.dp))
+                            Text("%02d".format(i + 1), style = BType.label(11f, 0f), color = c.mut, modifier = Modifier.width(20.dp))
                             InlineField(t.title, { onTitle(t.key, it) }, stringResource(R.string.review_task_hint), stringResource(R.string.review_task_a11y), Modifier.weight(1f).heightIn(min = 48.dp))
                             Box(Modifier.size(44.dp).clickable(role = Role.Button) { onDelete(t.key) }, contentAlignment = Alignment.Center) {
                                 Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.review_delete_task), tint = c.mut, modifier = Modifier.size(20.dp))
@@ -477,7 +476,7 @@ fun ReviewStep(
                 if (tasks.isEmpty()) Text(stringResource(R.string.review_empty), style = BType.body(13), color = c.warn,
                     modifier = Modifier.fillMaxWidth().background(c.warnTint, RoundedCornerShape(14.dp)).border(1.dp, c.warn, RoundedCornerShape(14.dp)).padding(14.dp))
                 if (d.adding && total > 9) WarnNote(stringResource(R.string.review_heavy, total, ui.otherGoals + 1), R.drawable.ic_warning)
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onAdd),
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onAdd),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                     Icon(painterResource(R.drawable.ic_add), null, tint = c.ink2, modifier = Modifier.size(20.dp))
                     Text(stringResource(R.string.review_add_task), style = BType.body(14, FontWeight.Medium), color = c.ink2)
@@ -493,7 +492,7 @@ fun ReviewStep(
 @Composable
 private fun InlineField(value: String, onChange: (String) -> Unit, placeholder: String, a11y: String, modifier: Modifier) {
     val c = LocalBridgeColors.current
-    LiveTextField(value, onChange, singleLine = true, textStyle = BType.body(15, FontWeight.Medium).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
+    LiveTextField(value, onChange, singleLine = true, textStyle = BType.body(15, FontWeight.Medium).copy(color = c.ink), cursorBrush = SolidColor(c.ink),
         modifier = modifier.semantics { contentDescription = a11y },
         decorationBox = { inner -> Box(contentAlignment = Alignment.CenterStart) { if (value.isEmpty()) Text(placeholder, style = BType.body(15, FontWeight.Medium), color = c.mut2); inner() } })
 }
@@ -515,7 +514,7 @@ fun FeasibilityCard(f: Feasibility, deadline: LocalDate?, compact: Boolean = fal
         val suggested = f.suggestedDeadline?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.takeIf { it != deadline }
         if (suggested != null && onUseDate != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.heightIn(min = 40.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp)).clickable(role = Role.Button) { onUseDate(suggested) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.heightIn(min = 40.dp).background(c.s1, RoundedCornerShape(20.dp)).border(1.dp, c.line, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { onUseDate(suggested) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.verdict_use_date, shortDate(suggested)), style = BType.body(13, FontWeight.SemiBold), color = c.ink)
                 }
                 Text(stringResource(R.string.verdict_keep_date), style = BType.body(12), color = c.mut, modifier = Modifier.weight(1f))

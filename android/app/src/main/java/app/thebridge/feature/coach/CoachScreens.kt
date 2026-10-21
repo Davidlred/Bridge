@@ -1,5 +1,6 @@
 package app.thebridge.feature.coach
 
+import androidx.compose.ui.draw.clip
 import app.thebridge.ui.components.LiveTextField
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
@@ -122,18 +123,14 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                     Box(Modifier.size(6.dp).background(dot, CircleShape)); Text(status, style = BType.body(12, FontWeight.Medium), color = c.mut)
                 }
-                ui.focus?.let { f ->
-                    Text(if (ui.goals.size > 1) stringResource(R.string.coach_ctx_many, ui.goals.size, f.goal.label.uppercase()) else stringResource(R.string.coach_ctx_one, f.progress.day),
-                        style = BType.label(9.5f, 0.12f), color = c.mut2)
-                }
             }
             Row(Modifier.align(Alignment.TopEnd).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(Modifier.heightIn(min = 44.dp).background(c.s1, RoundedCornerShape(22.dp)).border(1.dp, c.line, RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = actions.study).padding(horizontal = 14.dp),
+                Row(Modifier.heightIn(min = 44.dp).background(c.s1, RoundedCornerShape(22.dp)).border(1.dp, c.line, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = actions.study).padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(painterResource(R.drawable.ic_focus), null, tint = c.acc, modifier = Modifier.size(19.dp))
                     Text(stringResource(R.string.coach_study), style = BType.body(13, FontWeight.Medium), color = c.ink)
                 }
-                Box(Modifier.size(44.dp).background(c.s1, CircleShape).border(1.dp, c.line, CircleShape).clickable(role = Role.Button, onClick = actions.newChat), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).background(c.s1, CircleShape).border(1.dp, c.line, CircleShape).clip(CircleShape).clickable(role = Role.Button, onClick = actions.newChat), contentAlignment = Alignment.Center) {
                     Icon(painterResource(R.drawable.ic_add_comment), stringResource(R.string.coach_new_chat), tint = c.ink, modifier = Modifier.size(20.dp))
                 }
             }
@@ -142,8 +139,8 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
         if (ui.goals.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ui.goals.forEach { g ->
                 val on = g.goal.id == ui.focus?.goal?.id
-                Text(g.goal.label, style = BType.body(13, FontWeight.SemiBold), color = if (on) c.onAcc else c.ink2, maxLines = 1,
-                    modifier = Modifier.heightIn(min = 40.dp).background(if (on) c.acc else c.s1, RoundedCornerShape(20.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(20.dp))
+                Text(g.goal.label, style = BType.body(13, FontWeight.SemiBold), color = if (on) c.ink else c.mut, maxLines = 1,
+                    modifier = Modifier.heightIn(min = 40.dp).background(if (on) c.accTint else Color.Transparent, RoundedCornerShape(20.dp)).border(1.dp, if (on) c.line2 else c.line, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
                         .clickable(role = Role.Tab) { actions.focus(g.goal.id) }.semantics { selected = on }.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
@@ -152,7 +149,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
             if (ui.hasEarlier) item {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.coach_show_earlier), style = BType.body(12, FontWeight.Medium), color = c.mut,
-                        modifier = Modifier.heightIn(min = 36.dp).border(1.dp, c.line, RoundedCornerShape(18.dp)).clickable(role = Role.Button, onClick = actions.showEarlier).padding(horizontal = 14.dp, vertical = 9.dp))
+                        modifier = Modifier.heightIn(min = 36.dp).border(1.dp, c.line, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).clickable(role = Role.Button, onClick = actions.showEarlier).padding(horizontal = 14.dp, vertical = 9.dp))
                 }
             }
             if (ui.loaded && ui.items.isEmpty()) item { Greeting(ui) }
@@ -167,7 +164,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
             listOf(R.string.coach_chip_meditate, R.string.coach_chip_missed, R.string.coach_chip_easier).forEach { id ->
                 val text = stringResource(id)
                 Text(text, style = BType.body(13, FontWeight.Medium), color = c.accInk, maxLines = 1,
-                    modifier = Modifier.heightIn(min = 36.dp).border(1.dp, c.accLine, RoundedCornerShape(18.dp)).clickable(role = Role.Button) { actions.chip(text) }.padding(horizontal = 14.dp, vertical = 9.dp))
+                    modifier = Modifier.heightIn(min = 36.dp).border(1.dp, c.accLine, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).clickable(role = Role.Button) { actions.chip(text) }.padding(horizontal = 14.dp, vertical = 9.dp))
             }
         }
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -188,7 +185,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
 @Composable
 private fun SendButton(enabled: Boolean, size: Int, onClick: () -> Unit) {
     val c = LocalBridgeColors.current
-    Box(Modifier.size(size.dp).alpha(if (enabled) 1f else .35f).background(c.acc, CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size.dp).alpha(if (enabled) 1f else .35f).background(c.acc, CircleShape).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(painterResource(R.drawable.ic_arrow_upward), stringResource(R.string.coach_send), tint = c.onAcc, modifier = Modifier.size(if (size > 44) 22.dp else 20.dp))
     }
 }
@@ -231,10 +228,10 @@ private fun CoachBubble(item: ChatItem, ui: CoachUi, actions: CoachActions) {
                 Text(s.title, style = BType.display(15, 1.3f), color = c.ink)
                 if (s.rationale.isNotBlank()) Text(s.rationale, style = BType.body(13, lineHeight = 1.45f), color = c.mut)
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f).heightIn(min = 44.dp).background(c.acc, RoundedCornerShape(12.dp)).clickable(enabled = ui.focus != null, role = Role.Button) { actions.add(item) }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.weight(1f).heightIn(min = 44.dp).background(c.acc, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(enabled = ui.focus != null, role = Role.Button) { actions.add(item) }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.coach_add_to, ui.focus?.goal?.label.orEmpty()), style = BType.body(14, FontWeight.SemiBold), color = c.onAcc, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Box(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(12.dp)).clickable(role = Role.Button) { actions.dismiss(item) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { actions.dismiss(item) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.coach_dismiss), style = BType.body(14, FontWeight.Medium), color = c.ink2)
                     }
                 }
@@ -293,7 +290,7 @@ fun StudyModeScreen(ui: CoachUi, onNotes: (String) -> Unit, onInput: (String) ->
                 Text(stringResource(R.string.study_mode), style = BType.label(11f, 0.14f), color = c.mut, modifier = Modifier.padding(start = 10.dp))
                 Text("%02d:%02d".format(ui.studySeconds / 60, ui.studySeconds % 60), style = BType.label(14f, 0f), color = c.ink, modifier = Modifier.padding(start = 10.dp))
                 Spacer(Modifier.weight(1f))
-                Row(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = exit).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = exit).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(painterResource(R.drawable.ic_close_fullscreen), null, tint = c.ink, modifier = Modifier.size(18.dp))
                     Text(stringResource(R.string.study_exit), style = BType.body(13, FontWeight.Medium), color = c.ink)
                 }
@@ -318,7 +315,7 @@ fun StudyModeScreen(ui: CoachUi, onNotes: (String) -> Unit, onInput: (String) ->
                 val s = shown.suggestion
                 if (s != null && shown.message.status == "done") when (shown.message.suggestionState) {
                     "added" -> Text(stringResource(R.string.coach_added_today), style = BType.body(12, FontWeight.Medium), color = c.ok)
-                    "pending" -> Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).background(c.accTint, RoundedCornerShape(12.dp)).border(1.dp, c.accLine, RoundedCornerShape(12.dp)).clickable(role = Role.Button) { add(shown) },
+                    "pending" -> Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).background(c.accTint, RoundedCornerShape(12.dp)).border(1.dp, c.accLine, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { add(shown) },
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
                         Icon(painterResource(R.drawable.ic_add), null, tint = c.accInk, modifier = Modifier.size(18.dp))
                         Text(stringResource(R.string.study_add, s.title), style = BType.body(13, FontWeight.SemiBold), color = c.accInk, maxLines = 1, overflow = TextOverflow.Ellipsis)

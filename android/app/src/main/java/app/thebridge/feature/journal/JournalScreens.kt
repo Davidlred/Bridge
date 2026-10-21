@@ -90,7 +90,7 @@ fun JournalScreen(ui: JournalUi, actions: JournalActions, dayIndex: (JournalEnti
             Row(Modifier.background(c.s0, RoundedCornerShape(12.dp)).border(1.dp, c.line, RoundedCornerShape(12.dp)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 listOf(JournalTab.Today to R.string.seg_today, JournalTab.History to R.string.journal_history).forEach { (t, label) ->
                     val on = ui.tab == t
-                    Box(Modifier.heightIn(min = 36.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(9.dp)).clickable(role = Role.Tab) { actions.tab(t) }.semantics { selected = on }.padding(horizontal = 14.dp),
+                    Box(Modifier.heightIn(min = 36.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(9.dp)).clip(RoundedCornerShape(9.dp)).clickable(role = Role.Tab) { actions.tab(t) }.semantics { selected = on }.padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center) { Text(stringResource(label), style = BType.body(13, FontWeight.SemiBold), color = if (on) c.onAcc else c.mut) }
                 }
             }
@@ -109,7 +109,7 @@ private fun GoalChips(ui: JournalUi, selected: String?, allowAll: Boolean, onPic
             val on = selected == id
             Text(label, style = BType.body(13, FontWeight.SemiBold), color = if (on) c.ink else c.ink2, maxLines = 1,
                 modifier = Modifier.heightIn(min = 40.dp).background(if (on) c.accTint else c.s1, RoundedCornerShape(20.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(20.dp))
-                    .clickable(role = Role.RadioButton) { onPick(id) }.semantics { this.selected = on }.padding(horizontal = 14.dp, vertical = 10.dp))
+                    .clip(RoundedCornerShape(20.dp)).clickable(role = Role.RadioButton) { onPick(id) }.semantics { this.selected = on }.padding(horizontal = 14.dp, vertical = 10.dp))
         }
     }
 }
@@ -170,7 +170,7 @@ private fun TodayEntry(ui: JournalUi, actions: JournalActions) {
 private fun MoodButton(index: Int, label: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalBridgeColors.current
     Column(modifier.heightIn(min = 70.dp).background(if (on) c.accTint else Color.Transparent, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp))
-        .clickable(role = Role.RadioButton, onClick = onClick).semantics { selected = on; contentDescription = label }.padding(vertical = 10.dp),
+        .clip(RoundedCornerShape(14.dp)).clickable(role = Role.RadioButton, onClick = onClick).semantics { selected = on; contentDescription = label }.padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
         MoodRing(index, on, 24)
         Text(label, style = BType.body(11, FontWeight.Medium), color = if (on) c.ink else c.mut, maxLines = 1)
@@ -214,7 +214,7 @@ private fun History(ui: JournalUi, actions: JournalActions, dayIndex: (JournalEn
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).background(c.track))
             }
             Text(stringResource(R.string.journal_empty_history), style = BType.display(20, 1.25f), color = c.ink, textAlign = TextAlign.Center)
-            Box(Modifier.heightIn(min = 48.dp).background(c.acc, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { actions.tab(JournalTab.Today) }.padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.heightIn(min = 48.dp).background(c.acc, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button) { actions.tab(JournalTab.Today) }.padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.journal_write_today), style = BType.body(14, FontWeight.SemiBold), color = c.onAcc)
             }
         }
@@ -224,7 +224,7 @@ private fun History(ui: JournalUi, actions: JournalActions, dayIndex: (JournalEn
         items.forEach { item ->
             val e = item.entry
             val date = LocalDate.parse(e.localDate)
-            Column(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(18.dp)).border(1.dp, c.line, RoundedCornerShape(18.dp)).clickable(role = Role.Button) { actions.open(item) }.padding(16.dp),
+            Column(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(18.dp)).border(1.dp, c.line, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).clickable(role = Role.Button) { actions.open(item) }.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(if (e.localDate == ui.today) stringResource(R.string.seg_today) else date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())), style = BType.display(15), color = c.ink)

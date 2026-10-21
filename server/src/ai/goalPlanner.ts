@@ -1,6 +1,7 @@
 import { env } from '../env.js';
 import { runText, AIUnavailable } from './replicate.js';
 import { Feasibility, Plan, type PlanRequest, type RealityRequest } from './planSchema.js';
+import { PLAIN_VOICE, plain } from './voice.js';
 
 const SYSTEM = `You are the planning engine for The Bridge, a goal coach app.
 Turn the user's goal into a realistic daily plan.
@@ -10,12 +11,13 @@ Rules:
 - If the goal is too vague to plan (fewer than 3 meaningful words, or no clear outcome), set needsClarification to ONE short question and return an empty tasks array.
 - Otherwise return 2 to 6 tasks. Every task repeats EVERY day: never write weekly frequencies ("three times a week") in a title or rationale. If an activity shouldn't be daily, make a daily version of it (e.g. "Run or strength session (alternate days)").
 - Each task takes 90 minutes or less, fits outside busy blocks and between wake and sleep, and prefers the user's preferred times.
-- title: specific and doable today, with an amount where it helps (e.g. "Easy run — 5 km at conversational pace"). At most 60 characters.
+- title: specific and doable today, with an amount where it helps (e.g. "Easy run, 5 km at conversational pace"). At most 60 characters.
 - timeOfDay: a clock time like "7:00 AM" or "6:30 PM" whenever the routine allows, so a reminder can fire; otherwise a short anchor in sentence case like "After work" or "Before bed".
 - The routine may be free text written by the user. Read wake and sleep times, work hours and habits from it, and build on the habits they want to change.
 - Week one is deliberately light so the plan sticks.
 - priority: High for the task that most moves the goal, Low for supporting habits.
 - Each rationale is one plain sentence. No motivational filler.
+- ${PLAIN_VOICE}
 - Health, money or legal goals: general guidance only; add "check with a professional" to a rationale where relevant.
 - If the goal is harmful (self-harm, disordered eating, illegal activity), set needsClarification to a supportive sentence and return no tasks.
 - label: 1 to 3 words naming the goal (e.g. "Half marathon").
@@ -41,6 +43,7 @@ Rules:
 - The deadline is the user's choice. Never change it. If it looks too tight or too loose, propose suggestedDeadline (ISO date after today), otherwise null.
 - verdict: "realistic", "stretch" (possible with consistent effort) or "unrealistic".
 - reason: at most two plain sentences, specific to this goal. No shaming, no motivational filler.
+- ${PLAIN_VOICE}
 - Deadlines more than 3 years away: suggest working in milestones in the reason.
 - Use daysUntilDeadline and weeksUntilDeadline for any statement about time left. Never work out durations yourself.
 Output ONLY a JSON object: {"verdict", "reason", "suggestedDeadline"}. No prose, no code fences.`;
@@ -70,7 +73,13 @@ export async function generatePlan(req: PlanRequest, signal?: AbortSignal): Prom
     const repair = attempt ? `\n\nYour previous output was invalid: ${lastError}. Return corrected JSON only.` : '';
     const raw = await runText(env.MODEL_PLANNER, { system_prompt: SYSTEM, prompt: prompt + repair, max_tokens: 1500, temperature: 0.4 }, signal);
     try {
-      const plan = Plan.parse(extractJSON(raw));
+      const parsed = Plan.parse(extractJSON(raw));
+      const plan = {
+        ...parsed,
+        needsClarification: parsed.needsClarification ? plain(parsed.needsClarification) : parsed.needsClarification,
+        feasibility: parsed.feasibility && { ...parsed.feasibility, reason: plain(parsed.feasibility.reason) },
+        tasks: parsed.tasks.map(t => ({ ...t, title: plain(t.title), rationale: t.rationale && plain(t.rationale) })),
+      };
       if (!plan.needsClarification && plan.tasks.length < 2) throw new Error('fewer than 2 tasks');
       return plan;
     } catch (e) {

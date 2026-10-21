@@ -158,12 +158,12 @@ class ScreenshotTest {
     }
     private fun task(id: String, title: String, priority: String, time: String?, ai: Boolean = true) = TaskEntity(id, "g1", title, priority, time, origin = if (ai) "ai" else "user", rationale = "Builds the aerobic base without fatigue.")
     private val marathon = goal("g1", "Half marathon", 0, LocalDate.of(2026, 9, 20), LocalDate.of(2027, 1, 10), listOf(
-        task("t1", "Easy run — 5 km at conversational pace", "High", "7:00 AM") to true,
-        task("t2", "Mobility — 10 min hip routine", "Medium", "After run") to true,
+        task("t1", "Easy run, 5 km at conversational pace", "High", "7:00 AM") to true,
+        task("t2", "Mobility, 10 min hip routine", "Medium", "After run") to true,
         task("t3", "In bed by 10:30 PM", "High", "10:30 PM") to false,
         task("t4", "Call Sam about Saturday long run", "Low", "Lunch", ai = false) to false,
     ), Feasibility("stretch", "Possible with four runs a week; your sleep is the bottleneck.", "2027-02-07"))
-    private val spanish = goal("g2", "Spanish B1", 1, LocalDate.of(2026, 10, 4), LocalDate.of(2027, 6, 1), listOf(task("t5", "Flashcards — 15 min", "High", "Commute") to true))
+    private val spanish = goal("g2", "Spanish B1", 1, LocalDate.of(2026, 10, 4), LocalDate.of(2027, 6, 1), listOf(task("t5", "Flashcards, 15 min", "High", "Commute") to true))
     @Test fun todaySingle() = snap("today") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon)), TodayActions(), LocalTime.of(9, 41), day) }
     @Test fun todayOverview() = snap("today-goals") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon, spanish)), TodayActions(), LocalTime.of(9, 41), day) }
     @Test fun todayEmpty() = snap("today-empty") { TodayScreen(TodayUi(true, "Sharon"), TodayActions(), LocalTime.of(9, 41), day) }
@@ -223,7 +223,7 @@ class ScreenshotTest {
     @Test fun obReview() = snap("ob-review") {
         ReviewStep(ob(OnboardingDraft(goalId = "g", step = Step.Review, goal = "Run a half marathon in under 2 hours.", deadline = "2027-02-09", label = "Half marathon", plan = PlanState.Done,
             feasibility = Feasibility("realistic", "Seventeen weeks is enough with three runs a week.", null),
-            tasks = listOf(DraftTask("a", "Easy run — 5 km", "High", ai = true), DraftTask("b", "Mobility — 10 min", ai = true), DraftTask("c", "In bed by 10:30 PM", ai = true)))), {}, {}, { _, _ -> }, {}, {}, {})
+            tasks = listOf(DraftTask("a", "Easy run, 5 km", "High", ai = true), DraftTask("b", "Mobility, 10 min", ai = true), DraftTask("c", "In bed by 10:30 PM", ai = true)))), {}, {}, { _, _ -> }, {}, {}, {})
     }
     // --- Milestone 4 ---
     private val now = java.time.LocalDateTime.of(2026, 10, 13, 9, 41).atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()

@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -176,7 +177,7 @@ private fun NoGoals(onAdd: () -> Unit) {
 @Composable
 private fun AddGoalTile(onAdd: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalBridgeColors.current
-    Row(modifier.fillMaxWidth().heightIn(min = 56.dp).border(1.dp, c.line2, RoundedCornerShape(20.dp)).clickable(role = Role.Button, onClick = onAdd),
+    Row(modifier.fillMaxWidth().heightIn(min = 56.dp).border(1.dp, c.line2, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button, onClick = onAdd),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
         Icon(painterResource(R.drawable.ic_add), null, tint = c.ink2, modifier = Modifier.size(20.dp))
         Text(stringResource(R.string.add_a_goal), style = BType.body(14, FontWeight.Medium), color = c.ink2)
@@ -238,7 +239,7 @@ private fun Detail(ui: TodayUi, g: GoalState, actions: TodayActions) {
         }
     } else {
         Row(Modifier.fillMaxWidth().padding(top = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.heightIn(min = 46.dp).background(c.accTint, RoundedCornerShape(23.dp)).border(1.dp, c.acc, RoundedCornerShape(23.dp)).clickable(role = Role.Button) { actions.editGoal(g) }.padding(start = 12.dp, end = 14.dp),
+            Row(Modifier.heightIn(min = 46.dp).background(c.accTint, RoundedCornerShape(23.dp)).border(1.dp, c.line2, RoundedCornerShape(23.dp)).clip(RoundedCornerShape(23.dp)).clickable(role = Role.Button) { actions.editGoal(g) }.padding(start = 12.dp, end = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 if (g.progress.allDone) Icon(painterResource(R.drawable.ic_check_circle), null, tint = c.ok, modifier = Modifier.size(16.dp))
                 else Box(Modifier.size(8.dp).background(c.acc, CircleShape))
@@ -246,7 +247,7 @@ private fun Detail(ui: TodayUi, g: GoalState, actions: TodayActions) {
                 Text("${g.progress.doneToday}/${g.progress.tasksToday}", style = BType.label(11f, 0f), color = c.mut)
                 Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit_goal_a11y), tint = c.mut, modifier = Modifier.size(16.dp))
             }
-            Row(Modifier.heightIn(min = 46.dp).border(1.dp, c.line, RoundedCornerShape(23.dp)).clickable(role = Role.Button, onClick = actions.addGoal).padding(horizontal = 16.dp),
+            Row(Modifier.heightIn(min = 46.dp).border(1.dp, c.line, RoundedCornerShape(23.dp)).clip(RoundedCornerShape(23.dp)).clickable(role = Role.Button, onClick = actions.addGoal).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(painterResource(R.drawable.ic_add), null, tint = c.ink2, modifier = Modifier.size(18.dp))
                 Text(stringResource(R.string.add_goal_chip), style = BType.body(13, FontWeight.Medium), color = c.ink2)
@@ -279,9 +280,9 @@ private fun Segments(view: GoalView, onChange: (GoalView) -> Unit, onCommunity: 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(GoalView.Today to R.string.seg_today, GoalView.Reality to R.string.seg_reality).forEach { (v, label) ->
                 val on = v == view
-                val bg = when { !on -> Color.Transparent; v == GoalView.Today -> c.acc; else -> c.ink }
-                val fg = when { !on -> c.mut; v == GoalView.Today -> c.onAcc; else -> c.bg }
-                Box(Modifier.weight(1f).heightIn(min = 40.dp).background(bg, RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(v) }
+                val bg = if (!on) Color.Transparent else if (c.isDark) c.s2 else c.s1
+                val fg = if (on) c.ink else c.mut
+                Box(Modifier.weight(1f).heightIn(min = 40.dp).background(bg, RoundedCornerShape(10.dp)).border(1.dp, if (on) c.line2 else Color.Transparent, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(v) }
                     .semantics { stateDescription = if (on) "selected" else "" }, contentAlignment = Alignment.Center) {
                     Text(stringResource(label), style = BType.body(14, FontWeight.SemiBold, 1.2f), color = fg, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 4.dp))
                 }
@@ -322,24 +323,19 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
                 Column(Modifier.padding(top = 70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(stringResource(R.string.day_of, p.day, p.total), style = BType.label(10f, 0.16f), color = c.mut)
                     Text(pctText, style = BType.display(44, 1f).copy(letterSpacing = (-1.3).sp), color = c.ink)
-                    Text(stringResource(R.string.across_bridge), style = BType.body(12), color = c.mut)
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(R.string.start_label, start.format(md).uppercase()), style = BType.label(9.5f, 0.1f), color = c.mut, modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp))
-                Text(stringResource(R.string.goal_label, end.format(md).uppercase()), style = BType.label(9.5f, 0.1f), color = c.accInk, textAlign = TextAlign.End, modifier = Modifier.weight(1f, fill = false))
-            }
-            Row(Modifier.background(c.okTint, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(7.dp).background(c.okFill, CircleShape))
-                Text(stringResource(R.string.done_today, p.doneToday, p.tasksToday), style = BType.body(13, FontWeight.Medium), color = c.ok)
+                Text(start.format(md).uppercase(), style = BType.label(9.5f, 0.1f), color = c.mut, modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp))
+                Text(end.format(md).uppercase(), style = BType.label(9.5f, 0.1f), color = c.mut, textAlign = TextAlign.End, modifier = Modifier.weight(1f, fill = false))
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Stat(stringResource(R.string.stat_streak), c.goalCards[0], Modifier.weight(1f)) {
+        Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Stat(stringResource(R.string.stat_streak), c.goalCards[0], Modifier.weight(1f).fillMaxHeight()) {
                 Row(verticalAlignment = Alignment.Bottom) { Text("${p.streak}", style = BType.display(22, 1f), color = c.ink); Text(" " + pluralStringResource(R.plurals.stat_days, p.streak), style = BType.body(12), color = c.mut) }
             }
-            Stat(stringResource(R.string.stat_days_left), c.goalCards[1], Modifier.weight(1f)) { Text("${p.daysLeft}", style = BType.display(22, 1f), color = c.ink) }
-            Stat(stringResource(R.string.stat_drift), c.goalCards[2], Modifier.weight(1f)) {
+            Stat(stringResource(R.string.stat_days_left), c.goalCards[1], Modifier.weight(1f).fillMaxHeight()) { Text("${p.daysLeft}", style = BType.display(22, 1f), color = c.ink) }
+            Stat(stringResource(R.string.stat_drift), c.goalCards[2], Modifier.weight(1f).fillMaxHeight()) {
                 val d = p.drift
                 Text(when { d == null -> stringResource(R.string.drift_none); d > 0 -> "+$d%"; d < 0 -> "−${abs(d)}%"; else -> "0%" }, style = BType.display(22, 1f), color = if ((d ?: 0) < 0) c.warn else c.ok)
                 Text(stringResource(when { d == null || d == 0 -> R.string.drift_on; d < 0 -> R.string.drift_behind; else -> R.string.drift_ahead }), style = BType.body(11), color = c.mut)
@@ -356,7 +352,7 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
             Text(stringResource(R.string.no_tasks_body), style = BType.body(13, lineHeight = 1.45f), color = c.mut, textAlign = TextAlign.Center)
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { g.tasks.forEach { TaskRow(it, actions) } }
-        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).border(1.dp, c.line, RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClick = actions.newTask),
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).border(1.dp, c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClick = actions.newTask),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
             Icon(painterResource(R.drawable.ic_add), null, tint = c.ink2, modifier = Modifier.size(20.dp))
             Text(stringResource(R.string.add_task), style = BType.body(14, FontWeight.Medium), color = c.ink2)
@@ -367,7 +363,7 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
 @Composable
 private fun Stat(label: String, bg: Color, modifier: Modifier, value: @Composable ColumnScope.() -> Unit) {
     val c = LocalBridgeColors.current
-    Column(modifier.background(if (c.isDark) c.s1 else bg, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(12.dp).semantics(mergeDescendants = true) {},
+    Column(modifier.background(c.s1, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(12.dp).semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = BType.label(9.5f, 0.12f), color = c.mut)
         value()
@@ -412,7 +408,7 @@ private fun LockCard(g: GoalState, onJournal: () -> Unit) {
             }
             Text(stringResource(if (locked) R.string.lock_done_sub else R.string.lock_sub), style = BType.body(13), color = c.mut)
         }
-        Box(Modifier.size(44.dp).background(if (locked) c.okTint else c.acc, CircleShape).clickable(role = Role.Button, onClick = onJournal), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).background(if (locked) c.okTint else c.acc, CircleShape).clip(CircleShape).clickable(role = Role.Button, onClick = onJournal), contentAlignment = Alignment.Center) {
             Icon(painterResource(if (locked) R.drawable.ic_book else R.drawable.ic_arrow_forward), stringResource(if (locked) R.string.lock_read else R.string.lock_open), tint = if (locked) c.ok else c.onAcc, modifier = Modifier.size(22.dp))
         }
     }
@@ -429,7 +425,7 @@ fun TaskRow(t: PlanTask, actions: TodayActions) {
     val title = t.task.title
     val toggleLabel = stringResource(if (t.done) R.string.untoggle_task_a11y else R.string.toggle_task_a11y, title)
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).background(c.s1, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp))
-        .clickable(role = Role.Button) { actions.openTask(t) }.padding(start = 8.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+        .clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button) { actions.openTask(t) }.padding(start = 8.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(44.dp).clickable(role = Role.Checkbox, onClickLabel = toggleLabel) {
             val done = !t.done
@@ -444,10 +440,6 @@ fun TaskRow(t: PlanTask, actions: TodayActions) {
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (t.isAi) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(Modifier.size(5.dp).background(c.acc, CircleShape))
-                Text(stringResource(R.string.ai_label), style = BType.label(9.5f, 0.1f), color = c.acc)
-            }
             Text(title, style = BType.body(15, FontWeight.Medium, 1.35f), color = if (t.done) c.mut else c.ink, textDecoration = if (t.done) TextDecoration.LineThrough else null)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PriorityPill(t.task.priority)
@@ -471,7 +463,6 @@ private fun RealityView(ui: TodayUi, g: GoalState, actions: TodayActions) {
             val img = g.reality
             GoalImage(img?.url?.takeIf { img.status == "done" }, stringResource(R.string.reality_title), Modifier.matchParentSize())
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.bg.copy(alpha = .92f))))
-            Text(stringResource(R.string.reality_kicker), style = BType.label(10f, 0.16f), color = c.mut, modifier = Modifier.padding(18.dp))
             Column(Modifier.align(Alignment.BottomStart).padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 when (img?.status) {
                     "done" -> Unit
@@ -512,9 +503,6 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 SheetTitle(stringResource(if (t == null) R.string.add_task_title else R.string.task_details))
-                if (t?.isAi == true) Row(Modifier.heightIn(min = 26.dp).background(c.accTint, RoundedCornerShape(13.dp)).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Box(Modifier.size(5.dp).background(c.acc, CircleShape)); Text(stringResource(R.string.ai_suggested), style = BType.label(10f, 0.1f), color = c.accInk)
-                }
             }
             if (readOnly) Text(stringResource(R.string.shared_task_note), style = BType.body(13), color = c.mut)
             BridgeField(stringResource(R.string.field_title), title, { title = it.take(120); error = false }, stringResource(R.string.add_task_hint), error = if (error) stringResource(R.string.task_name_err) else null)
@@ -530,10 +518,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
                 BridgeField(stringResource(R.string.field_when), time, { time = it.take(24) }, stringResource(R.string.field_when_hint), Modifier.weight(1f))
             }
             t?.task?.rationale?.let {
-                Column(Modifier.fillMaxWidth().background(c.accTint, RoundedCornerShape(14.dp)).border(1.dp, c.accLine, RoundedCornerShape(14.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(stringResource(R.string.why_this_task), style = BType.label(10f, 0.14f), color = c.acc)
-                    Text(it, style = BType.body(14, lineHeight = 1.5f), color = c.ink2)
-                }
+                Text(it, style = BType.body(13, lineHeight = 1.5f), color = c.mut)
             }
             val save = { if (title.trim().length < 2) error = true else onSave(title, notes, priority, time) }
             when {
@@ -550,7 +535,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
                     if (!readOnly) PrimaryButton(stringResource(R.string.save_changes), save)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SecondaryButton(stringResource(if (t.done) R.string.mark_not_done else R.string.mark_done), { onToggle(!t.done) }, Modifier.weight(1f))
-                        if (!readOnly) Box(Modifier.weight(1f).heightIn(min = 48.dp).border(1.dp, c.bad, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { confirm = true }, contentAlignment = Alignment.Center) {
+                        if (!readOnly) Box(Modifier.weight(1f).heightIn(min = 48.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button) { confirm = true }, contentAlignment = Alignment.Center) {
                             Text(stringResource(R.string.delete), style = BType.body(14, FontWeight.Medium), color = c.bad)
                         }
                     }
@@ -590,10 +575,10 @@ fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate)
                         Deadlines.check(picked, today, Deadlines.MIN_DAYS_EDIT) == null -> onSave(label, picked)
                     }
                 })
-                if (onComplete != null) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.ok, RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onComplete), contentAlignment = Alignment.Center) {
+                if (onComplete != null) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onComplete), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.mark_complete), style = BType.body(14, FontWeight.Medium), color = c.ok)
                 }
-                if (canArchive) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.bad, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { confirm = true }, contentAlignment = Alignment.Center) {
+                if (canArchive) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button) { confirm = true }, contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.archive_goal), style = BType.body(14, FontWeight.Medium), color = c.bad)
                 }
             }
@@ -606,7 +591,7 @@ fun LimitSheet(onManage: () -> Unit, onDismiss: () -> Unit, onUpgrade: (() -> Un
     val c = LocalBridgeColors.current
     BridgeSheet(onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(48.dp).background(c.accTint, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("3", style = BType.display(22), color = c.acc) }
+            Box(Modifier.size(48.dp).background(c.accTint, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("3", style = BType.display(22), color = c.ink) }
             SheetTitle(stringResource(R.string.limit_title))
             Text(stringResource(R.string.limit_body), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
             PrimaryButton(stringResource(R.string.limit_manage), onManage)
@@ -648,11 +633,11 @@ fun ChooseGoalsContent(goals: List<GoalEntity>, initial: Set<String>, max: Int, 
             goals.forEach { g ->
                 val on = g.id in keep
                 val enabled = on || keep.size < max
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (on) c.accTint else c.s1, RoundedCornerShape(14.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(14.dp))
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (on) c.accTint else c.s1, RoundedCornerShape(14.dp)).border(1.dp, if (on) c.line2 else c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
                     .toggleable(on, enabled = enabled, role = Role.Checkbox) { keep = if (it) keep + g.id else keep - g.id }.padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.size(24.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(7.dp)).border(1.5.dp, if (on) c.acc else c.mut2, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
-                        if (on) Icon(painterResource(R.drawable.ic_check), null, tint = c.onAcc, modifier = Modifier.size(16.dp))
+                    Box(Modifier.size(24.dp).background(if (on) c.ink else Color.Transparent, RoundedCornerShape(7.dp)).border(1.5.dp, if (on) c.ink else c.mut2, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
+                        if (on) Icon(painterResource(R.drawable.ic_check), null, tint = c.bg, modifier = Modifier.size(16.dp))
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(g.label, style = BType.body(15, FontWeight.SemiBold), color = if (enabled) c.ink else c.mut)
@@ -766,7 +751,7 @@ fun CelebrateScreen(g: GoalState, streak: Int, next: GoalState?, onNext: () -> U
                 val left = (g.progress.total - g.progress.day).coerceAtLeast(0)
                 Text(pluralStringResource(R.plurals.celebrate_days_to_go, left, left) + " " + stringResource(R.string.celebrate_body), style = BType.body(15, lineHeight = 1.5f), color = c.mut)
                 Spacer(Modifier.height(20.dp))
-                if (next != null) Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).background(c.s1, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClick = onNext).padding(horizontal = 18.dp),
+                if (next != null) Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).background(c.s1, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClick = onNext).padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     val n = next.progress.tasksToday - next.progress.doneToday
                     Text(stringResource(R.string.celebrate_next, next.goal.label, n), style = BType.body(15, FontWeight.Medium), color = c.ink)

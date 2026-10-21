@@ -1,5 +1,6 @@
 package app.thebridge.ui.components
 
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,27 +61,24 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-/** Back arrow, four progress bars and "N OF 4". [onBack] null hides the arrow but keeps the space. */
+/** Back arrow and four progress bars (read out as "Step N of 4"). [onBack] null hides the arrow but keeps the space. */
 @Composable
 fun StepHeader(step: Int, onBack: (() -> Unit)?) {
     val c = LocalBridgeColors.current
     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         if (onBack != null) BackButton(onBack, Modifier.offset(x = (-10).dp)) else Box(Modifier.size(width = 34.dp, height = 44.dp))
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val stepLabel = stringResource(R.string.ob_step, step)
+        Row(Modifier.weight(1f).padding(end = 10.dp).semantics { contentDescription = stepLabel }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             repeat(4) { i -> Box(Modifier.weight(1f).height(3.dp).background(if (i < step) c.acc else c.track, RoundedCornerShape(2.dp))) }
         }
-        Text(stringResource(R.string.ob_step, step), style = BType.label(11f, 0.12f), color = c.mut)
     }
 }
 
-/** Mono kicker in accent + Bricolage 30 title. */
+/** Bricolage 30 step title. */
 @Composable
-fun StepTitle(kicker: String, title: String) {
+fun StepTitle(title: String) {
     val c = LocalBridgeColors.current
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(kicker, style = BType.label(11f, 0.14f), color = c.acc)
-        Text(title, style = BType.display(30, 1.12f), color = c.ink, modifier = Modifier.semantics { heading() })
-    }
+    Text(title, style = BType.display(30, 1.12f), color = c.ink, modifier = Modifier.semantics { heading() })
 }
 
 /** Multi-line field on the surface colour, radius 18. */
@@ -90,12 +88,12 @@ fun BigTextArea(value: String, onChange: (String) -> Unit, placeholder: String, 
     var focused by remember { mutableStateOf(false) }
     val style = if (large) BType.body(20, FontWeight.Medium, 1.4f) else BType.body(16, lineHeight = 1.55f)
     LiveTextField(
-        value = value, onValueChange = onChange, textStyle = style.copy(color = c.ink), cursorBrush = SolidColor(c.acc), maxLength = maxLength,
+        value = value, onValueChange = onChange, textStyle = style.copy(color = c.ink), cursorBrush = SolidColor(c.ink), maxLength = maxLength,
         keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
         modifier = modifier.fillMaxWidth().heightIn(min = minHeight.dp).semantics { contentDescription = a11y }
             .onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
-            Box(Modifier.fillMaxWidth().heightIn(min = minHeight.dp).background(c.s1, RoundedCornerShape(18.dp)).border(if (focused) 1.5.dp else 1.dp, if (focused) c.acc else c.line, RoundedCornerShape(18.dp)).padding(18.dp)) {
+            Box(Modifier.fillMaxWidth().heightIn(min = minHeight.dp).background(c.s1, RoundedCornerShape(18.dp)).border(if (focused) 1.5.dp else 1.dp, if (focused) c.mut else c.line, RoundedCornerShape(18.dp)).padding(18.dp)) {
                 if (value.isEmpty()) Text(placeholder, style = style, color = c.mut2)
                 inner()
             }
@@ -125,7 +123,7 @@ fun DateField(label: String?, value: LocalDate?, today: LocalDate, minDays: Int,
         if (label != null) Text(label, style = BType.label(if (compact) 10f else 11f, 0.12f), color = c.mut)
         Box(
             Modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 52.dp).background(c.s1, RoundedCornerShape(if (compact) 12.dp else Radius.input))
-                .border(1.dp, c.line, RoundedCornerShape(if (compact) 12.dp else Radius.input)).clickable(role = Role.Button) { open = true }.padding(horizontal = if (compact) 12.dp else 16.dp),
+                .border(1.dp, c.line, RoundedCornerShape(if (compact) 12.dp else Radius.input)).clip(RoundedCornerShape(if (compact) 12.dp else Radius.input)).clickable(role = Role.Button) { open = true }.padding(horizontal = if (compact) 12.dp else 16.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(value?.let(::shortDate) ?: stringResource(R.string.target_date_pick), style = BType.body(if (compact) 14 else 16, FontWeight.Medium), color = if (value == null) c.mut2 else c.ink)
@@ -161,17 +159,18 @@ fun GoalImage(url: String?, description: String?, modifier: Modifier = Modifier)
 @Composable
 fun PriorityPill(priority: String) {
     val c = LocalBridgeColors.current
-    val (fg, bg, label) = when (priority) {
+    // Neutral pill; the dot carries the priority colour.
+    val (fg, _, label) = when (priority) {
         "High" -> Triple(c.pHi, c.pHiTint, R.string.priority_high)
         "Low" -> Triple(c.pLo, c.pLoTint, R.string.priority_low)
         else -> Triple(c.pMd, c.pMdTint, R.string.priority_medium)
     }
     val text = stringResource(label)
     val a11y = stringResource(R.string.priority_a11y, text)
-    Row(Modifier.heightIn(min = 22.dp).background(bg, RoundedCornerShape(Radius.pill)).padding(horizontal = 9.dp).semantics(mergeDescendants = true) { contentDescription = a11y },
+    Row(Modifier.heightIn(min = 22.dp).background(c.accTint, RoundedCornerShape(Radius.pill)).padding(horizontal = 9.dp).semantics(mergeDescendants = true) { contentDescription = a11y },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(Modifier.size(6.dp).background(fg, CircleShape))
-        Text(text, style = BType.body(11, FontWeight.SemiBold), color = fg)
+        Text(text, style = BType.body(11, FontWeight.SemiBold), color = c.ink2)
     }
 }
 
@@ -182,10 +181,9 @@ fun PrioritySelector(value: String, onChange: (String) -> Unit, modifier: Modifi
     Row(modifier.fillMaxWidth().background(c.bg, RoundedCornerShape(12.dp)).border(1.dp, c.line, RoundedCornerShape(12.dp)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         listOf("High" to R.string.priority_high, "Medium" to R.string.priority_medium, "Low" to R.string.priority_low).forEach { (key, label) ->
             val on = key == value
-            val fg = when (key) { "High" -> c.pHi; "Low" -> c.pLo; else -> c.pMd }
-            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(if (on) when (key) { "High" -> c.pHiTint; "Low" -> c.pLoTint; else -> c.pMdTint } else Color.Transparent, RoundedCornerShape(9.dp))
-                .clickable(role = Role.RadioButton) { onChange(key) }, contentAlignment = Alignment.Center) {
-                Text(stringResource(label), style = BType.body(12, FontWeight.SemiBold), color = if (on) fg else c.mut)
+            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(if (on) c.accTint else Color.Transparent, RoundedCornerShape(9.dp)).border(1.dp, if (on) c.line2 else Color.Transparent, RoundedCornerShape(9.dp))
+                .clip(RoundedCornerShape(9.dp)).clickable(role = Role.RadioButton) { onChange(key) }, contentAlignment = Alignment.Center) {
+                Text(stringResource(label), style = BType.body(12, FontWeight.SemiBold), color = if (on) c.ink else c.mut)
             }
         }
     }

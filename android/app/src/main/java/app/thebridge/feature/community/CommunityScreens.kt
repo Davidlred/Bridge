@@ -192,7 +192,7 @@ private fun Segments(tab: CommunityTab, onChange: (CommunityTab) -> Unit) {
     Row(Modifier.fillMaxWidth().background(c.s0, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf(CommunityTab.Feed to R.string.seg_feed, CommunityTab.Alliance to R.string.seg_alliance).forEach { (t, label) ->
             val on = t == tab
-            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(t) }
+            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(t) }
                 .semantics { selected = on }, contentAlignment = Alignment.Center) {
                 Text(stringResource(label), style = BType.body(14, FontWeight.SemiBold), color = if (on) c.onAcc else c.mut)
             }
