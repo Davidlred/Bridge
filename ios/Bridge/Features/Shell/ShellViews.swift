@@ -47,6 +47,11 @@ struct ProfileView: View {
     @Environment(GoalStore.self) private var goals
     @Environment(BillingStore.self) private var billing
     enum Sheet: String, Identifiable { case delete, logOut, coachStyle, plus; var id: String { rawValue } }
+    /// Without Plus the coach speaks Balanced (the server keeps a Plus pick for renewal): show what the coach actually uses.
+    private var styleInUse: CoachStyle {
+        let picked = CoachStyle.named(session.user?.coachStyle)
+        return picked.plus && !billing.active.contains("plus") ? .balanced : picked
+    }
 
     var body: some View {
         let name = session.user?.displayName ?? ""
@@ -79,7 +84,7 @@ struct ProfileView: View {
             SettingsSection(title: "Coach") {
                 SettingsValue(label: "Coach name", value: session.user?.coachName ?? "Arc") { coachName = session.user?.coachName ?? "Arc"; renaming = true }
                 Divider().overlay(Theme.line)
-                SettingsValue(label: "Coaching style", value: CoachStyle.named(session.user?.coachStyle).title) { sheet = .coachStyle }
+                SettingsValue(label: "Coaching style", value: styleInUse.title) { sheet = .coachStyle }
                 Divider().overlay(Theme.line)
                 Toggle(isOn: Binding(get: { coachReadsJournal }, set: { on in
                     coachReadsJournal = on
@@ -139,7 +144,7 @@ struct ProfileView: View {
                 case .delete: DeleteAccountSheet()
                 case .logOut: LogOutSheet(unsynced: unsynced, hasMessages: hasMessages, onConfirm: logOut)
                 case .coachStyle:
-                    CoachStyleSheet(current: CoachStyle.named(session.user?.coachStyle), hasPlus: billing.active.contains("plus")) { style in
+                    CoachStyleSheet(current: styleInUse, hasPlus: billing.active.contains("plus")) { style in
                         if style.plus && !billing.active.contains("plus") { sheet = .plus; return }
                         sheet = nil
                         Task {

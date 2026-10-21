@@ -89,6 +89,8 @@ fun ProfileScreen(
 ) {
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var picking by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    // Without Plus the coach speaks Balanced (the server keeps a Plus pick for renewal): show what the coach actually uses.
+    val styleInUse = if (COACH_STYLES.firstOrNull { it.id == coachStyle }?.plus == true && !hasPlus) "balanced" else coachStyle
     val c = LocalBridgeColors.current
     TabPage {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -115,7 +117,7 @@ fun ProfileScreen(
         SettingsSection(stringResource(R.string.settings_coach)) {
             SettingsValue(stringResource(R.string.settings_coach_name), coachName) { renaming = true }
             HorizontalDivider(color = c.line)
-            SettingsValue(stringResource(R.string.coach_style_title), stringResource(COACH_STYLES.firstOrNull { it.id == coachStyle }?.label ?: R.string.coach_style_balanced)) { picking = true }
+            SettingsValue(stringResource(R.string.coach_style_title), stringResource(COACH_STYLES.firstOrNull { it.id == styleInUse }?.label ?: R.string.coach_style_balanced)) { picking = true }
             HorizontalDivider(color = c.line)
             SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
         }
@@ -141,9 +143,9 @@ fun ProfileScreen(
         }
     }
     if (renaming) RenameCoachSheet(coachName, onSave = { onRenameCoach(it); renaming = false }, onDismiss = { renaming = false })
-    if (picking) androidx.compose.runtime.key(coachStyle) {
+    if (picking) androidx.compose.runtime.key(styleInUse) {
         BridgeSheet({ picking = false }) {
-            CoachStyleContent(coachStyle, hasPlus, onPick = { s -> picking = false; if (s.plus && !hasPlus) onUpgrade() else onCoachStyle(s.id) })
+            CoachStyleContent(styleInUse, hasPlus, onPick = { s -> picking = false; if (s.plus && !hasPlus) onUpgrade() else onCoachStyle(s.id) })
         }
     }
 }
