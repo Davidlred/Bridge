@@ -79,7 +79,7 @@ struct ProfileView: View {
             SettingsSection(title: "Coach") {
                 SettingsValue(label: "Coach name", value: session.user?.coachName ?? "Arc") { coachName = session.user?.coachName ?? "Arc"; renaming = true }
                 Divider().overlay(Theme.line)
-                SettingsValue(label: "Coaching style", value: CoachStyle.named(session.user?.coachStyle).label) { sheet = .coachStyle }
+                SettingsValue(label: "Coaching style", value: CoachStyle.named(session.user?.coachStyle).title) { sheet = .coachStyle }
                 Divider().overlay(Theme.line)
                 Toggle(isOn: Binding(get: { coachReadsJournal }, set: { on in
                     coachReadsJournal = on

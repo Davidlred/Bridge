@@ -16,6 +16,10 @@ enum CoachStyle: String, CaseIterable, Identifiable {
         case .efficient: "Short and to the point. No small talk."
         }
     }
+    /// The same name as plain text (settings rows take a String).
+    var title: String {
+        switch self { case .balanced: String(localized: "Balanced"); case .strict: String(localized: "Strict"); case .playful: String(localized: "Playful"); case .efficient: String(localized: "Efficient") }
+    }
     static func named(_ raw: String?) -> CoachStyle { CoachStyle(rawValue: raw ?? "") ?? .balanced }
 }
 
