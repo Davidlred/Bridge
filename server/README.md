@@ -46,7 +46,7 @@ Goals also sync `routine`, `realityNote` ("Why I started") and `feasibility`. De
 | Route | Notes |
 |---|---|
 | `POST /v1/coach/messages` | Server-Sent Events: `token` {text}… then `suggestion` {title, rationale, priority, timeOfDay}? then `done` (or `error`). Context: goals, today's tasks, streak, last 20 messages; the journal only if `settings.coachReadsJournal` is true. 30/day. Self-harm messages get a supportive reply with resources instead of the model. |
-| `PATCH /v1/me` | `{coachName?, displayName?}`. Empty or offensive coach names become "Arc". |
+| `PATCH /v1/me` | `{coachName?, displayName?, coachStyle?}`. Empty or offensive coach names become "Arc". `coachStyle`: `balanced` (free), `strict`, `playful`, `efficient` (Plus; 403 `plus_required` without it). The coach uses the pick only while Plus is active and keeps it for renewal. |
 | sync entity `journal` | `{goalId, localDate, mood, body, baseVersion, resolve?}`. Bodies are encrypted at rest with a per-user key wrapped by `JOURNAL_KEK`. A stale `baseVersion` (or a second entry for the same day) keeps both versions: the incoming one is current, the other is returned with `conflictOf` until the client sends `resolve: true`. |
 
 Coach conversations sync across devices (sync entity `chat`, encrypted like the journal). The coach route stores both the message and the reply, including a partial reply when the stream is interrupted.

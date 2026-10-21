@@ -37,6 +37,9 @@ Latency target: p50 < 8s, p95 < 20s. Client shows the *thinking* mascot with rot
 - Tool-like suggestions: the model may append one fenced JSON block `{"suggestTask": {...}}`; server strips it from the visible text and sends it as a separate SSE event `suggestion` → client renders the "Add to plan" card after the stream ends.
 - Persona: warm, direct, short (≤ 90 words unless asked), never shames missed days, always ends with one concrete next step.
 
+### Coaching styles
+The coach's voice line comes from `server/src/coach/styles.ts`: **Balanced** (free, the default), **Strict**, **Playful** and **Efficient** (Plus). Only the voice changes; every style keeps the shared rules (never shame a missed day, one concrete next step, general guidance only on health, money and legal topics), and crisis messages always get the fixed supportive reply. Without an active Plus entitlement the server uses Balanced whatever the user picked.
+
 ## Safety + cost guardrails
 - Per-user quotas (Redis token bucket): free 30 coach messages/day, 5 plan generations/day; Plus higher. Return `429 ai_quota` with reset time; client shows a friendly limit message.
 - Max tokens: plan 1,500, coach 600, nudges 120.
