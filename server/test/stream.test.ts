@@ -26,3 +26,12 @@ describe('StreamJoiner', () => {
     expect(join(['The plan', ' works. ', 'The', 're you go'])).toBe('The plan works. There you go');
   });
 });
+
+describe('textInput', async () => {
+  const { textInput } = await import('../src/ai/replicate.js');
+  it('raises max_tokens to 1024 for Claude on Replicate, and leaves other models alone', () => {
+    expect(textInput('anthropic/claude-4.5-haiku', { prompt: 'x', max_tokens: 3 })).toEqual({ prompt: 'x', max_tokens: 1024 });
+    expect(textInput('anthropic/claude-opus-4.7', { prompt: 'x', max_tokens: 1500 })).toEqual({ prompt: 'x', max_tokens: 1500 });
+    expect(textInput('meta/llama', { prompt: 'x', max_tokens: 3 })).toEqual({ prompt: 'x', max_tokens: 3 });
+  });
+});

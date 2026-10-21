@@ -5,7 +5,7 @@ import { sql } from '../db.js';
 import { auth } from '../auth/tokens.js';
 import { HttpError } from '../util.js';
 import { goalImageKey, photoKey, signedUrl, storage, userPrefix, verifySignature } from '../storage.js';
-import { AIUnavailable, runImage } from '../ai/replicate.js';
+import { AIUnavailable, runImage, runText } from '../ai/replicate.js';
 import { assessReality } from '../ai/goalPlanner.js';
 import { RealityRequest } from '../ai/planSchema.js';
 
@@ -32,12 +32,33 @@ export async function takeQuota(userId: string, kind: string, limit: number, n =
 
 // Prompts never ask the model to mock, exaggerate or sexualise the person. "If nothing changes" is honest, not cruel.
 const STYLE = 'Photorealistic candid photograph, natural light, warm muted palette, shallow depth of field. No text, no logos, no watermarks.';
-function prompt(kind: Kind, goal: string, routine: string, withFace: boolean): string {
+/**
+ * The image models need a concrete scene to change a photo (given only "a scene after achieving the goal", the photo
+ * editor returned the selfie almost unchanged). A fast text model writes it from the goal and routine, and leaves out
+ * anything private or explicit the routine may mention: the routine itself never reaches the image model.
+ */
+const SCENE = `You write the scene for one photorealistic image in a goal app. Reply with one or two plain sentences describing only what the camera sees: the place, what the person is doing, their clothes, and the objects that make it obvious.
+"future": the person at the moment they have achieved the goal, doing the thing itself, with clear visible proof of the achievement (a finish line, a certificate, a working app on screen, a stage).
+"reality": an ordinary moment a year from now if their routine stays the same and the goal has not happened. Honest and neutral, slightly tired, not bleak, never mocking.
+Never include nudity, sexual activity, drugs, self-harm, violence or anything private; if the routine mentions such things, leave them out. Do not describe the face or body shape. No quotes, no lists.`;
+
+export async function sceneFor(kind: Kind, goal: string, routine: string): Promise<string | null> {
+  try {
+    const text = await runText(env.MODEL_FAST, { system_prompt: SCENE, prompt: JSON.stringify({ kind, goal, routine: routine.slice(0, 600) }), max_tokens: 200, temperature: 0.4 }, AbortSignal.timeout(20_000));
+    const scene = text.replace(/\s+/g, ' ').trim();
+    return scene.length >= 20 ? scene.slice(0, 500) : null;
+  } catch { return null; }
+}
+
+function prompt(kind: Kind, goal: string, routine: string, withFace: boolean, scene: string | null = null): string {
   if (withFace) {
+    const keep = 'Keep the person\'s face, identity, skin tone, hairstyle and any glasses exactly the same. Change everything else (background, clothing, pose and lighting) to fit the new scene.';
+    if (scene) return `Transform this photo into a completely new scene. ${keep} New scene: ${scene} Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
     return kind === 'future'
-      ? `Keep this exact person: same face, same identity, same skin tone and features. Show them in an everyday scene a short while after achieving this goal: "${goal}". They look healthy, focused and quietly proud. ${STYLE}`
-      : `Keep this exact person: same face, same identity, same skin tone and features. Show them in an ordinary moment a year from now if their routine stays exactly the same: "${routine.slice(0, 600)}". Honest and neutral, slightly tired, the goal "${goal}" still not reached. Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
+      ? `Transform this photo into a completely new scene. ${keep} New scene: this person a few months from now, having achieved this goal: "${goal}", in the place where that happens, actively doing it, with clear visual proof of it in the frame, focused and quietly proud. ${STYLE}`
+      : `Transform this photo into a completely new scene. ${keep} New scene: this person in an ordinary moment a year from now, the goal "${goal}" still not reached; honest and neutral, slightly tired, not bleak. Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
   }
+  if (scene) return `${scene} Seen from behind or at a distance so the face is not visible. ${STYLE}`;
   // No photo (or no consent): a scene that suggests the person without showing a face.
   return kind === 'future'
     ? `The moment this goal is achieved: "${goal}". Show the person doing or having just done the thing itself, with clear visual proof of the achievement in the scene (for example crossing the finish line, holding the certificate, on stage). Seen from behind or at a distance so their face is not visible. ${STYLE}`
@@ -56,7 +77,8 @@ async function download(url: string): Promise<Buffer> {
 /** Generates one image and records the outcome. Runs after the request returns; the client polls. */
 async function generate(log: FastifyBaseLogger, userId: string, goalId: string, kind: Kind, goal: string, routine: string, withFace: boolean) {
   try {
-    const input: Record<string, unknown> = { prompt: prompt(kind, goal, routine, withFace), aspect_ratio: '3:4', output_format: 'jpg' };
+    const scene = await sceneFor(kind, goal, routine);
+    const input: Record<string, unknown> = { prompt: prompt(kind, goal, routine, withFace, scene), aspect_ratio: '3:4', output_format: 'jpg' };
     let model = env.MODEL_IMAGE;
     if (withFace) {
       const photo = await storage.get(photoKey(userId));

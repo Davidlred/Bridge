@@ -8,9 +8,16 @@ export class AIUnavailable extends Error { constructor(msg: string, readonly ret
 
 type Prediction = { id: string; status: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled'; output?: unknown; error?: string; urls: { get: string; cancel: string; stream?: string } };
 
+/**
+ * Claude on Replicate rejects max_tokens below 1024 (422), although its published schema says 1: moderation asked for 3
+ * and failed on every message. It is only a ceiling (prompts keep replies short), so raise it for Claude models here.
+ */
+export const textInput = (model: string, input: Record<string, unknown>) =>
+  model.startsWith('anthropic/') && typeof input.max_tokens === 'number' && input.max_tokens < 1024 ? { ...input, max_tokens: 1024 } : input;
+
 /** Runs a language model to completion. Uses Prefer: wait, then polls. Aborts and cancels on signal. */
 export async function runText(model: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
-  const output = await runPrediction(model, input, signal);
+  const output = await runPrediction(model, textInput(model, input), signal);
   return Array.isArray(output) ? output.join('') : String(output ?? '');
 }
 
@@ -86,7 +93,7 @@ export class StreamJoiner {
 
 /** Streams new text from a language model via Replicate's SSE stream URL. */
 export async function* streamText(model: string, input: Record<string, unknown>, signal?: AbortSignal): AsyncGenerator<string> {
-  const res = await create(model, { input, stream: true }, signal);
+  const res = await create(model, { input: textInput(model, input), stream: true }, signal);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}`, res.status >= 500 || res.status === 429);
   const p = (await res.json()) as Prediction;
   if (!p.urls.stream) throw new AIUnavailable('model does not support streaming', false);

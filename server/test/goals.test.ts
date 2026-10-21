@@ -18,6 +18,8 @@ vi.mock('../src/ai/replicate.js', async orig => {
       return `data:image/jpeg;base64,${JPEG.toString('base64')}`;
     }),
     runText: vi.fn(async (_model: string, input: Record<string, unknown>, signal?: AbortSignal) => {
+      // The scene writer for images answers at once with one concrete scene.
+      if (String(input.system_prompt).includes('scene for one photorealistic image')) return 'A runner crossing a city finish line, arms raised, race bib on.';
       // Like the real client: a cancelled request stops the model.
       await new Promise(r => setTimeout(r, 50));
       if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
@@ -103,6 +105,8 @@ run('goals core', () => {
     expect(faceCalls).toHaveLength(2);
     expect(faceCalls.every(c => c.model === 'black-forest-labs/flux-kontext-pro')).toBe(true);
     expect(plain.every(c => String(c.input.prompt).includes('face is not visible'))).toBe(true);
+    // Images use the written scene; the user's routine never reaches the image model
+    expect(calls.every(c => String(c.input.prompt).includes('finish line') && !String(c.input.prompt).includes('Up at 7:30'))).toBe(true);
     expect((await fetchMedia(a[0]!.url!)).statusCode).toBe(200);
     // Another user can't read or regenerate them
     expect((await app.inject({ method: 'GET', url: `/v1/ai/images/${g1}`, headers: h(without.accessToken) })).json().images.every((x: { status: string }) => x.status === 'none')).toBe(true);
