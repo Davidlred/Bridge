@@ -449,6 +449,11 @@
 
     <!-- Settings (milestone 3) -->
     <string name="settings_coach">Coach</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="appearance_system">Match phone</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
     <string name="settings_coach_name">Coach name</string>
     <string name="settings_coach_journal">Let my coach read my journal</string>
     <string name="settings_coach_journal_sub">Your last three entries are shared with the coach for context. Never used for training.</string>

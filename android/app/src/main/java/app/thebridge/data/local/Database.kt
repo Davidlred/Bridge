@@ -76,6 +76,8 @@ data class ChatMessageEntity(
     val suggestion: String? = null,    // JSON {title, rationale, priority, timeOfDay}
     val suggestionState: String? = null, // pending | added | dismissed
     val createdAt: Long = System.currentTimeMillis(),
+    /** The goal this conversation is about (each goal has its own thread). Null for messages from before that. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val goalId: String? = null,
 )
 
 @Dao
@@ -267,8 +269,8 @@ interface PullDao {
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
         SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class],
-    version = 5, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5)],
+    version = 6, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao

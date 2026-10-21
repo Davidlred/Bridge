@@ -59,6 +59,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -77,6 +78,7 @@ import kotlinx.coroutines.delay
 data class CoachActions(
     val onInput: (String) -> Unit = {}, val send: () -> Unit = {}, val chip: (String) -> Unit = {}, val retry: (ChatItem) -> Unit = {},
     val add: (ChatItem) -> Unit = {}, val dismiss: (ChatItem) -> Unit = {}, val showEarlier: () -> Unit = {}, val newChat: () -> Unit = {}, val study: () -> Unit = {},
+    val focus: (String) -> Unit = {},
 )
 
 /** Mascot status line and dot colour for each mood (copy from the prototype). */
@@ -134,6 +136,15 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
                 Box(Modifier.size(44.dp).background(c.s1, CircleShape).border(1.dp, c.line, CircleShape).clickable(role = Role.Button, onClick = actions.newChat), contentAlignment = Alignment.Center) {
                     Icon(painterResource(R.drawable.ic_add_comment), stringResource(R.string.coach_new_chat), tint = c.ink, modifier = Modifier.size(20.dp))
                 }
+            }
+        }
+        // One conversation per goal: switch between them here.
+        if (ui.goals.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ui.goals.forEach { g ->
+                val on = g.goal.id == ui.focus?.goal?.id
+                Text(g.goal.label, style = BType.body(13, FontWeight.SemiBold), color = if (on) c.onAcc else c.ink2, maxLines = 1,
+                    modifier = Modifier.heightIn(min = 40.dp).background(if (on) c.acc else c.s1, RoundedCornerShape(20.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(20.dp))
+                        .clickable(role = Role.Tab) { actions.focus(g.goal.id) }.semantics { selected = on }.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
         HorizontalDivider(color = c.line)

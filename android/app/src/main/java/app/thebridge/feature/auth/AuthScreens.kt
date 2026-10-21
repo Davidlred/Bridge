@@ -74,6 +74,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.res.ResourcesCompat
@@ -99,11 +100,16 @@ fun BridgeMark(color: Color, modifier: Modifier = Modifier, width: Int = 92) {
     }
 }
 
-/** First frame: mark on black in both themes. */
+/** First frame: mark on black in both themes. The mark rises in gently (still when motion is reduced, and in previews). */
 @Composable
-fun SplashScreen() {
+fun SplashScreen(animate: Boolean = true) {
     val label = stringResource(R.string.splash_logo)
-    Box(Modifier.fillMaxSize().background(Color.Black).semantics { contentDescription = label }, contentAlignment = Alignment.Center) { BridgeMark(Color.White) }
+    val still = !animate || LocalReduceMotion.current || androidx.compose.ui.platform.LocalInspectionMode.current
+    val appear = remember { androidx.compose.animation.core.Animatable(if (still) 1f else 0f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { appear.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    Box(Modifier.fillMaxSize().background(Color.Black).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Box(Modifier.graphicsLayer { val v = appear.value; alpha = v; scaleX = .86f + .14f * v; scaleY = scaleX; translationY = (1f - v) * 24.dp.toPx() }) { BridgeMark(Color.White) }
+    }
 }
 
 @Composable

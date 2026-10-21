@@ -57,6 +57,7 @@ data class TodayUi(
 @HiltViewModel
 class TodayViewModel @Inject constructor(
     private val saved: SavedStateHandle,
+    private val coach: app.thebridge.data.CoachRepository,
     private val repo: GoalRepository,
     private val ai: AiRepository,
     val store: DataStore<Preferences>,
@@ -81,6 +82,7 @@ class TodayViewModel @Inject constructor(
 
     fun openGoal(id: String?) {
         open.value = id; saved["open"] = id; view.value = GoalView.Today
+        if (id != null) viewModelScope.launch { coach.setFocus(id) }
         if (id != null) refreshImages(listOf(id))
     }
     fun showView(v: GoalView) { view.value = v }

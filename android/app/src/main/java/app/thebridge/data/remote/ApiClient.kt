@@ -62,7 +62,7 @@ class StreamInterrupted : Exception()
 @Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList())
 @Serializable data class JournalDto(val id: String, val goalId: String? = null, val localDate: String, val mood: Int? = null, val body: String = "", val version: Int = 1, val conflictOf: String? = null, val updatedAt: Long = 0)
 @Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList(), val chat: List<ChatDto> = emptyList(), val removedChat: List<String> = emptyList())
-@Serializable data class ChatDto(val id: String, val conversation: String, val role: String, val text: String, val suggestion: SuggestionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
+@Serializable data class ChatDto(val id: String, val conversation: String, val goalId: String? = null, val role: String, val text: String, val suggestion: SuggestionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
 @Serializable data class SuggestionDto(val title: String, val rationale: String = "", val priority: String = "Medium", val timeOfDay: String? = null)
 
 // --- Social (milestone 4). Names are first names only; the server never sends other people's goal text or tasks. ---

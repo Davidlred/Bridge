@@ -51,6 +51,9 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
     }
 
     val addGoal = { if (ui.atLimit && !hasPlus) sheet = "limit" else onAddGoal() }
+    // Back inside a goal goes to that goal's Today view, then to the list of goals; only from there does it leave the app.
+    androidx.activity.compose.BackHandler(enabled = ui.view != GoalView.Today && ui.open != null) { vm.showView(GoalView.Today) }
+    androidx.activity.compose.BackHandler(enabled = ui.view == GoalView.Today && ui.openGoalId != null && ui.goals.size > 1) { vm.openGoal(null) }
     TodayScreen(ui, TodayActions(
         openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },

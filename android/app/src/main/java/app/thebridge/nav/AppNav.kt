@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -133,6 +134,8 @@ private val tabs = listOf(
 )
 
 private val PushEasing = CubicBezierEasing(.2f, .8f, .2f, 1f)
+private const val SPLASH_HOLD = 1300L
+private const val SPLASH_EXIT = 560
 
 /** Session phase decides the whole tree: splash → signed-out flow → tabs (with the re-auth sheet on top when expired). */
 @Composable
@@ -154,9 +157,17 @@ fun AppRoot(auth: AuthViewModel, shell: ShellViewModel = hiltViewModel()) {
             UpgradeScreen(onOpenStore = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) })
             return@Box
         }
+        // The splash holds a moment (not just a flash), then slides up to reveal the app; once per launch.
+        var splashHeld by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(Unit) { delay(SPLASH_HOLD); splashHeld = true }
+        val reduce = LocalReduceMotion.current
         // Ready and Expired share the tabs, so the key only changes between splash, auth flow, first-goal onboarding and tabs.
-        val stage = when (phase) { SessionPhase.Launching -> 0; SessionPhase.SignedOut -> 1; SessionPhase.Onboarding -> 2; else -> 3 }
-        AnimatedContent(stage, transitionSpec = { fadeIn(tween(Motion.fade)) togetherWith fadeOut(tween(Motion.fade)) }, label = "phase") { st ->
+        val stage = if (!splashHeld) 0 else when (phase) { SessionPhase.Launching -> 0; SessionPhase.SignedOut -> 1; SessionPhase.Onboarding -> 2; else -> 3 }
+        AnimatedContent(stage, transitionSpec = {
+            if (initialState == 0 && !reduce) (fadeIn(tween(Motion.push), initialAlpha = .4f) togetherWith slideOutVertically(tween(SPLASH_EXIT, easing = PushEasing)) { -it })
+                .apply { targetContentZIndex = -1f } // the splash stays on top while it slides away
+            else fadeIn(tween(Motion.fade)) togetherWith fadeOut(tween(Motion.fade))
+        }, label = "phase") { st ->
             Column(Modifier.fillMaxSize()) {
                 if (st != 0 && !online) OfflineBanner(queued, Modifier.background(c.warnTint).windowInsetsPadding(WindowInsets.statusBars))
                 when (st) {
@@ -236,6 +247,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
     val share by shell.share.collectAsStateWithLifecycle(app.thebridge.data.ShareLevel.Streaks)
     val analyticsOn by shell.analyticsOn.collectAsStateWithLifecycle(false)
+    val appearance by shell.appearance.collectAsStateWithLifecycle("system")
     // "Download my data": the system Save dialog picks where the JSON goes.
     val saveExport = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(shell::exportData) }
     // One coach ViewModel for the tab and Study Mode, so they share the conversation.
@@ -294,6 +306,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         coachName = user?.coachName ?: "Arc", onRenameCoach = shell::renameCoach, coachStyle = user?.coachStyle ?: "balanced", hasPlus = hasPlus, onCoachStyle = shell::setCoachStyle, onUpgrade = { sheet = "plus" }, coachReadsJournal = coachReadsJournal, onCoachReadsJournal = shell::setCoachReadsJournal,
                         share = share, onShare = shell::cycleShare, onHall = { nav.navigate(HallOfFame) }, onExport = { saveExport.launch("the-bridge-export.json") },
                         analytics = analyticsOn, onAnalytics = shell::setAnalytics,
+                        appearance = appearance, onAppearance = shell::setAppearance,
                     )
                 }
                 composable<HallOfFame> { app.thebridge.feature.community.HallRoute(onBack = { nav.popBackStack() }) }

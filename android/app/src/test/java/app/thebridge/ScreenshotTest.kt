@@ -140,7 +140,7 @@ class ScreenshotTest {
     private val errors = AuthUiState(name = "S", email = "sharon@", nameError = UiText.Res(R.string.err_name), emailError = UiText.Res(R.string.err_email),
         passwordError = UiText.Res(R.string.err_password_short), formError = UiText.Res(R.string.err_signup_offline))
 
-    @Test fun splash() = snap("splash") { SplashScreen() }
+    @Test fun splash() = snap("splash") { SplashScreen(animate = false) }
     @Test fun welcome() = snap("welcome") { WelcomeScreen({}, {}) }
     @Test fun signUp() = snap("signup") { SignUpScreen(filled, {}, {}, {}, {}, {}, {}, {}) }
     @Test fun signUpErrors() = snap("signup-errors") { SignUpScreen(errors, {}, {}, {}, {}, {}, {}, {}) }
@@ -315,6 +315,7 @@ class ScreenshotTest {
     @Test fun paywallAlliancePlus() = snap("paywall-alliance") {
         Box(Modifier.padding(24.dp)) { PaywallContent(PaywallUi(Product.AlliancePlus, loading = false, offers = listOf(Offer("m", "$3.99", Period.Month, 7)), selected = "m"), {}, {}, {}, {}) }
     }
+    @Test fun appearance() = snap("appearance") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { app.thebridge.feature.shell.AppearanceContent("system") {} } }
     @Test fun coachStyles() = snap("coach-styles") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { app.thebridge.feature.shell.CoachStyleContent("balanced", hasPlus = false) {} } }
     @Test fun paywallPlusUnavailable() = snap("paywall-plus-off") { Box(Modifier.padding(24.dp)) { PaywallContent(PaywallUi(Product.Plus, available = false, loading = false), {}, {}, {}, {}) } }
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}, onHall = {}) }

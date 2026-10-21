@@ -45,7 +45,10 @@ class ShellViewModel @Inject constructor(
     private val billing: app.thebridge.data.BillingRepository,
     private val analytics: app.thebridge.data.Analytics,
     private val inviteReferrer: app.thebridge.data.InviteReferrer,
+    private val appearanceStore: app.thebridge.data.Appearance,
 ) : ViewModel() {
+    val appearance = appearanceStore.mode
+    fun setAppearance(mode: String) = viewModelScope.launch { appearanceStore.set(mode) }
     /** Invite code from a Play Store install that started on thebridge.app/join (once per install). */
     suspend fun installInvite(): String? = inviteReferrer.takeCode()
     val analyticsOn = analytics.enabled

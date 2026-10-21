@@ -40,10 +40,27 @@ class CoachRepository @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val ctx: android.content.Context,
 ) {
     val messages: Flow<List<ChatMessageEntity>> = db.chat().all()
-    /** The current conversation. On a fresh device it continues the newest conversation pulled from the account. */
-    val conversation: Flow<String?> = kotlinx.coroutines.flow.combine(store.data.map { it[CONVERSATION] }, messages) { pref, msgs -> pref ?: msgs.lastOrNull()?.conversation }
 
-    private suspend fun conversationId(): String = conversation.first() ?: UuidV7.next().also { id -> store.edit { it[CONVERSATION] = id } }
+    /**
+     * Each goal has its own conversation, so a new goal never continues another goal's chat. The goal the coach is on is
+     * the one picked in Coach or opened on Today, unless a newer goal has been created since: then the new one.
+     */
+    val focusPick: Flow<Pair<String?, String?>> = store.data.map { it[FOCUS] to it[FOCUS_NEWEST] }
+    suspend fun setFocus(goalId: String) {
+        val newest = goals.activeGoals().first().maxOfOrNull { it.goal.id }
+        store.edit { it[FOCUS] = goalId; if (newest != null) it[FOCUS_NEWEST] = newest }
+    }
+
+    /** "New conversation" picks per goal; otherwise a goal continues its newest conversation (also on a fresh device). */
+    val conversationPicks: Flow<Map<String, String>> = store.data.map { p ->
+        p.asMap().mapNotNull { (k, v) -> if (k.name.startsWith(CONV_PREFIX) && v is String) k.name.removePrefix(CONV_PREFIX) to v else null }.toMap()
+    }
+
+    private suspend fun conversationId(goalId: String?): String {
+        val key = convKey(goalId)
+        store.data.first()[key]?.let { return it }
+        return messages.first().lastOrNull { it.goalId == goalId }?.conversation ?: UuidV7.next().also { id -> store.edit { it[key] = id } }
+    }
 
     /** Suggestion state and deletes sync to the account's other devices; messages themselves are stored by the server with the reply. */
     private suspend fun enqueue(id: String, op: String, patch: kotlinx.serialization.json.JsonObject) {
@@ -51,20 +68,20 @@ class CoachRepository @Inject constructor(
         app.thebridge.data.sync.SyncWorker.kick(ctx)
     }
 
-    /** Starts a fresh conversation; earlier ones stay on the device behind "Show earlier conversation". */
-    suspend fun newConversation() { store.edit { it[CONVERSATION] = UuidV7.next() } }
+    /** Starts a fresh conversation for this goal; earlier ones stay on the device behind "Show earlier conversation". */
+    suspend fun newConversation(goalId: String?) { store.edit { it[convKey(goalId)] = UuidV7.next() } }
 
     /**
      * Sends [text] (or re-sends the failed message [retryId]) and streams the reply.
      * [onFirstToken] lets the UI switch the mascot from thinking to talking. Returns null on success.
      */
     suspend fun send(text: String, focusGoalId: String?, mode: String = "chat", retryId: String? = null, onFirstToken: () -> Unit = {}): CoachProblem? {
-        val conv = conversationId()
+        val conv = conversationId(focusGoalId)
         val history = db.chat().recent(conv, 21).reversed().filter { it.id != retryId && it.status != "failed" && it.text.isNotBlank() }.takeLast(20)
-        val userMsg = retryId?.let { db.chat().get(it) }?.copy(status = "sending") ?: ChatMessageEntity(UuidV7.next(), conv, "user", text.trim(), status = "sending")
+        val userMsg = retryId?.let { db.chat().get(it) }?.copy(status = "sending") ?: ChatMessageEntity(UuidV7.next(), conv, "user", text.trim(), status = "sending", goalId = focusGoalId)
         db.chat().upsert(userMsg)
         val active = goals.activeGoals().first()
-        val reply = ChatMessageEntity(UuidV7.next(), conv, "coach", "", status = "streaming", createdAt = System.currentTimeMillis() + 1)
+        val reply = ChatMessageEntity(UuidV7.next(), conv, "coach", "", status = "streaming", createdAt = System.currentTimeMillis() + 1, goalId = focusGoalId)
         val body = buildJsonObject {
             put("message", userMsg.text); put("mode", mode); put("localDate", LocalDay.today()); put("focusGoalId", focusGoalId)
             // Ids let the server store this exchange so it follows the account to other devices.
@@ -133,5 +150,19 @@ class CoachRepository @Inject constructor(
         return send(question.text, focusGoalId, retryId = question.id, onFirstToken = onFirstToken)
     }
 
-    private companion object { val CONVERSATION = stringPreferencesKey("coach_conversation") }
+    companion object {
+        private val FOCUS = stringPreferencesKey("coach_focus")
+        private val FOCUS_NEWEST = stringPreferencesKey("coach_focus_newest")
+        private const val CONV_PREFIX = "coach_conversation_"
+        private fun convKey(goalId: String?) = stringPreferencesKey(CONV_PREFIX + (goalId ?: "none"))
+
+        /** The goal whose thread [m] is in. Messages from before per-goal threads belong to the oldest goal. */
+        fun threadOf(m: ChatMessageEntity, oldestGoalId: String?): String? = m.goalId ?: oldestGoalId
+
+        /** The pick if it is still active and no goal was created after it; otherwise the newest goal. */
+        fun focusOf(goalIds: List<String>, pick: String?, newestAtPick: String?): String? {
+            val newest = goalIds.maxOrNull() ?: return null
+            return if (pick != null && pick in goalIds && (newestAtPick ?: "") >= newest) pick else newest
+        }
+    }
 }

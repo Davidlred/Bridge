@@ -86,7 +86,9 @@ fun ProfileScreen(
     coachStyle: String = "balanced", hasPlus: Boolean = false, onCoachStyle: (String) -> Unit = {}, onUpgrade: () -> Unit = {},
     share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null, onExport: () -> Unit = {},
     analytics: Boolean = false, onAnalytics: (Boolean) -> Unit = {},
+    appearance: String = "system", onAppearance: (String) -> Unit = {},
 ) {
+    var choosingLook by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var picking by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     // Without Plus the coach speaks Balanced (the server keeps a Plus pick for renewal): show what the coach actually uses.
@@ -121,6 +123,9 @@ fun ProfileScreen(
             HorizontalDivider(color = c.line)
             SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
         }
+        SettingsSection(stringResource(R.string.settings_display)) {
+            SettingsValue(stringResource(R.string.settings_appearance), stringResource(APPEARANCES.firstOrNull { it.first == appearance }?.second ?: R.string.appearance_system)) { choosingLook = true }
+        }
         SettingsSection(stringResource(R.string.settings_privacy)) {
             SettingsValue(stringResource(R.string.settings_share), stringResource(when (share) {
                 app.thebridge.data.ShareLevel.Nothing -> R.string.settings_share_nothing; app.thebridge.data.ShareLevel.Streaks -> R.string.settings_share_streaks; app.thebridge.data.ShareLevel.All -> R.string.settings_share_all
@@ -142,10 +147,31 @@ fun ProfileScreen(
             }
         }
     }
+    if (choosingLook) BridgeSheet({ choosingLook = false }) { AppearanceContent(appearance) { onAppearance(it); choosingLook = false } }
     if (renaming) RenameCoachSheet(coachName, onSave = { onRenameCoach(it); renaming = false }, onDismiss = { renaming = false })
     if (picking) androidx.compose.runtime.key(styleInUse) {
         BridgeSheet({ picking = false }) {
             CoachStyleContent(styleInUse, hasPlus, onPick = { s -> picking = false; if (s.plus && !hasPlus) onUpgrade() else onCoachStyle(s.id) })
+        }
+    }
+}
+
+val APPEARANCES = listOf("system" to R.string.appearance_system, "light" to R.string.appearance_light, "dark" to R.string.appearance_dark)
+
+/** Light, dark or follow the phone. */
+@Composable
+fun AppearanceContent(current: String, onPick: (String) -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SheetTitle(stringResource(R.string.settings_appearance))
+        APPEARANCES.forEach { (id, label) ->
+            val on = id == current
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp)).background(if (on) c.accTint else c.s1).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(14.dp))
+                .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(id) }.semantics { selected = on }.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(label), style = BType.body(15, androidx.compose.ui.text.font.FontWeight.SemiBold), color = c.ink, modifier = Modifier.weight(1f))
+                if (on) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_check), null, tint = c.acc, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

@@ -73,22 +73,28 @@ class CoachViewModel @Inject constructor(
     private val local = MutableStateFlow(CoachUi())
     private val showEarlier = MutableStateFlow(false)
 
-    val state: StateFlow<CoachUi> = combine(local, coach.messages, coach.conversation, goalsRepo.activeGoals(), combine(session.user.map { it?.coachName ?: "Arc" }, showEarlier, ::Pair)) { l, msgs, conv, goals, (name, earlier) ->
-        val shown = if (earlier || conv == null) msgs else msgs.filter { it.conversation == conv }
+    val state: StateFlow<CoachUi> = combine(local, coach.messages, coach.focusPick, goalsRepo.activeGoals(),
+        combine(session.user.map { it?.coachName ?: "Arc" }, showEarlier, coach.conversationPicks, ::Triple)) { l, msgs, (pick, newestAtPick), goals, (name, earlier, convPicks) ->
+        val focusId = CoachRepository.focusOf(goals.map { it.goal.id }, pick, newestAtPick)
+        val oldest = goals.minOfOrNull { it.goal.id }
+        // Only this goal's thread; within it, the current conversation unless "Show earlier conversation".
+        val thread = msgs.filter { CoachRepository.threadOf(it, oldest) == focusId }
+        val conv = convPicks[focusId ?: "none"] ?: thread.lastOrNull()?.conversation
+        val shown = if (earlier || conv == null) thread else thread.filter { it.conversation == conv }
         l.copy(
-            loaded = true, coachName = name, goals = goals, focus = goals.firstOrNull { it.goal.id == focusId } ?: goals.firstOrNull(),
-            hasEarlier = !earlier && msgs.any { it.conversation != conv },
+            loaded = true, coachName = name, goals = goals.sortedBy { it.goal.id }, focus = goals.firstOrNull { it.goal.id == focusId },
+            hasEarlier = !earlier && thread.any { it.conversation != conv },
             items = shown.mapIndexed { i, m -> ChatItem(m, coach.suggestion(m), i > 0 && shown[i - 1].conversation != m.conversation) },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CoachUi())
 
-    private var focusId: String? = null
-    fun setFocus(goalId: String?) { focusId = goalId }
+    /** Switch the coach to another goal's conversation. */
+    fun setFocus(goalId: String) = viewModelScope.launch { showEarlier.value = false; coach.setFocus(goalId) }
 
     fun onInput(v: String) = local.update { it.copy(input = v.take(2000), notice = null) }
     fun useChip(v: String) = onInput(v)
     fun showEarlier() { showEarlier.value = true }
-    fun newConversation() = viewModelScope.launch { showEarlier.value = false; coach.newConversation() }
+    fun newConversation() = viewModelScope.launch { showEarlier.value = false; coach.newConversation(state.value.focus?.goal?.id) }
 
     private var sendJob: Job? = null
 

@@ -12,7 +12,7 @@ fun CoachRoute(vm: CoachViewModel, onStudy: () -> Unit) {
     CoachScreen(ui, CoachActions(
         onInput = vm::onInput, send = { vm.send() }, chip = vm::useChip, retry = { vm.retry(it.message) },
         add = { vm.addSuggestion(it) }, dismiss = { vm.dismissSuggestion(it) }, showEarlier = vm::showEarlier, newChat = { vm.newConversation() },
-        study = { vm.enterStudy(); onStudy() },
+        study = { vm.enterStudy(); onStudy() }, focus = { vm.setFocus(it) },
     ))
 }
 
