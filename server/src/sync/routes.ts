@@ -326,7 +326,7 @@ export async function syncRoutes(app: FastifyInstance) {
     const journalIds = of('journal').map(r => r.entity_id as string);
     const journalRows = journalIds.length ? await sql`select id, goal_id, local_date::text, mood, body_ciphertext, version, conflict_of, updated_at from journal_entries where id in ${sql(journalIds)} and user_id = ${req.userId}` : [];
     const chatIds = of('chat').map(r => r.entity_id as string);
-    const chatRows = chatIds.length ? await sql`select id, conversation, role, body_ciphertext, status, suggestion_state, created_at from coach_messages where id in ${sql(chatIds)} and user_id = ${req.userId}` : [];
+    const chatRows = chatIds.length ? await sql`select id, conversation, goal_id, role, body_ciphertext, status, suggestion_state, created_at from coach_messages where id in ${sql(chatIds)} and user_id = ${req.userId}` : [];
     const key = journalRows.length || chatRows.length ? await journalKey(sql, req.userId) : null;
 
     const alive = new Set(goals.map(g => g.id as string)), done = new Set(live.map(c => `${c.task_id}:${c.local_date}`));
@@ -345,7 +345,7 @@ export async function syncRoutes(app: FastifyInstance) {
       removedJournal: journalIds.filter(id => !journalRows.some(j => j.id === id)),
       chat: chatRows.map(c => {
         const body = JSON.parse(decryptText(key!, c.body_ciphertext)) as { text: string; suggestion: unknown };
-        return { id: c.id, conversation: c.conversation, role: c.role, text: body.text, suggestion: body.suggestion ?? null, status: c.status, suggestionState: c.suggestion_state, createdAt: ms(c.created_at) };
+        return { id: c.id, conversation: c.conversation, goalId: c.goal_id, role: c.role, text: body.text, suggestion: body.suggestion ?? null, status: c.status, suggestionState: c.suggestion_state, createdAt: ms(c.created_at) };
       }),
       removedChat: chatIds.filter(id => !chatRows.some(c => c.id === id)),
     };

@@ -92,12 +92,22 @@ export class SuggestionSplitter {
   }
 }
 
+/**
+ * Each goal has its own conversation. The goal in focus gets full detail; the others only appear by name, so the coach can
+ * avoid clashes (time, energy) without drifting into them. Without a focus (older apps) every goal is described.
+ */
 function prompt(req: CoachRequest, journal: string[]): string {
-  const goals = req.goals.map(g => {
-    const focus = g.id && g.id === req.focusGoalId ? ' (in focus)' : '';
+  const focus = req.focusGoalId ? req.goals.find(g => g.id === req.focusGoalId) : undefined;
+  const detail = (g: CoachRequest['goals'][number]) => {
     const tasks = g.tasks.map(t => `  - [${t.done ? 'x' : ' '}] ${t.title} (${t.priority}${t.timeOfDay ? `, ${t.timeOfDay}` : ''})`).join('\n');
-    return `Goal${focus}: ${g.statement} — "${g.label}", deadline ${g.deadline}, day ${g.day} of ${g.total}, streak ${g.streak} days.\nToday's tasks:\n${tasks || '  (none)'}`;
-  }).join('\n\n');
+    return `Goal: ${g.statement} — "${g.label}", deadline ${g.deadline}, day ${g.day} of ${g.total}, streak ${g.streak} days.\nToday's tasks:\n${tasks || '  (none)'}`;
+  };
+  const others = focus ? req.goals.filter(g => g !== focus).map(g => `"${g.label}"`) : [];
+  const goals = focus
+    ? [`This conversation is only about this goal:\n${detail(focus)}`,
+       others.length ? `The user also has other goals (${others.join(', ')}). They have their own conversations: don't bring them up unless the user does.` : '']
+        .filter(Boolean).join('\n\n')
+    : req.goals.map(detail).join('\n\n');
   const history = req.history.map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n');
   return [
     `Today is ${req.localDate}.`,
@@ -110,14 +120,14 @@ function prompt(req: CoachRequest, journal: string[]): string {
 
 /** Stores one message (encrypted with the user's key) and logs it for sync. */
 export async function saveMessage(userId: string, id: string, conversation: string, role: 'user' | 'coach', text: string,
-  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date) {
+  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date, goalId: string | null = null) {
   await sql.begin(async tx => {
     const [other] = await tx`select user_id from coach_messages where id = ${id}`;
     if (other && other.user_id !== userId) return;                 // never touch another user's row
     const key = await journalKey(tx, userId);
     const body = encryptText(key, JSON.stringify({ text, suggestion }));
-    await tx`insert into coach_messages (id, user_id, conversation, role, body_ciphertext, status, suggestion_state, created_at)
-             values (${id}, ${userId}, ${conversation}, ${role}, ${body}, ${status}, ${suggestion ? 'pending' : null}, ${at})
+    await tx`insert into coach_messages (id, user_id, conversation, role, body_ciphertext, status, suggestion_state, created_at, goal_id)
+             values (${id}, ${userId}, ${conversation}, ${role}, ${body}, ${status}, ${suggestion ? 'pending' : null}, ${at}, ${goalId})
              on conflict (id) do update set body_ciphertext = excluded.body_ciphertext, status = excluded.status,
                suggestion_state = coalesce(coach_messages.suggestion_state, excluded.suggestion_state)`;
     await tx`insert into changes (user_id, entity, entity_id, op) values (${userId}, 'chat', ${id}, 'upsert')`;
@@ -155,7 +165,10 @@ export async function coachRoutes(app: FastifyInstance) {
     // The question is stored before the model runs, so it reaches the user's other devices even if the reply fails.
     const store = r.conversation && r.messageId && r.replyId;
     const sentAt = new Date(r.sentAt ?? Date.now());
-    if (store) await saveMessage(req.userId, r.messageId!, r.conversation!, 'user', r.message, null, 'sent', sentAt);
+    // The goal the conversation is about, if it is one of the user's own (never trust an id blindly).
+    const [owned] = r.focusGoalId ? await sql`select id from goals where id = ${r.focusGoalId} and user_id = ${req.userId}` : [];
+    const goalId = owned ? String(owned.id) : null;
+    if (store) await saveMessage(req.userId, r.messageId!, r.conversation!, 'user', r.message, null, 'sent', sentAt, goalId);
     let replyText = '';
     let suggestion: z.infer<typeof Suggestion> | null = null;
     let status: 'done' | 'interrupted' = 'interrupted';
@@ -186,7 +199,7 @@ export async function coachRoutes(app: FastifyInstance) {
       // Saved before the stream closes, so the reply is already there when the app syncs right after.
       // A partial reply is kept as "interrupted" (the app shows "Reply interrupted · Retry"); an empty one isn't stored.
       if (store && replyText) {
-        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1))
+        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1), goalId)
           .catch(e => req.log.error({ err: e.message }, 'coach_save_failed'));
       }
       out.end();

@@ -115,6 +115,22 @@ db('coach and journal', () => {
     expect(await rename('shithead')).toBe('Arc');
   });
 
+  it('keeps each goal in its own conversation: full detail for the goal in focus, the others by name only', async () => {
+    const a = await signUp();
+    const g1 = uuidv7(), g2 = uuidv7();
+    await push(a.accessToken, [g1, g2].map((id, i) => ({ id: uuidv7(), entity: 'goal', entityId: id, op: 'upsert', clientTs: Date.now(), patch: { label: i ? 'Learn Rust' : 'Half marathon', statement: i ? 'Learn Rust to an intermediate level' : 'Run a half marathon in under 2 hours', startDate: '2026-10-01', deadline: '2027-04-01' } })));
+    const rust = { ...goal, id: g2, label: 'Learn Rust', statement: 'Learn Rust to an intermediate level', tasks: [{ title: 'Rustlings, 3 exercises', done: false, priority: 'High', timeOfDay: '8:00 PM' }] };
+    script = ['Start with ownership.'];
+    const conversation = uuidv7();
+    await ask(a.accessToken, 'Where do I start?', { goals: [{ ...goal, id: g1 }, rust], focusGoalId: g2, conversation, messageId: uuidv7(), replyId: uuidv7() });
+    expect(lastPrompt).toContain('only about this goal');
+    expect(lastPrompt).toContain('Rustlings, 3 exercises');
+    expect(lastPrompt).not.toContain('Easy run 5 km');                    // the other goal's tasks stay out
+    expect(lastPrompt).toContain('"Half marathon"');                    // named, so the coach knows it exists
+    const chat = (await pull(a.accessToken)).chat as { goalId: string | null }[];
+    expect(chat.map(c => c.goalId)).toEqual([g2, g2]);
+  });
+
   it('lets Plus members pick a coaching style; without Plus the coach stays balanced', async () => {
     const a = await signUp();
     const style = (coachStyle: string) => app.inject({ method: 'PATCH', url: '/v1/me', headers: h(a.accessToken), payload: { coachStyle } });
