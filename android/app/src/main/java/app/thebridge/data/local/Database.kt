@@ -43,6 +43,10 @@ data class TaskEntity(
     val position: Int = 0,
     val deletedAt: Long? = null,
     val updatedAt: Long = System.currentTimeMillis(),
+    /** A step: one-time, for this local day, carried over until done. Null for a daily habit. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val onDate: String? = null,
+    /** Up to three links, JSON [{"title","url"}], checked by the server when the AI wrote them. */
+    @androidx.room.ColumnInfo(defaultValue = "[]") val resources: String = "[]",
 )
 
 @Entity(tableName = "completions", primaryKeys = ["taskId", "localDate"])
@@ -269,8 +273,8 @@ interface PullDao {
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
         SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class],
-    version = 6, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6)],
+    version = 7, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao

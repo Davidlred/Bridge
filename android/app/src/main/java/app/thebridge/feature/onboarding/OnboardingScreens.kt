@@ -129,7 +129,7 @@ fun OnboardingFlow(adding: Boolean, onExit: (() -> Unit)?, onFinished: () -> Uni
                 Step.Routine -> RoutineStep(ui, vm::back, vm::onRoutine, { vm.useExampleRoutine(examples.second) }, vm::toPhoto)
                 Step.Photo -> PhotoStep(ui, vm::back, vm::uploadPhoto, vm::removePhoto, vm::generate, vm::skipPhoto)
                 Step.Generating -> GeneratingStep(ui, vm::retry, vm::writeOwnTasks, vm::continueWithoutImages, vm::cancelGeneration)
-                Step.Review -> ReviewStep(ui, vm::onLabel, vm::onDeadline, vm::onTaskTitle, vm::deleteTask, vm::addTask) { vm.start(onFinished) }
+                Step.Review -> ReviewStep(ui, vm::onLabel, vm::onDeadline, vm::onTaskTitle, vm::deleteTask, vm::addTask, vm::deleteStep) { vm.start(onFinished) }
             }
         }
     }
@@ -429,7 +429,7 @@ private fun Clarify(question: String, onEdit: () -> Unit) {
 @Composable
 fun ReviewStep(
     ui: OnboardingUi, onLabel: (String) -> Unit, onDeadline: (LocalDate) -> Unit, onTitle: (String, String) -> Unit,
-    onDelete: (String) -> Unit, onAdd: () -> Unit, onStart: () -> Unit,
+    onDelete: (String) -> Unit, onAdd: () -> Unit, onDeleteStep: (String) -> Unit = {}, onStart: () -> Unit,
 ) {
     val c = LocalBridgeColors.current
     val d = ui.draft
@@ -480,6 +480,22 @@ fun ReviewStep(
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                     Icon(painterResource(R.drawable.ic_add), null, tint = c.ink2, modifier = Modifier.size(20.dp))
                     Text(stringResource(R.string.review_add_task), style = BType.body(14, FontWeight.Medium), color = c.ink2)
+                }
+                // The one-time first steps: install this, read those chapters. They arrive on Today on their day.
+                if (d.steps.isNotEmpty()) {
+                    Text(stringResource(R.string.review_steps_title), style = BType.display(20), color = c.ink, modifier = Modifier.padding(top = 10.dp).semantics { heading() })
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        d.steps.forEach { s ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).background(c.s1, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(stringResource(R.string.review_step_day, s.day), style = BType.label(10f, 0.1f), color = c.mut, modifier = Modifier.width(44.dp))
+                                Text(s.title, style = BType.body(14, FontWeight.Medium, 1.35f), color = c.ink, modifier = Modifier.weight(1f))
+                                Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button) { onDeleteStep(s.key) }, contentAlignment = Alignment.Center) {
+                                    Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.review_delete_step), tint = c.mut, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -11,6 +11,8 @@ import app.thebridge.data.local.OutboxEntity
 import app.thebridge.data.local.TaskEntity
 import app.thebridge.data.remote.ApiClient
 import app.thebridge.data.remote.Feasibility
+import app.thebridge.data.remote.LinkDto
+import app.thebridge.data.remote.PlanStepDto
 import app.thebridge.data.sync.SyncWorker
 import app.thebridge.domain.GoalProgress
 import app.thebridge.domain.Progress
@@ -29,10 +31,11 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** A task on today's plan. */
-data class PlanTask(val task: TaskEntity, val done: Boolean) {
+/** A task on today's plan: a daily habit, or a step (one-time, [carriedFrom] its day when that has passed). */
+data class PlanTask(val task: TaskEntity, val done: Boolean, val links: List<LinkDto> = emptyList(), val carriedFrom: LocalDate? = null) {
     val isAi: Boolean get() = task.origin == "ai"
     val readOnly: Boolean get() = task.origin == "shared"
+    val isStep: Boolean get() = task.onDate != null
 }
 
 data class GoalState(
@@ -43,13 +46,21 @@ data class GoalState(
     val images: Map<String, GoalImageEntity>,
     /** Today's reflection for this goal has text or a mood ("Locked in."). */
     val journaledToday: Boolean = false,
+    /** Daily habit titles, and step titles done and still open: what the next week of steps is planned from. */
+    val habits: List<String> = emptyList(),
+    val doneSteps: List<String> = emptyList(),
+    val openSteps: List<String> = emptyList(),
 ) {
+    /** No step left to do: offer to plan the next ones. */
+    val needsSteps: Boolean get() = openSteps.isEmpty()
     val future: GoalImageEntity? get() = images["future"]
     val reality: GoalImageEntity? get() = images["reality"]
 }
 
-data class NewTask(val title: String, val priority: String = "Medium", val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val ai: Boolean = false)
-data class NewGoal(val id: String, val label: String, val statement: String, val deadline: LocalDate, val routine: String?, val feasibility: Feasibility?, val tasks: List<NewTask>, val category: String? = null)
+data class NewTask(val title: String, val priority: String = "Medium", val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val ai: Boolean = false, val resources: List<LinkDto> = emptyList())
+/** A one-time step on plan day [day] (1 = the goal's first day). */
+data class NewStep(val day: Int, val title: String, val minutes: Int? = null, val rationale: String? = null, val resources: List<LinkDto> = emptyList())
+data class NewGoal(val id: String, val label: String, val statement: String, val deadline: LocalDate, val routine: String?, val feasibility: Feasibility?, val tasks: List<NewTask>, val category: String? = null, val steps: List<NewStep> = emptyList())
 
 /**
  * Goals, tasks and completions. Every write puts the row and its outbox record in one transaction,
@@ -77,18 +88,29 @@ class GoalRepository @Inject constructor(
         val doneOn = completions.groupBy { it.taskId }.mapValues { (_, c) -> c.map { LocalDate.parse(it.localDate) }.toSet() }
         goals.map { g ->
             val live = tasks.filter { it.goalId == g.id && it.deletedAt == null }
-            val created = live.associate { it.id to createdDay(it.id, LocalDate.parse(g.startDate)) }
+            val (steps, habits) = live.partition { it.onDate != null }
+            val created = habits.associate { it.id to createdDay(it.id, LocalDate.parse(g.startDate)) }
+            val stepDays = steps.associate { it.id to LocalDate.parse(it.onDate) }
             GoalState(
                 goal = g,
-                tasks = live.map { PlanTask(it, today in doneOn[it.id].orEmpty()) }
-                    .sortedWith(compareBy({ PRIORITY_ORDER[it.task.priority] ?: 1 }, { it.task.position })),
-                progress = Progress.of(LocalDate.parse(g.startDate), LocalDate.parse(g.deadline), today, created, doneOn.filterKeys { it in created }),
+                // Habits every day; a step on its day and after until it is done. Steps first: they are today's specific action.
+                tasks = live.filter { Progress.showsToday(stepDays[it.id], doneOn[it.id].orEmpty(), today) }
+                    .map { PlanTask(it, today in doneOn[it.id].orEmpty(), links(it.resources), stepDays[it.id]?.takeIf { d -> d.isBefore(today) }) }
+                    .sortedWith(compareBy({ if (it.isStep) 0 else 1 }, { it.task.onDate }, { PRIORITY_ORDER[it.task.priority] ?: 1 }, { it.task.position })),
+                progress = Progress.of(LocalDate.parse(g.startDate), LocalDate.parse(g.deadline), today, created, doneOn.filterKeys { it in created || it in stepDays }, stepDays),
+                habits = habits.map { it.title },
+                doneSteps = steps.filter { doneOn[it.id].orEmpty().isNotEmpty() }.sortedBy { it.onDate }.map { it.title },
+                openSteps = steps.filter { doneOn[it.id].orEmpty().isEmpty() }.sortedBy { it.onDate }.map { it.title },
                 feasibility = g.feasibility?.let { runCatching { json.decodeFromString(Feasibility.serializer(), it) }.getOrNull() },
                 images = images.filter { it.goalId == g.id }.associateBy { it.kind },
                 journaledToday = g.id in journaled,
             )
         }
     }
+
+    private val linkList = kotlinx.serialization.builtins.ListSerializer(LinkDto.serializer())
+    private fun links(raw: String): List<LinkDto> = runCatching { json.decodeFromString(linkList, raw) }.getOrDefault(emptyList())
+    private fun linksJson(l: List<LinkDto>): String = json.encodeToString(linkList, l.take(3))
 
     /** UUIDv7 ids carry their creation time; tasks never count as missed before they existed. */
     private fun createdDay(id: String, start: LocalDate): LocalDate = runCatching {
@@ -123,7 +145,29 @@ class GoalRepository @Inject constructor(
                 if (g.feasibility != null) put("feasibility", json.encodeToJsonElement(Feasibility.serializer(), g.feasibility))
             })
             g.tasks.filter { it.title.isNotBlank() }.forEachIndexed { i, t ->
-                val row = TaskEntity(UuidV7.next(), g.id, t.title.trim(), t.priority, t.timeOfDay, t.minutes, t.rationale, t.notes, if (t.ai) "ai" else "user", position = i)
+                val row = TaskEntity(UuidV7.next(), g.id, t.title.trim(), t.priority, t.timeOfDay, t.minutes, t.rationale, t.notes, if (t.ai) "ai" else "user", position = i, resources = linksJson(t.resources))
+                db.tasks().upsert(row)
+                enqueue("task", row.id, "upsert", taskPatch(row, create = true))
+            }
+            g.steps.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
+                val row = stepRow(g.id, s.title, s.minutes, s.rationale, s.resources, start.plusDays((s.day - 1).coerceAtLeast(0).toLong()), 100 + i)
+                db.tasks().upsert(row)
+                enqueue("task", row.id, "upsert", taskPatch(row, create = true))
+            }
+        }
+    }
+
+    private fun stepRow(goalId: String, title: String, minutes: Int?, rationale: String?, resources: List<LinkDto>, day: LocalDate, position: Int) =
+        TaskEntity(UuidV7.next(), goalId, title.trim().take(120), "Medium", minutes = minutes, rationale = rationale?.take(200), origin = "ai", position = position,
+            onDate = day.toString(), resources = linksJson(resources))
+
+    /** The next week of steps, planned by the AI; day 1 is today. */
+    suspend fun addSteps(goalId: String, steps: List<PlanStepDto>) {
+        val today = today()
+        val first = db.tasks().nextPosition(goalId)
+        write { enqueue ->
+            steps.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
+                val row = stepRow(goalId, s.title, s.minutes, s.rationale, s.resources, today.plusDays((s.day - 1).coerceAtLeast(0).toLong()), first + i)
                 db.tasks().upsert(row)
                 enqueue("task", row.id, "upsert", taskPatch(row, create = true))
             }
@@ -131,7 +175,11 @@ class GoalRepository @Inject constructor(
     }
 
     private fun taskPatch(t: TaskEntity, create: Boolean) = buildJsonObject {
-        if (create) { put("goalId", t.goalId); put("origin", t.origin); put("rationale", t.rationale); put("minutes", t.minutes) }
+        if (create) {
+            put("goalId", t.goalId); put("origin", t.origin); put("rationale", t.rationale); put("minutes", t.minutes)
+            if (t.onDate != null) put("onDate", t.onDate)
+            if (t.resources != "[]") put("resources", json.parseToJsonElement(t.resources))
+        }
         put("title", t.title); put("priority", t.priority); put("timeOfDay", t.timeOfDay); put("notes", t.notes); put("position", t.position)
     }
 

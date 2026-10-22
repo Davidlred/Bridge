@@ -26,6 +26,26 @@ class GoalsCoreTest {
         assertFalse(p.allDone)
     }
 
+    @Test fun `a step shows on its day, carries over until done, and not after`() {
+        assertTrue(Progress.showsToday(null, emptySet(), d(4)))                 // a habit: every day
+        assertFalse(Progress.showsToday(d(5), emptySet(), d(4)))                // not yet
+        assertTrue(Progress.showsToday(d(4), emptySet(), d(4)))                 // its day
+        assertTrue(Progress.showsToday(d(2), emptySet(), d(4)))                 // missed: carried over
+        assertTrue(Progress.showsToday(d(2), setOf(d(4)), d(4)))                // done today: stays ticked today
+        assertFalse(Progress.showsToday(d(2), setOf(d(3)), d(4)))               // done yesterday: gone
+    }
+
+    @Test fun `today's count includes due steps, and drift counts a step on its own day`() {
+        val habits = mapOf("h" to start)
+        val steps = mapOf("today" to d(4), "late" to d(3), "later" to d(6), "done" to d(2))
+        val done = mapOf("h" to setOf(d(4), d(3), d(2)), "today" to setOf(d(4)), "done" to setOf(d(2)))
+        val p = Progress.of(start, d(10), d(4), habits, done, steps)
+        assertEquals(3, p.tasksToday)          // habit + today's step + yesterday's carried step
+        assertEquals(2, p.doneToday)
+        // Day 3: habit done, its step missed. Day 2: habit and step done. Day 1: habit missed. 3 of 5 = 60%, 20 points under pace.
+        assertEquals(-20, p.drift)
+    }
+
     @Test fun `total never drops below the day index once the deadline has passed`() {
         val p = Progress.of(start, d(5), d(8), mapOf("a" to start), emptyMap())
         assertEquals(8, p.total); assertEquals(7f / 8, p.fraction, 0.0001f)

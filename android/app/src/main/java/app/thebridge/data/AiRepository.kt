@@ -32,6 +32,9 @@ class AiRepository @Inject constructor(
     suspend fun reality(goal: String, deadline: String, today: String, routine: String, tasks: List<String>): Feasibility =
         api.reality(goal, deadline, today, routine, tasks)
 
+    suspend fun nextSteps(goal: String, deadline: String, today: String, routine: String, habits: List<String>, done: List<String>, open: List<String>) =
+        api.nextSteps(goal, deadline, today, routine, habits, done, open)
+
     /** Starts the missing (or failed) images for a goal and stores their state locally. */
     suspend fun startImages(goalId: String, goal: String, routine: String, kinds: List<String> = listOf("future", "reality")): List<GoalImageDto> =
         api.startImages(goalId, goal, routine, kinds).also { save(goalId, it) }

@@ -50,7 +50,12 @@ enum class PlanState { Pending, Running, Done, Failed, Clarify, Quota }
 enum class PhotoState { None, Uploading, Done, Failed }
 
 @Serializable
-data class DraftTask(val key: String = UuidV7.next(), val title: String, val priority: String = "Medium", val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val ai: Boolean = false)
+data class DraftTask(val key: String = UuidV7.next(), val title: String, val priority: String = "Medium", val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val ai: Boolean = false,
+                     val resources: List<app.thebridge.data.remote.LinkDto> = emptyList())
+
+/** A one-time first-week step from the plan. */
+@Serializable
+data class DraftStep(val key: String = UuidV7.next(), val day: Int, val title: String, val minutes: Int? = null, val rationale: String? = null, val resources: List<app.thebridge.data.remote.LinkDto> = emptyList())
 
 /** Everything typed during onboarding. Saved on every change so a killed app resumes at the same step with the same inputs. */
 @Serializable
@@ -68,6 +73,7 @@ data class OnboardingDraft(
     val clarification: String? = null,
     val label: String = "",
     val tasks: List<DraftTask> = emptyList(),
+    val steps: List<DraftStep> = emptyList(),
     val feasibility: Feasibility? = null,
     val category: String? = null,
     val genStartedAt: Long = 0,
@@ -208,7 +214,8 @@ class OnboardingViewModel @Inject constructor(
                 if (plan.needsClarification != null) { edit { it.copy(plan = PlanState.Clarify, clarification = plan.needsClarification) }; return@launch }
                 edit {
                     it.copy(plan = PlanState.Done, label = it.label.ifBlank { plan.label.ifBlank { GoalText.autoLabel(it.goal) } }, feasibility = plan.feasibility, category = plan.category,
-                        tasks = plan.tasks.map { t -> DraftTask(title = t.title, priority = t.priority, timeOfDay = t.timeOfDay, minutes = t.minutes, rationale = t.rationale, ai = true) })
+                        tasks = plan.tasks.map { t -> DraftTask(title = t.title, priority = t.priority, timeOfDay = t.timeOfDay, minutes = t.minutes, rationale = t.rationale, ai = true, resources = t.resources) },
+                        steps = plan.steps.map { s -> DraftStep(day = s.day, title = s.title, minutes = s.minutes, rationale = s.rationale, resources = s.resources) })
                 }
             } catch (e: ApiException) {
                 edit { it.copy(plan = if (e.code == "ai_quota" || e.status == 429) PlanState.Quota else PlanState.Failed) }
@@ -257,6 +264,7 @@ class OnboardingViewModel @Inject constructor(
     fun onTaskTitle(key: String, v: String) = edit { d -> d.copy(tasks = d.tasks.map { if (it.key == key) it.copy(title = v.take(80)) else it }) }
     fun deleteTask(key: String) = edit { d -> d.copy(tasks = d.tasks.filterNot { it.key == key }) }
     fun addTask() = edit { d -> d.copy(tasks = d.tasks + DraftTask(title = "")) }
+    fun deleteStep(key: String) = edit { d -> d.copy(steps = d.steps.filterNot { it.key == key }) }
 
     fun back() {
         when (draft.value?.step) {
@@ -277,7 +285,8 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             goals.createGoal(NewGoal(
                 id = d.goalId, label = d.label, statement = d.goal, deadline = s.deadline!!, routine = d.routine.trim().ifBlank { null }, feasibility = d.feasibility, category = d.category,
-                tasks = d.tasks.filter { it.title.isNotBlank() }.map { NewTask(it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, ai = it.ai) },
+                tasks = d.tasks.filter { it.title.isNotBlank() }.map { NewTask(it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, ai = it.ai, resources = it.resources) },
+                steps = d.steps.map { app.thebridge.data.NewStep(it.day, it.title, it.minutes, it.rationale, it.resources) },
             ))
             store.edit { it.remove(KEY) }
             if (d.adding) toaster.show(UiText.Res(R.string.toast_goal_added, listOf(d.label.trim(), s.otherGoals + 1)), ToastKind.Ok)

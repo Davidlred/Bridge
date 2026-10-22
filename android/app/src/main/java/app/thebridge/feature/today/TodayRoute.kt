@@ -58,7 +58,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },
         openJournal = onOpenJournal, onNote = vm::onRealityNote, useDate = { id, d -> vm.useSuggestedDate(id, d) }, recheck = vm::recheck,
-        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity, complete = vm::complete, archive = { sheet = "archive:$it" }, choosePaused = { sheet = "choose" },
+        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity, complete = vm::complete, archive = { sheet = "archive:$it" }, choosePaused = { sheet = "choose" }, planSteps = vm::planSteps,
         openNotificationSettings = if (notificationsOn || ui.goals.isEmpty()) null else { {
             ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
         } },

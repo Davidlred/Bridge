@@ -41,10 +41,11 @@ object Progress {
      *   doesn't count as missed on earlier days.
      * @param completions local dates with a completion, per task id.
      */
-    fun of(start: LocalDate, deadline: LocalDate, today: LocalDate, taskCreatedDays: Map<String, LocalDate>, completions: Map<String, Set<LocalDate>>): GoalProgress {
+    fun of(start: LocalDate, deadline: LocalDate, today: LocalDate, taskCreatedDays: Map<String, LocalDate>, completions: Map<String, Set<LocalDate>>,
+           stepDays: Map<String, LocalDate> = emptyMap()): GoalProgress {
         val day = (ChronoUnit.DAYS.between(start, today).toInt() + 1).coerceAtLeast(1)
         val total = (ChronoUnit.DAYS.between(start, deadline).toInt() + 1).coerceAtLeast(day)
-        val tasks = taskCreatedDays.keys
+        val tasks = taskCreatedDays.keys + stepDays.filter { (id, d) -> showsToday(d, completions[id].orEmpty(), today) }.keys
         val doneToday = tasks.count { today in completions[it].orEmpty() }
         val todayShare = if (tasks.isEmpty()) 0f else doneToday.toFloat() / tasks.size
         val days = completions.values.flatten().toSet()
@@ -53,7 +54,7 @@ object Progress {
             day = day, total = total, doneToday = doneToday, tasksToday = tasks.size,
             fraction = ((day - 1 + todayShare) / total).coerceIn(0f, 1f),
             streak = streak(completions.values.flatten().toSet(), today),
-            drift = drift(start, today, taskCreatedDays, completions),
+            drift = drift(start, today, taskCreatedDays, completions, stepDays),
             overdue = today.isAfter(deadline),
             awayDays = ChronoUnit.DAYS.between(last ?: start.minusDays(1), today).toInt().minus(1).coerceAtLeast(0),
             activeDays = days.count { !it.isAfter(today) },
@@ -69,11 +70,19 @@ object Progress {
     }
 
     /** Last 7 finished days: share of planned tasks done, against [PACE_TARGET]. Today is excluded so mornings don't read as "behind". */
-    fun drift(start: LocalDate, today: LocalDate, taskCreatedDays: Map<String, LocalDate>, completions: Map<String, Set<LocalDate>>): Int? {
+    /**
+     * Habits ([stepDay] null) show every day. A step shows from its day until the day it is done (it carries over), and
+     * not after an earlier day's completion.
+     */
+    fun showsToday(stepDay: LocalDate?, doneDays: Set<LocalDate>, today: LocalDate): Boolean =
+        stepDay == null || (!stepDay.isAfter(today) && doneDays.none { it.isBefore(today) })
+
+    fun drift(start: LocalDate, today: LocalDate, taskCreatedDays: Map<String, LocalDate>, completions: Map<String, Set<LocalDate>>, stepDays: Map<String, LocalDate> = emptyMap()): Int? {
         var planned = 0; var done = 0
         for (i in 1..7) {
             val d = today.minusDays(i.toLong())
             if (d.isBefore(start)) break
+            for ((step, due) in stepDays) if (due == d) { planned++; if (d in completions[step].orEmpty()) done++ }
             for ((task, created) in taskCreatedDays) {
                 if (created.isAfter(d)) continue
                 planned++

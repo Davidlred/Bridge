@@ -166,6 +166,23 @@ class ScreenshotTest {
     private val spanish = goal("g2", "Spanish B1", 1, LocalDate.of(2026, 10, 4), LocalDate.of(2027, 6, 1), listOf(task("t5", "Flashcards, 15 min", "High", "Commute") to true))
     @Test fun todaySingle() = snap("today") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon)), TodayActions(), LocalTime.of(9, 41), day) }
     @Test fun todayOverview() = snap("today-goals") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon, spanish)), TodayActions(), LocalTime.of(9, 41), day) }
+    // A goal with first steps: yesterday's step carried over, today's step, a habit; links on each.
+    @Test fun todaySteps() = snap("today-steps") {
+        val book = app.thebridge.data.remote.LinkDto("The Rust Programming Language", "https://doc.rust-lang.org/book/")
+        val rust = marathon.copy(goal = marathon.goal.copy(label = "Rust CLI", statement = "Learn Rust well enough to build a command-line tool"), openSteps = listOf("s1", "s2"), tasks = listOf(
+            PlanTask(TaskEntity("s1", "g1", "Install Rust with rustup and run cargo new hello", "Medium", origin = "ai", onDate = day.minusDays(1).toString()), false,
+                listOf(app.thebridge.data.remote.LinkDto("Install Rust", "https://www.rust-lang.org/tools/install")), day.minusDays(1)),
+            PlanTask(TaskEntity("s2", "g1", "Read chapters 1 and 2 of The Rust Programming Language", "Medium", origin = "ai", onDate = day.toString()), false, listOf(book)),
+            PlanTask(task("t1", "Read The Rust Programming Language for 30 min", "High", "7:30 PM"), true, listOf(book))))
+        TodayScreen(TodayUi(true, "Sharon", listOf(rust)), TodayActions(), LocalTime.of(9, 41), day)
+    }
+    @Test fun links() = snap("links") {
+        androidx.compose.foundation.layout.Column(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            app.thebridge.feature.today.LinkRow(app.thebridge.data.remote.LinkDto("The Rust Programming Language", "https://doc.rust-lang.org/book/"))
+            app.thebridge.feature.today.LinkRow(app.thebridge.data.remote.LinkDto("Ownership and borrowing explained", "https://www.youtube.com/results?search_query=rust%20ownership"))
+            app.thebridge.feature.today.LinkRow(app.thebridge.data.remote.LinkDto("Rust by Example", "https://www.google.com/search?q=Rust%20by%20Example"))
+        }
+    }
     @Test fun todayEmpty() = snap("today-empty") { TodayScreen(TodayUi(true, "Sharon"), TodayActions(), LocalTime.of(9, 41), day) }
     private val overdue = goal("g1", "Half marathon", 0, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 10, 11), marathon.tasks.map { it.task to false })
     private val away = marathon.copy(tasks = marathon.tasks.map { it.copy(done = false) },
@@ -223,7 +240,8 @@ class ScreenshotTest {
     @Test fun obReview() = snap("ob-review") {
         ReviewStep(ob(OnboardingDraft(goalId = "g", step = Step.Review, goal = "Run a half marathon in under 2 hours.", deadline = "2027-02-09", label = "Half marathon", plan = PlanState.Done,
             feasibility = Feasibility("realistic", "Seventeen weeks is enough with three runs a week.", null),
-            tasks = listOf(DraftTask("a", "Easy run, 5 km", "High", ai = true), DraftTask("b", "Mobility, 10 min", ai = true), DraftTask("c", "In bed by 10:30 PM", ai = true)))), {}, {}, { _, _ -> }, {}, {}, {})
+            tasks = listOf(DraftTask("a", "Easy run, 5 km", "High", ai = true), DraftTask("b", "Mobility, 10 min", ai = true), DraftTask("c", "In bed by 10:30 PM", ai = true)),
+            steps = listOf(app.thebridge.feature.onboarding.DraftStep("s1", 1, "Get fitted for running shoes"), app.thebridge.feature.onboarding.DraftStep("s2", 2, "Do Couch to 5K week 1, run 1")))), {}, {}, { _, _ -> }, {}, {}, {}, {})
     }
     // --- Milestone 4 ---
     private val now = java.time.LocalDateTime.of(2026, 10, 13, 9, 41).atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()

@@ -108,7 +108,8 @@ class RemoteSyncApi @Inject constructor(
         // A task or completion can arrive after its parent was deleted on another device; skip instead of breaking the foreign key.
         val goals = dao.knownGoals(page.tasks.map { it.goalId }.distinct()).toSet()
         dao.tasks(page.tasks.filter { it.goalId in goals }.map {
-            TaskEntity(it.id, it.goalId, it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, it.notes, it.origin, it.sharedTaskId, it.position, it.deletedAt, it.updatedAt)
+            TaskEntity(it.id, it.goalId, it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, it.notes, it.origin, it.sharedTaskId, it.position, it.deletedAt, it.updatedAt,
+                it.onDate, api.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.thebridge.data.remote.LinkDto.serializer()), it.resources))
         })
         page.removed.completions.forEach { dao.removeCompletion(it.taskId, it.localDate) }
         db.journal().delete(page.removedJournal)

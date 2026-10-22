@@ -47,12 +47,16 @@ data class TodayUi(
     val realityError: Boolean = false,
     /** Paused when Plus ended; the user chooses which goals stay active. */
     val paused: List<GoalEntity> = emptyList(),
+    /** The goal whose next steps are being planned. */
+    val stepsBusy: String? = null,
 ) {
     val streak: Int get() = goals.maxOfOrNull { it.progress.streak } ?: 0
     val open: GoalState? get() = goals.find { it.goal.id == openGoalId } ?: goals.singleOrNull()
     val showOverview: Boolean get() = goals.size > 1 && open == null
     val atLimit: Boolean get() = goals.size >= GoalRepository.FREE_GOAL_LIMIT
 }
+
+private data class ViewBits(val view: GoalView, val celebrate: String?, val reality: Pair<Boolean, Boolean>, val stepsBusy: String?)
 
 @HiltViewModel
 class TodayViewModel @Inject constructor(
@@ -73,9 +77,11 @@ class TodayViewModel @Inject constructor(
     private val view = MutableStateFlow(GoalView.Today)
     private val celebrate = MutableStateFlow<String?>(null)
     private val reality = MutableStateFlow(false to false)   // busy, error
+    private val stepsBusy = MutableStateFlow<String?>(null)
 
-    val state: StateFlow<TodayUi> = combine(repo.activeGoals(), session.user.map { it?.displayName.orEmpty() }, open, combine(view, celebrate, reality, ::Triple), repo.pausedGoals()) { goals, name, openId, (v, cel, r), paused ->
-        TodayUi(true, name, goals, openId?.takeIf { id -> goals.any { it.goal.id == id } }, v, cel, r.first, r.second, paused)
+    val state: StateFlow<TodayUi> = combine(repo.activeGoals(), session.user.map { it?.displayName.orEmpty() }, open,
+        combine(view, celebrate, reality, stepsBusy) { v, cel, r, sb -> ViewBits(v, cel, r, sb) }, repo.pausedGoals()) { goals, name, openId, b, paused ->
+        TodayUi(true, name, goals, openId?.takeIf { id -> goals.any { it.goal.id == id } }, b.view, b.celebrate, b.reality.first, b.reality.second, paused, b.stepsBusy)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUi())
 
     private val imagesRefreshedAt = mutableMapOf<String, Long>()
@@ -163,6 +169,23 @@ class TodayViewModel @Inject constructor(
     fun onRealityNote(id: String, text: String) {
         noteJob?.cancel()
         noteJob = viewModelScope.launch { delay(800); repo.updateGoal(id, realityNote = text.take(1000)) }
+    }
+
+    /** Plans the next week of steps from what is done and still open. */
+    fun planSteps(g: GoalState) {
+        if (stepsBusy.value != null) return
+        stepsBusy.value = g.goal.id
+        viewModelScope.launch {
+            try {
+                val steps = ai.nextSteps(g.goal.statement, g.goal.deadline, LocalDay.today(), g.goal.routine.orEmpty(), g.habits, g.doneSteps, g.openSteps)
+                repo.addSteps(g.goal.id, steps)
+                toaster.show(UiText.Res(R.string.toast_steps_added), ToastKind.Ok)
+            } catch (e: OfflineException) {
+                toaster.show(UiText.Res(R.string.error_offline), ToastKind.Warn)
+            } catch (e: Exception) {
+                toaster.show(UiText.Res(R.string.steps_failed), ToastKind.Warn)
+            } finally { stepsBusy.value = null }
+        }
     }
 
     fun retryImages(g: GoalState) = viewModelScope.launch {

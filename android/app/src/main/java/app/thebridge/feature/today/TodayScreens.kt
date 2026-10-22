@@ -114,7 +114,7 @@ data class TodayActions(
     val openJournal: (String) -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
     val recheck: (String) -> Unit = {}, val retryImages: (GoalState) -> Unit = {}, val openNotificationSettings: (() -> Unit)? = null,
     val openCommunity: (String) -> Unit = {}, val complete: (String) -> Unit = {}, val archive: (String) -> Unit = {},
-    val choosePaused: () -> Unit = {},
+    val choosePaused: () -> Unit = {}, val planSteps: (GoalState) -> Unit = {},
 )
 
 @Composable
@@ -357,6 +357,17 @@ private fun TodayView(ui: TodayUi, g: GoalState, actions: TodayActions) {
             Icon(painterResource(R.drawable.ic_add), null, tint = c.ink2, modifier = Modifier.size(20.dp))
             Text(stringResource(R.string.add_task), style = BType.body(14, FontWeight.Medium), color = c.ink2)
         }
+        // Every step done (or a goal from before steps): the AI plans the next week from where you are.
+        if (g.needsSteps && !p.overdue) {
+            val busy = ui.stepsBusy == g.goal.id
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).border(1.dp, c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                .clickable(enabled = !busy, role = Role.Button) { actions.planSteps(g) }.padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = c.ink2, strokeWidth = 2.dp)
+                else Icon(painterResource(R.drawable.ic_event), null, tint = c.ink2, modifier = Modifier.size(20.dp))
+                Text(stringResource(if (busy) R.string.plan_steps_busy else R.string.plan_steps), style = BType.body(14, FontWeight.Medium), color = c.ink2)
+            }
+        }
     }
 }
 
@@ -441,12 +452,40 @@ fun TaskRow(t: PlanTask, actions: TodayActions) {
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = BType.body(15, FontWeight.Medium, 1.35f), color = if (t.done) c.mut else c.ink, textDecoration = if (t.done) TextDecoration.LineThrough else null)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PriorityPill(t.task.priority)
+            // A step has no priority: it is today's action. One carried over says since when.
+            val meta = t.carriedFrom != null || t.task.timeOfDay != null || t.links.isNotEmpty() || !t.isStep
+            if (meta) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!t.isStep) PriorityPill(t.task.priority)
+                t.carriedFrom?.let { Text(stringResource(R.string.step_carried, it.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())), style = BType.body(12), color = c.mut) }
                 t.task.timeOfDay?.let { Text(it, style = BType.body(12), color = c.mut) }
+                if (t.links.isNotEmpty()) Icon(painterResource(R.drawable.ic_link), stringResource(R.string.task_has_links), tint = c.mut, modifier = Modifier.size(16.dp))
             }
         }
         Icon(painterResource(R.drawable.ic_chevron_right), null, tint = c.mut2, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Opens in the browser (or the YouTube app). Says where it goes: the site, or that it is a search. */
+@Composable
+fun LinkRow(l: app.thebridge.data.remote.LinkDto) {
+    val c = LocalBridgeColors.current
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    val host = remember(l.url) { runCatching { java.net.URI(l.url).host.orEmpty().removePrefix("www.").removePrefix("m.") }.getOrDefault("") }
+    val source = when {
+        l.url.contains("youtube.com/results") -> stringResource(R.string.link_youtube_search)
+        l.url.contains("google.com/search") -> stringResource(R.string.link_web_search)
+        host == "youtube.com" || host == "youtu.be" -> stringResource(R.string.link_youtube)
+        else -> host
+    }
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).background(c.bg, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
+        .clickable(role = Role.Button) { runCatching { uri.openUri(l.url) } }.padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(painterResource(R.drawable.ic_link), null, tint = c.ink2, modifier = Modifier.size(18.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(l.title, style = BType.body(14, FontWeight.Medium), color = c.ink, maxLines = 2)
+            if (source.isNotEmpty()) Text(source, style = BType.body(12), color = c.mut, maxLines = 1)
+        }
+        Icon(painterResource(R.drawable.ic_chevron_right), null, tint = c.mut2, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -519,6 +558,10 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
             }
             t?.task?.rationale?.let {
                 Text(it, style = BType.body(13, lineHeight = 1.5f), color = c.mut)
+            }
+            if (t != null && t.links.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.task_links), style = BType.label(11f, 0.12f), color = c.mut)
+                t.links.forEach { LinkRow(it) }
             }
             val save = { if (title.trim().length < 2) error = true else onSave(title, notes, priority, time) }
             when {

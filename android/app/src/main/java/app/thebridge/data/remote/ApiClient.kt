@@ -44,8 +44,13 @@ class StreamInterrupted : Exception()
 @Serializable private data class MeResponse(val user: UserDto)
 
 @Serializable data class Feasibility(val verdict: String, val reason: String, val suggestedDeadline: String? = null)
-@Serializable data class PlanTaskDto(val title: String, val priority: String, val timeOfDay: String, val minutes: Int, val rationale: String)
-@Serializable data class PlanDto(val needsClarification: String? = null, val label: String, val goal: String, val category: String? = null, val feasibility: Feasibility, val tasks: List<PlanTaskDto>)
+/** Something to read, watch or use, with a link that opens (the server checked it or made it a search). */
+@Serializable data class LinkDto(val title: String, val url: String)
+@Serializable data class PlanTaskDto(val title: String, val priority: String, val timeOfDay: String, val minutes: Int, val rationale: String, val resources: List<LinkDto> = emptyList())
+/** A one-time step on plan day [day] (1 = the day it was planned). */
+@Serializable data class PlanStepDto(val day: Int, val title: String, val minutes: Int? = null, val rationale: String? = null, val resources: List<LinkDto> = emptyList())
+@Serializable private data class StepsResponse(val steps: List<PlanStepDto>)
+@Serializable data class PlanDto(val needsClarification: String? = null, val label: String, val goal: String, val category: String? = null, val feasibility: Feasibility, val tasks: List<PlanTaskDto>, val steps: List<PlanStepDto> = emptyList())
 @Serializable private data class PlanResponse(val plan: PlanDto)
 @Serializable private data class RealityResponse(val feasibility: Feasibility)
 @Serializable data class GoalImageDto(val kind: String, val status: String, val url: String? = null, val withFace: Boolean = false)
@@ -56,7 +61,7 @@ class StreamInterrupted : Exception()
 @Serializable data class MutationDto(val id: String, val entity: String, val entityId: String, val op: String, val patch: JsonElement, val clientTs: Long)
 @Serializable data class PushResponse(val accepted: List<String> = emptyList(), val rejected: Map<String, String> = emptyMap())
 @Serializable data class GoalDto(val id: String, val label: String, val statement: String, val startDate: String, val deadline: String, val status: String, val sourceAllianceId: String? = null, val colorIndex: Int = 0, val updatedAt: Long = 0, val routine: String? = null, val realityNote: String? = null, val feasibility: Feasibility? = null, val category: String? = null)
-@Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0)
+@Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0, val onDate: String? = null, val resources: List<LinkDto> = emptyList())
 @Serializable data class CompletionDto(val taskId: String, val localDate: String, val completedAt: Long = 0)
 @Serializable data class CompletionKey(val taskId: String, val localDate: String)
 @Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList())
@@ -210,6 +215,14 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
             put("goalText", goalText); put("deadline", deadline); put("today", today); put("routine", routine)
             put("tasks", kotlinx.serialization.json.JsonArray(tasks.take(20).map { kotlinx.serialization.json.JsonPrimitive(it.take(120)) }))
         }, authed = true, slow = true)).feasibility
+    /** The next week of steps for a goal under way. */
+    suspend fun nextSteps(goalText: String, deadline: String, today: String, routine: String, habits: List<String>, done: List<String>, open: List<String>): List<PlanStepDto> {
+        fun arr(l: List<String>, max: Int) = kotlinx.serialization.json.JsonArray(l.take(max).map { kotlinx.serialization.json.JsonPrimitive(it.take(120)) })
+        return json.decodeFromString<StepsResponse>(call("POST", "/v1/ai/steps", buildJsonObject {
+            put("goalText", goalText); put("deadline", deadline); put("today", today); put("routine", routine.take(1000))
+            put("habits", arr(habits, 20)); put("done", arr(done.takeLast(60), 60)); put("open", arr(open, 30))
+        }, authed = true, slow = true)).steps
+    }
     suspend fun startImages(goalId: String, goalText: String, routine: String, kinds: List<String>): List<GoalImageDto> =
         json.decodeFromString<ImagesResponse>(call("POST", "/v1/ai/images", buildJsonObject {
             put("goalId", goalId); put("goalText", goalText); put("routine", routine); put("kinds", kotlinx.serialization.json.JsonArray(kinds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
