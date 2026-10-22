@@ -563,7 +563,7 @@ struct TaskRow: View {
 }
 
 /// Opens in the browser (or the YouTube app). Says where it goes: the site, or that it is a search.
-struct LinkRow: View {
+struct ResourceLinkRow: View {
     let link: LinkDTO
     @Environment(\.openURL) private var openURL
     private var source: String {
@@ -679,7 +679,7 @@ struct TaskSheet: View {
                 if let links = task?.links, !links.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("LINKS").bridgeLabel(11)
-                        ForEach(links, id: \.self) { LinkRow(link: $0) }
+                        ForEach(links, id: \.self) { ResourceLinkRow(link: $0) }
                     }
                 }
                 let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time) } }

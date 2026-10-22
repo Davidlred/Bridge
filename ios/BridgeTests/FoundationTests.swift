@@ -173,9 +173,9 @@ final class FoundationSnapshotTests: XCTestCase {
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }
     func testLinks() {
         verify(VStack(spacing: 8) {
-            LinkRow(link: LinkDTO(title: "The Rust Programming Language", url: "https://doc.rust-lang.org/book/"))
-            LinkRow(link: LinkDTO(title: "Ownership and borrowing explained", url: "https://www.youtube.com/results?search_query=rust%20ownership"))
-            LinkRow(link: LinkDTO(title: "Exercism Rust track", url: "https://exercism.org/tracks/rust"))
+            ResourceLinkRow(link: LinkDTO(title: "The Rust Programming Language", url: "https://doc.rust-lang.org/book/"))
+            ResourceLinkRow(link: LinkDTO(title: "Ownership and borrowing explained", url: "https://www.youtube.com/results?search_query=rust%20ownership"))
+            ResourceLinkRow(link: LinkDTO(title: "Exercism Rust track", url: "https://exercism.org/tracks/rust"))
         }.padding(24).background(Theme.s1), named: "links")
     }
     func testAppearance() { verify(AppearanceSheet(current: "system") { _ in }.background(Theme.s1), named: "appearance") }
