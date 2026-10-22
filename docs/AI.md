@@ -22,12 +22,18 @@ Request (client → `POST /v1/ai/plan`):
 ```
 Rules baked into the system prompt:
 1. The **deadline field is authoritative**. Ignore dates in the free text. If the free text contradicts the deadline, mention it in `feasibility.reason`, never change `deadline`.
-2. 2–6 daily tasks, each doable in ≤ 90 minutes, scheduled outside busy blocks.
-3. Every task has a one-sentence rationale.
-4. No medical, legal or financial advice beyond general guidance; for health goals add "check with a professional" when relevant.
-5. Output **only** JSON matching the schema (see `server/src/ai/planSchema.ts`).
+2. 1–4 daily habits ("tasks"), each doable in ≤ 90 minutes, scheduled outside busy blocks, naming the actual thing ("Read The Rust Programming Language for 30 min", not "Study Rust").
+3. Steps: the concrete one-time actions for the first 7 days (`day` 1 = today, 1–2 a day): what to install and from where, which book and chapters, which exercises or video.
+4. Every task and step has a one-sentence rationale and up to 3 resources: `{title, url}` only for pages the model is certain exist (official sites, docs, free books), otherwise `{title, search}` (a YouTube search phrase). No invented URLs.
+5. No medical, legal or financial advice beyond general guidance; for health goals add "check with a professional" when relevant.
+6. Plain voice: no em dashes, emoji or filler (`ai/voice.ts`; dashes left in plan text become commas).
+7. Output **only** JSON matching the schema (see `server/src/ai/planSchema.ts`).
 
 Server pipeline: build prompt → call model (60s sync wait, poll fallback) → strip code fences → `JSON.parse` → zod validate → on failure, one repair retry with the zod error → on second failure return `503 plan_unavailable` (client shows "Generation fails" state with "Write my own tasks").
+
+**Links** (`ai/links.ts`): every resource is checked before the plan goes out, in parallel, 4s each. YouTube links go through oEmbed; other pages through HEAD (GET when HEAD is refused). A 404/410, an unknown host or an unknown video means invented: a video becomes a YouTube search, a page a web search for its title. 403/429/timeouts are kept (sites that turn bots away). The apps only ever get `{title, url}`.
+
+**Steps on the device**: a step is a task with `onDate` (its local day). It shows on that day, carries over ("From Mon") until done, and counts toward drift on its own day. When no step is open, Today offers "Plan my next steps" → `POST /v1/ai/steps` with the habits and the done/open step titles; the reply's days are relative to today.
 
 Latency target: p50 < 8s, p95 < 20s. Client shows the *thinking* mascot with rotating status lines; cancel aborts the request (server aborts the Replicate prediction via `POST /predictions/{id}/cancel`).
 
