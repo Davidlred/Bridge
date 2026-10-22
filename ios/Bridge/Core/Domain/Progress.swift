@@ -50,17 +50,19 @@ enum Progress {
     /// - Parameters:
     ///   - taskCreated: local date each live task first existed (from its UUIDv7 id).
     ///   - completions: local dates with a completion, per task id.
-    static func of(start: String, deadline: String, today: String, taskCreated: [UUID: String], completions: [UUID: Set<String>]) -> GoalProgress {
+    static func of(start: String, deadline: String, today: String, taskCreated: [UUID: String], completions: [UUID: Set<String>], stepDays: [UUID: String] = [:]) -> GoalProgress {
         let day = max(1, Day.between(start, today) + 1)
         let total = max(day, Day.between(start, deadline) + 1)
-        let done = taskCreated.keys.filter { completions[$0]?.contains(today) == true }.count
-        let share = taskCreated.isEmpty ? 0 : Double(done) / Double(taskCreated.count)
+        let due = stepDays.filter { showsToday(stepDay: $0.value, doneDays: completions[$0.key] ?? [], today: today) }.map(\.key)
+        let todays = Array(taskCreated.keys) + due
+        let done = todays.filter { completions[$0]?.contains(today) == true }.count
+        let share = todays.isEmpty ? 0 : Double(done) / Double(todays.count)
         let days = Set(completions.values.flatMap { $0 })
         let last = days.filter { $0 < today }.max()
-        return GoalProgress(day: day, total: total, doneToday: done, tasksToday: taskCreated.count,
+        return GoalProgress(day: day, total: total, doneToday: done, tasksToday: todays.count,
                             fraction: min(1, max(0, (Double(day - 1) + share) / Double(total))),
                             streak: streak(Set(completions.values.flatMap { $0 }), today: today),
-                            drift: drift(start: start, today: today, taskCreated: taskCreated, completions: completions),
+                            drift: drift(start: start, today: today, taskCreated: taskCreated, completions: completions, stepDays: stepDays),
                             overdue: today > deadline,
                             awayDays: max(0, Day.between(last ?? Day.add(-1, to: start), today) - 1),
                             activeDays: days.filter { $0 <= today }.count)
@@ -75,11 +77,22 @@ enum Progress {
     }
 
     /// Last 7 finished days: share of planned tasks done, against `paceTarget`. Today is excluded so mornings don't read as "behind".
-    static func drift(start: String, today: String, taskCreated: [UUID: String], completions: [UUID: Set<String>]) -> Int? {
+    /// Habits (stepDay nil) show every day. A step shows from its day until the day it is done (it carries over), and not
+    /// after an earlier day's completion.
+    static func showsToday(stepDay: String?, doneDays: Set<String>, today: String) -> Bool {
+        guard let stepDay else { return true }
+        return stepDay <= today && !doneDays.contains { $0 < today }
+    }
+
+    static func drift(start: String, today: String, taskCreated: [UUID: String], completions: [UUID: Set<String>], stepDays: [UUID: String] = [:]) -> Int? {
         var planned = 0, done = 0
         for i in 1...7 {
             let d = Day.add(-i, to: today)
             if d < start { break }
+            for (step, due) in stepDays where due == d {
+                planned += 1
+                if completions[step]?.contains(d) == true { done += 1 }
+            }
             for (task, created) in taskCreated where created <= d {
                 planned += 1
                 if completions[task]?.contains(d) == true { done += 1 }

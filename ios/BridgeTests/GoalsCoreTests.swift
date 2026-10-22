@@ -87,4 +87,19 @@ final class GoalsCoreTests: XCTestCase {
         XCTAssertEqual(CoachFocus.focus([older, newer], pick: UUID(), newestAtPick: newer), newer)
         XCTAssertNil(CoachFocus.focus([], pick: older, newestAtPick: older))
     }
+    /// Same cases as the Android GoalsCoreTest: steps show on their day, carry over until done, and count in drift on their day.
+    func testStepsCarryOverUntilDone() {
+        XCTAssertTrue(Progress.showsToday(stepDay: nil, doneDays: [], today: d(4)))
+        XCTAssertFalse(Progress.showsToday(stepDay: d(5), doneDays: [], today: d(4)))
+        XCTAssertTrue(Progress.showsToday(stepDay: d(4), doneDays: [], today: d(4)))
+        XCTAssertTrue(Progress.showsToday(stepDay: d(2), doneDays: [], today: d(4)))
+        XCTAssertTrue(Progress.showsToday(stepDay: d(2), doneDays: [d(4)], today: d(4)))
+        XCTAssertFalse(Progress.showsToday(stepDay: d(2), doneDays: [d(3)], today: d(4)))
+        let h = UUID(), today = UUID(), late = UUID(), later = UUID(), done = UUID()
+        let p = Progress.of(start: start, deadline: d(10), today: d(4), taskCreated: [h: start],
+                            completions: [h: [d(4), d(3), d(2)], today: [d(4)], done: [d(2)]],
+                            stepDays: [today: d(4), late: d(3), later: d(6), done: d(2)])
+        XCTAssertEqual(p.tasksToday, 3); XCTAssertEqual(p.doneToday, 2)
+        XCTAssertEqual(p.drift, -20)
+    }
 }

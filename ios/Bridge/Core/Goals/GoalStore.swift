@@ -12,8 +12,13 @@ struct PlanTask: Identifiable, Equatable {
     let rationale: String?
     let origin: String
     let done: Bool
+    var links: [LinkDTO] = []
+    /// A step's day (nil for a daily habit), and that day when it has passed and the step carried over.
+    var onDate: String? = nil
+    var carriedFrom: String? = nil
     var isAI: Bool { origin == "ai" }
     var readOnly: Bool { origin == "shared" }
+    var isStep: Bool { onDate != nil }
 }
 
 /// A goal paused when Plus ended: read-only, history kept, until the user picks it as one of their active goals.
@@ -37,9 +42,17 @@ struct GoalState: Identifiable, Equatable {
     let images: [String: GoalImage]
     /// Today's reflection for this goal has text or a mood ("Locked in.").
     var journaledToday = false
+    /// Daily habit titles, and step titles done and still open: what the next week of steps is planned from.
+    var habits: [String] = []
+    var doneSteps: [String] = []
+    var openSteps: [String] = []
+    /// No step left to do: offer to plan the next ones.
+    var needsSteps: Bool { openSteps.isEmpty }
 }
 
-struct NewTask { var title: String; var priority = "Medium"; var timeOfDay: String?; var minutes: Int?; var rationale: String?; var notes: String?; var ai = false }
+struct NewTask { var title: String; var priority = "Medium"; var timeOfDay: String?; var minutes: Int?; var rationale: String?; var notes: String?; var ai = false; var resources: [LinkDTO] = [] }
+/// A one-time step on plan day `day` (1 = the goal's first day).
+struct NewStep { var day: Int; var title: String; var minutes: Int?; var rationale: String?; var resources: [LinkDTO] = [] }
 
 /// Goals, tasks and completions. Every write puts the row and its outbox record in the same save,
 /// then nudges sync and reminders; the UI only ever reads the local store.
@@ -71,16 +84,25 @@ final class GoalStore {
             .sorted { $0.id.uuidString < $1.id.uuidString }.map { GoalChoice(id: $0.id, label: $0.label, statement: $0.statement) }
         goals = active.sorted { $0.id.uuidString < $1.id.uuidString }.map { g in
             let live = g.tasks.filter { $0.deletedAt == nil }
-            let created = Dictionary(uniqueKeysWithValues: live.map { ($0.id, Progress.createdDay($0.id, start: g.startDate)) })
-            let tasks = live.sorted { (Self.priorityOrder[$0.priority] ?? 1, $0.position) < (Self.priorityOrder[$1.priority] ?? 1, $1.position) }
-                .map { PlanTask(id: $0.id, title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, notes: $0.notes, rationale: $0.rationale, origin: $0.origin, done: doneOn[$0.id]?.contains(today) == true) }
+            let habits = live.filter { $0.onDate == nil }, steps = live.filter { $0.onDate != nil }
+            let created = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, Progress.createdDay($0.id, start: g.startDate)) })
+            let stepDays = Dictionary(uniqueKeysWithValues: steps.compactMap { s in s.onDate.map { (s.id, $0) } })
+            // Habits every day; a step on its day and after until it is done. Steps first: they are today's specific action.
+            let tasks = live.filter { Progress.showsToday(stepDay: $0.onDate, doneDays: doneOn[$0.id] ?? [], today: today) }
+                .sorted { ($0.onDate == nil ? 1 : 0, $0.onDate ?? "", Self.priorityOrder[$0.priority] ?? 1, $0.position) < ($1.onDate == nil ? 1 : 0, $1.onDate ?? "", Self.priorityOrder[$1.priority] ?? 1, $1.position) }
+                .map { PlanTask(id: $0.id, title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, notes: $0.notes, rationale: $0.rationale, origin: $0.origin, done: doneOn[$0.id]?.contains(today) == true,
+                                links: $0.links, onDate: $0.onDate, carriedFrom: $0.onDate.flatMap { $0 < today ? $0 : nil }) }
+            let byDay = steps.sorted { ($0.onDate ?? "") < ($1.onDate ?? "") }
             return GoalState(
                 id: g.id, label: g.label, statement: g.statement, startDate: g.startDate, deadline: g.deadline, colorIndex: g.colorIndex,
                 routine: g.routine, realityNote: g.realityNote, feasibility: g.feasibilityJSON.flatMap { try? JSONDecoder().decode(Feasibility.self, from: $0) },
                 tasks: tasks,
-                progress: Progress.of(start: g.startDate, deadline: g.deadline, today: today, taskCreated: created, completions: doneOn.filter { created[$0.key] != nil }),
+                progress: Progress.of(start: g.startDate, deadline: g.deadline, today: today, taskCreated: created, completions: doneOn.filter { created[$0.key] != nil || stepDays[$0.key] != nil }, stepDays: stepDays),
                 images: Dictionary(uniqueKeysWithValues: images.filter { $0.goalId == g.id }.map { ($0.kind, GoalImage(status: $0.status, url: $0.url, withFace: $0.withFace)) }),
-                journaledToday: journaled.contains(g.id)
+                journaledToday: journaled.contains(g.id),
+                habits: habits.map(\.title),
+                doneSteps: byDay.filter { !(doneOn[$0.id] ?? []).isEmpty }.map(\.title),
+                openSteps: byDay.filter { (doneOn[$0.id] ?? []).isEmpty }.map(\.title)
             )
         }
     }
@@ -101,7 +123,30 @@ final class GoalStore {
         Task { await NotificationScheduler.shared.reschedule() }
     }
 
-    func createGoal(id: UUID, label: String, statement: String, deadline: String, routine: String?, feasibility: Feasibility?, category: String? = nil, tasks: [NewTask]) {
+    private static func linksJSON(_ l: [LinkDTO]) -> Data? { try? JSONEncoder().encode(Array(l.prefix(3))) }
+    private static func linksPatch(_ l: [LinkDTO]) -> [[String: String]] { l.prefix(3).map { ["title": $0.title, "url": $0.url] } }
+
+    /// A one-time AI step on the given local day.
+    private func insertStep(_ g: GoalEntity, title: String, minutes: Int?, rationale: String?, resources: [LinkDTO], day: String, position: Int) {
+        let row = TaskEntity(id: UUIDv7.next(), title: String(title.trimmingCharacters(in: .whitespaces).prefix(120)), priority: "Medium", origin: "ai", position: position)
+        row.minutes = minutes; row.rationale = rationale.map { String($0.prefix(200)) }; row.onDate = day; row.resourcesJSON = Self.linksJSON(resources); row.goal = g
+        ctx.insert(row)
+        enqueue("task", row.id, "upsert", ["goalId": g.id.uuidString.lowercased(), "title": row.title, "priority": row.priority, "minutes": row.minutes ?? NSNull(),
+                                            "rationale": row.rationale ?? NSNull(), "origin": "ai", "position": position, "onDate": day, "resources": Self.linksPatch(resources)])
+    }
+
+    /// The next week of steps, planned by the AI; day 1 is today.
+    func addSteps(goalId: UUID, _ steps: [PlanStepDTO]) {
+        guard let g = goalRow(goalId) else { return }
+        let today = LocalDay.today()
+        let first = (g.tasks.map(\.position).max() ?? -1) + 1
+        for (i, s) in steps.filter({ !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }).enumerated() {
+            insertStep(g, title: s.title, minutes: s.minutes, rationale: s.rationale, resources: s.resources ?? [], day: Day.add(max(0, s.day - 1), to: today), position: first + i)
+        }
+        commit()
+    }
+
+    func createGoal(id: UUID, label: String, statement: String, deadline: String, routine: String?, feasibility: Feasibility?, category: String? = nil, tasks: [NewTask], steps: [NewStep] = []) {
         let start = LocalDay.today()
         let colour = goals.count % 3
         let g = GoalEntity(id: id, label: label.trimmingCharacters(in: .whitespaces), statement: statement.trimmingCharacters(in: .whitespaces), startDate: start, deadline: deadline, colorIndex: colour)
@@ -112,10 +157,14 @@ final class GoalStore {
         enqueue("goal", id, "upsert", patch)
         for (i, t) in tasks.filter({ !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }).enumerated() {
             let row = TaskEntity(id: UUIDv7.next(), title: t.title.trimmingCharacters(in: .whitespaces), priority: t.priority, origin: t.ai ? "ai" : "user", position: i)
-            row.timeOfDay = t.timeOfDay; row.minutes = t.minutes; row.rationale = t.rationale; row.notes = t.notes; row.goal = g
+            row.timeOfDay = t.timeOfDay; row.minutes = t.minutes; row.rationale = t.rationale; row.notes = t.notes; row.resourcesJSON = Self.linksJSON(t.resources); row.goal = g
             ctx.insert(row)
             enqueue("task", row.id, "upsert", ["goalId": id.uuidString.lowercased(), "title": row.title, "priority": row.priority, "timeOfDay": row.timeOfDay ?? NSNull(),
-                                                "minutes": row.minutes ?? NSNull(), "rationale": row.rationale ?? NSNull(), "notes": row.notes ?? NSNull(), "origin": row.origin, "position": i])
+                                                "minutes": row.minutes ?? NSNull(), "rationale": row.rationale ?? NSNull(), "notes": row.notes ?? NSNull(), "origin": row.origin, "position": i,
+                                                "resources": Self.linksPatch(t.resources)])
+        }
+        for (i, s) in steps.filter({ !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }).enumerated() {
+            insertStep(g, title: s.title, minutes: s.minutes, rationale: s.rationale, resources: s.resources, day: Day.add(max(0, s.day - 1), to: start), position: 100 + i)
         }
         commit()
     }

@@ -171,6 +171,13 @@ final class FoundationSnapshotTests: XCTestCase {
         verify(ChooseGoalsView(goals: goals, initial: Set(goals.prefix(2).map(\.id)), max: 3, onSave: { _ in }, onUpgrade: {}).background(Theme.s1), named: "choose-goals")
     }
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }
+    func testLinks() {
+        verify(VStack(spacing: 8) {
+            LinkRow(link: LinkDTO(title: "The Rust Programming Language", url: "https://doc.rust-lang.org/book/"))
+            LinkRow(link: LinkDTO(title: "Ownership and borrowing explained", url: "https://www.youtube.com/results?search_query=rust%20ownership"))
+            LinkRow(link: LinkDTO(title: "Exercism Rust track", url: "https://exercism.org/tracks/rust"))
+        }.padding(24).background(Theme.s1), named: "links")
+    }
     func testAppearance() { verify(AppearanceSheet(current: "system") { _ in }.background(Theme.s1), named: "appearance") }
     func testCoachStyles() { verify(CoachStyleSheet(current: .balanced, hasPlus: false) { _ in }.background(Theme.s1), named: "coach-styles") }
     func testPaywallUnavailable() { verify(PaywallContent(product: .plus, available: false, loading: false, offers: [], selected: .constant(nil)).background(Theme.bg), named: "paywall-plus-off") }

@@ -30,6 +30,7 @@ enum ChangeApplier {
             row.goal = parent; row.title = t.title; row.priority = t.priority; row.timeOfDay = t.timeOfDay; row.minutes = t.minutes
             row.rationale = t.rationale; row.notes = t.notes; row.origin = t.origin; row.sharedTaskId = t.sharedTaskId; row.position = t.position
             row.deletedAt = date(t.deletedAt); row.updatedAt = date(t.updatedAt) ?? .now
+            row.onDate = t.onDate; row.resourcesJSON = try? JSONEncoder().encode(t.resources ?? [])
         }
         for c in page.removed.completions {
             if let row = try completion(c.taskId, c.localDate, ctx) { ctx.delete(row) }

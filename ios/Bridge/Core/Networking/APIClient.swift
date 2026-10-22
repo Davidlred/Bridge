@@ -38,8 +38,12 @@ enum CoachEvent: Sendable { case token(String), suggestion(Suggestion) }
 enum CoachStreamError: Error { case interrupted }
 
 struct Feasibility: Codable, Equatable, Sendable { let verdict: String; let reason: String; let suggestedDeadline: String? }
-struct PlanTaskDTO: Decodable, Sendable { let title: String; let priority: String; let timeOfDay: String; let minutes: Int; let rationale: String }
-struct PlanDTO: Decodable, Sendable { let needsClarification: String?; let label: String; let goal: String; let category: String?; let feasibility: Feasibility; let tasks: [PlanTaskDTO] }
+/// Something to read, watch or use, with a link that opens (the server checked it or made it a search).
+struct LinkDTO: Codable, Sendable, Hashable { let title: String; let url: String }
+struct PlanTaskDTO: Decodable, Sendable { let title: String; let priority: String; let timeOfDay: String; let minutes: Int; let rationale: String; let resources: [LinkDTO]? }
+/// A one-time step on plan day `day` (1 = the day it was planned).
+struct PlanStepDTO: Decodable, Sendable { let day: Int; let title: String; let minutes: Int?; let rationale: String?; let resources: [LinkDTO]? }
+struct PlanDTO: Decodable, Sendable { let needsClarification: String?; let label: String; let goal: String; let category: String?; let feasibility: Feasibility; let tasks: [PlanTaskDTO]; let steps: [PlanStepDTO]? }
 struct GoalImageDTO: Decodable, Sendable { let kind: String; let status: String; let url: String?; let withFace: Bool? }
 
 /// One outbox row on its way to the server. `patch` is the JSON object of changed fields.
@@ -58,7 +62,7 @@ struct PushResult: Decodable, Sendable { let accepted: Set<UUID>; let rejected: 
 }
 struct Changes: Decodable, Sendable {
     struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility?; let category: String? }
-    struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double? }
+    struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double?; let onDate: String?; let resources: [LinkDTO]? }
     struct Completion: Decodable, Sendable { let taskId: UUID; let localDate: String; let completedAt: Double? }
     struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion] }
     struct Journal: Decodable, Sendable { let id: UUID; let goalId: UUID?; let localDate: String; let mood: Int?; let body: String; let version: Int; let conflictOf: UUID? }
@@ -218,6 +222,14 @@ actor APIClient {
         let body: [String: Any] = ["goalText": goal, "deadline": deadline, "today": today, "timezone": timezone, "routine": routine,
                                    "locale": Locale.current.identifier(.bcp47), "existingGoals": existingGoals]
         return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/plan", body, authed: true, timeout: 90)).plan
+    }
+    /// The next week of steps for a goal under way.
+    func nextSteps(goal: String, deadline: String, today: String, routine: String, habits: [String], done: [String], open: [String]) async throws -> [PlanStepDTO] {
+        struct R: Decodable { let steps: [PlanStepDTO] }
+        let cut = { (l: [String]) in l.map { String($0.prefix(120)) } }
+        let body: [String: Any] = ["goalText": goal, "deadline": deadline, "today": today, "routine": String(routine.prefix(1000)),
+                                   "habits": cut(Array(habits.prefix(20))), "done": cut(Array(done.suffix(60))), "open": cut(Array(open.prefix(30)))]
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/ai/steps", body, authed: true, timeout: 90)).steps
     }
     func reality(goal: String, deadline: String, today: String, routine: String, tasks: [String]) async throws -> Feasibility {
         struct R: Decodable { let feasibility: Feasibility }

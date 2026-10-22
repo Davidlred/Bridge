@@ -13,6 +13,17 @@ struct DraftTask: Codable, Identifiable, Equatable {
     var minutes: Int?
     var rationale: String?
     var ai = false
+    var resources: [LinkDTO]?
+}
+
+/// A one-time first-week step from the plan.
+struct DraftStep: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var day: Int
+    var title: String
+    var minutes: Int?
+    var rationale: String?
+    var resources: [LinkDTO]?
 }
 
 /// Everything typed during onboarding. Saved on every change so a killed app resumes at the same step with the same inputs.
@@ -30,6 +41,8 @@ struct OnboardingDraft: Codable, Equatable {
     var clarification: String?
     var label = ""
     var tasks: [DraftTask] = []
+    /// Optional so drafts saved by an older version still load.
+    var steps: [DraftStep]?
     var feasibility: Feasibility?
     var category: String?
     var genStartedAt: Date?
@@ -136,7 +149,8 @@ final class OnboardingModel {
                 if let q = plan.needsClarification { draft.plan = .clarify; draft.clarification = q; return }
                 draft.label = draft.label.isEmpty ? (plan.label.isEmpty ? GoalText.autoLabel(d.goal) : plan.label) : draft.label
                 draft.feasibility = plan.feasibility; draft.category = plan.category
-                draft.tasks = plan.tasks.map { DraftTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: true) }
+                draft.tasks = plan.tasks.map { DraftTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: true, resources: $0.resources) }
+                draft.steps = (plan.steps ?? []).map { DraftStep(day: $0.day, title: $0.title, minutes: $0.minutes, rationale: $0.rationale, resources: $0.resources) }
                 draft.plan = .done
                 advanceIfReady()
             } catch APIError.server(let status, let code, _, _) where status == 429 || code == "ai_quota" {
@@ -200,13 +214,15 @@ final class OnboardingModel {
     // MARK: Review
     func addTask() { draft.tasks.append(DraftTask(title: "")) }
     func deleteTask(_ id: UUID) { draft.tasks.removeAll { $0.id == id } }
+    func deleteStep(_ id: UUID) { draft.steps?.removeAll { $0.id == id } }
 
     func start() -> Bool {
         guard draft.label.trimmingCharacters(in: .whitespaces).count >= 2 else { labelError = String(localized: "Give the goal a short name."); return false }
         guard canStart, let deadline = draft.deadline else { return false }
         let d = draft
         store.createGoal(id: d.goalId, label: d.label, statement: d.goal, deadline: deadline, routine: d.routine.isEmpty ? nil : d.routine, feasibility: d.feasibility, category: d.category,
-                         tasks: d.tasks.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }.map { NewTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: $0.ai) })
+                         tasks: d.tasks.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }.map { NewTask(title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, minutes: $0.minutes, rationale: $0.rationale, ai: $0.ai, resources: $0.resources ?? []) },
+                         steps: (d.steps ?? []).map { NewStep(day: $0.day, title: $0.title, minutes: $0.minutes, rationale: $0.rationale, resources: $0.resources ?? []) })
         UserDefaults.standard.removeObject(forKey: Self.key)
         if d.adding { toaster?.show(String(localized: "\(d.label.trimmingCharacters(in: .whitespaces)) added. \(otherGoals) goals running."), .ok) }
         else { session?.onboardingDone(); toaster?.show(String(localized: "Day 1 starts now."), .ok) }

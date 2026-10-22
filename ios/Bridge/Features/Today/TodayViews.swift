@@ -12,6 +12,8 @@ final class TodayModel {
     var finished: GoalState?
     var realityBusy = false
     var realityError = false
+    /// The goal whose next steps are being planned.
+    var stepsBusy: UUID?
     @ObservationIgnored private var noteTask: Task<Void, Never>?
     @ObservationIgnored private var imagesRefreshedAt: [UUID: Date] = [:]
 
@@ -69,6 +71,20 @@ final class TodayModel {
     func note(_ id: UUID, _ text: String) {
         noteTask?.cancel()
         noteTask = Task { try? await Task.sleep(for: .seconds(0.8)); if !Task.isCancelled { store?.updateGoal(id, realityNote: String(text.prefix(1000))) } }
+    }
+
+    /// Plans the next week of steps from what is done and still open. `done` says whether it worked (for the toast).
+    func planSteps(_ g: GoalState, done: @escaping @MainActor (Bool, Bool) -> Void) {
+        guard stepsBusy == nil else { return }
+        stepsBusy = g.id
+        Task {
+            defer { stepsBusy = nil }
+            do {
+                let steps = try await APIClient.shared.nextSteps(goal: g.statement, deadline: g.deadline, today: LocalDay.today(), routine: g.routine ?? "", habits: g.habits, done: g.doneSteps, open: g.openSteps)
+                store?.addSteps(goalId: g.id, steps)
+                done(true, false)
+            } catch APIError.offline { done(false, true) } catch { done(false, false) }
+        }
     }
 
     func retryImages(_ g: GoalState) {
@@ -358,6 +374,23 @@ struct TodayView: View {
                 Label("Add task", systemImage: "plus").font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).frame(maxWidth: .infinity, minHeight: 52)
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
             }
+            // Every step done (or a goal from before steps): the AI plans the next week from where you are.
+            if g.needsSteps && !p.overdue {
+                let busy = model.stepsBusy == g.id
+                Button {
+                    model.planSteps(g) { ok, offline in
+                        toaster.show(ok ? String(localized: "Next steps added.") : offline ? String(localized: "You're offline. Try again when you reconnect.") : String(localized: "Couldn't plan the next steps. Try again."), ok ? .ok : .warn)
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if busy { ProgressView().tint(Theme.ink2) } else { Image(systemName: "calendar.badge.plus").foregroundStyle(Theme.ink2) }
+                        Text(busy ? "Planning your next steps…" : "Plan my next steps").font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                }
+                .disabled(busy)
+            }
         }
     }
 
@@ -507,9 +540,14 @@ struct TaskRow: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(task.title).font(BFont.body(15, .medium)).foregroundStyle(task.done ? Theme.mut : Theme.ink).strikethrough(task.done).multilineTextAlignment(.leading)
-                        HStack(spacing: 8) {
-                            if let p = Theme.Priority(rawValue: task.priority) { PriorityPill(priority: p) }
-                            if let t = task.timeOfDay { Text(t).font(BFont.body(12)).foregroundStyle(Theme.mut) }
+                        // A step has no priority: it is today's action. One carried over says since when.
+                        if !task.isStep || task.carriedFrom != nil || task.timeOfDay != nil || !task.links.isEmpty {
+                            HStack(spacing: 8) {
+                                if !task.isStep, let p = Theme.Priority(rawValue: task.priority) { PriorityPill(priority: p) }
+                                if let c = task.carriedFrom, let d = Day.parse(c) { Text("From \(d.formatted(.dateTime.weekday(.abbreviated)))").font(BFont.body(12)).foregroundStyle(Theme.mut) }
+                                if let t = task.timeOfDay { Text(t).font(BFont.body(12)).foregroundStyle(Theme.mut) }
+                                if !task.links.isEmpty { Image(systemName: "link").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.mut).accessibilityLabel("Has links") }
+                            }
                         }
                     }
                     Spacer()
@@ -521,6 +559,37 @@ struct TaskRow: View {
         }
         .padding(.leading, 8).padding(.trailing, 12).padding(.vertical, 12).frame(minHeight: 68)
         .background(Theme.s1, in: RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
+    }
+}
+
+/// Opens in the browser (or the YouTube app). Says where it goes: the site, or that it is a search.
+struct LinkRow: View {
+    let link: LinkDTO
+    @Environment(\.openURL) private var openURL
+    private var source: String {
+        var host = URL(string: link.url)?.host() ?? ""
+        for prefix in ["www.", "m."] where host.hasPrefix(prefix) { host.removeFirst(prefix.count) }
+        if link.url.contains("youtube.com/results") { return String(localized: "YouTube search") }
+        if link.url.contains("google.com/search") { return String(localized: "Web search") }
+        if host == "youtube.com" || host == "youtu.be" { return String(localized: "YouTube") }
+        return host
+    }
+    var body: some View {
+        Button { if let u = URL(string: link.url) { openURL(u) } } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "link").font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink2).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(link.title).font(BFont.body(14, .medium)).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.leading)
+                    if !source.isEmpty { Text(source).font(BFont.body(12)).foregroundStyle(Theme.mut).lineLimit(1) }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.mut2).accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8).frame(maxWidth: .infinity, minHeight: 52)
+            .background(Theme.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(Text("Opens \(source)"))
     }
 }
 
@@ -606,6 +675,12 @@ struct TaskSheet: View {
                 }
                 if let r = task?.rationale {
                     Text(r).font(BFont.body(13)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let links = task?.links, !links.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("LINKS").bridgeLabel(11)
+                        ForEach(links, id: \.self) { LinkRow(link: $0) }
+                    }
                 }
                 let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time) } }
                 if task == nil {

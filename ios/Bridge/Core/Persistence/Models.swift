@@ -39,8 +39,13 @@ import SwiftData
     var position: Int
     var deletedAt: Date?
     var updatedAt: Date
+    /// A step: one-time, for this local day, carried over until done. Nil for a daily habit.
+    var onDate: String?
+    /// Up to three links, JSON [{"title","url"}], checked by the server when the AI wrote them.
+    var resourcesJSON: Data?
 
     var isReadOnlyShared: Bool { origin == "shared" }
+    var links: [LinkDTO] { resourcesJSON.flatMap { try? JSONDecoder().decode([LinkDTO].self, from: $0) } ?? [] }
 
     init(id: UUID, title: String, priority: String, origin: String, position: Int) {
         self.id = id; self.title = title; self.priority = priority; self.origin = origin

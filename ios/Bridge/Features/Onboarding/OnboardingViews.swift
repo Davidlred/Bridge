@@ -508,6 +508,19 @@ struct ReviewStepView: View {
                         Label("Add a task", systemImage: "plus").font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).frame(maxWidth: .infinity, minHeight: 52)
                             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
                     }
+                    // The one-time first steps: install this, read those chapters. They arrive on Today on their day.
+                    if let steps = d.steps, !steps.isEmpty {
+                        Text("Your first week").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader).padding(.top, 10)
+                        ForEach(steps) { s in
+                            HStack(spacing: 10) {
+                                Text("DAY \(s.day)").bridgeLabel(10).frame(width: 44, alignment: .leading)
+                                Text(s.title).font(BFont.body(14, .medium)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                                Button { model.deleteStep(s.id) } label: { Image(systemName: "trash").foregroundStyle(Theme.mut).frame(width: 44, height: 44) }.accessibilityLabel("Delete step")
+                            }
+                            .padding(.leading, 14).padding(.trailing, 4).padding(.vertical, 4).frame(minHeight: 52)
+                            .background(Theme.s1, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                        }
+                    }
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 110)
             }
