@@ -159,6 +159,22 @@ run('api', () => {
       expect(p.tasks[0].deletedAt).toBeTypeOf('number');
     });
 
+    it("keeps a step's day and links, and rejects links that are not web addresses", async () => {
+      const a = await signUp();
+      const g = uuidv7(), s = uuidv7(), bad = uuidv7();
+      const book = { title: 'The Rust Programming Language', url: 'https://doc.rust-lang.org/book/' };
+      const r = await push(a.accessToken, [mut('goal', g, 'upsert', goal()),
+        mut('task', s, 'upsert', { goalId: g, title: 'Read chapters 1 and 2', origin: 'ai', onDate: '2026-10-14', resources: [book] }),
+        mut('task', bad, 'upsert', { goalId: g, title: 'Sneaky', resources: [{ title: 'x', url: 'javascript:alert(1)' }] })]);
+      expect(Object.keys(r.rejected)).toHaveLength(1);
+      let p = await pull(a.accessToken);
+      expect(p.tasks).toHaveLength(1);
+      expect(p.tasks[0]).toMatchObject({ id: s, onDate: '2026-10-14', resources: [book] });
+      await push(a.accessToken, [mut('task', s, 'upsert', { onDate: null, resources: [] })]);   // made a daily habit, links removed
+      p = await pull(a.accessToken);
+      expect(p.tasks[0]).toMatchObject({ onDate: null, resources: [] });
+    });
+
     it('treats completions as a set and only lets a newer uncomplete remove one', async () => {
       const a = await signUp();
       const g = uuidv7(), t = uuidv7(), day = { localDate: '2026-10-13' };

@@ -25,8 +25,12 @@ vi.mock('../src/ai/replicate.js', async orig => {
       if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
       const system = String(input.system_prompt);
       if (system.includes('Reality Check')) return '{"verdict":"stretch","reason":"Possible with four runs a week.","suggestedDeadline":"2020-01-01"}';
+      if (system.includes('Plan the next 7 days')) return JSON.stringify({ steps: [
+        { day: 2, title: 'Run 3 x 1 km at tempo pace', minutes: 40, rationale: 'Starts speed work.', resources: [] },
+        { day: 1, title: 'Watch a tempo run explainer', minutes: 15, rationale: 'Learn the pace — before trying it.', resources: [{ title: 'Tempo runs explained', search: 'tempo run explained beginner' }] }] });
       return JSON.stringify({ needsClarification: null, label: 'Half marathon', goal: 'Run a half marathon in under 2 hours', feasibility: { verdict: 'realistic', reason: 'Plenty of time.', suggestedDeadline: null },
-        tasks: [{ title: 'Easy run 5 km', priority: 'High', timeOfDay: '07:00', minutes: 35, rationale: 'Builds the aerobic base.' }, { title: 'Mobility 10 min', priority: 'Medium', timeOfDay: 'After run', minutes: 10, rationale: 'Protects your hips.' }] });
+        tasks: [{ title: 'Easy run 5 km', priority: 'High', timeOfDay: '07:00', minutes: 35, rationale: 'Builds the aerobic base.' }, { title: 'Mobility 10 min', priority: 'Medium', timeOfDay: 'After run', minutes: 10, rationale: 'Protects your hips.' }],
+        steps: [{ day: 1, title: 'Get fitted for running shoes', minutes: 60, rationale: 'The right shoes prevent injury.', resources: [{ title: 'NHS Couch to 5K', url: 'https://www.nhs.uk/better-health/get-active/get-running-with-couch-to-5k/' }] }] });
     }),
   };
 });
@@ -213,6 +217,23 @@ run('goals core', () => {
       goalText: 'Run a half marathon in under 2 hours', deadline: '2027-02-09', today: '2026-10-14', timezone: 'Africa/Lagos', routine: 'Up at 7:30, desk job 9 to 6.' }) });
     expect(r.status).toBe(200);
     expect((await r.json()).plan.label).toBe('Half marathon');
+  });
+
+  it('plans first steps with links, and the next week of steps after them', async () => {
+    const a = await signUp();
+    const plan = (await app.inject({ method: 'POST', url: '/v1/ai/plan', headers: h(a.accessToken), payload: {
+      goalText: 'Run a half marathon in under 2 hours', deadline: '2027-02-09', today: '2026-10-14', timezone: 'Africa/Lagos', routine: 'Up at 7:30, desk job 9 to 6.' } })).json().plan;
+    expect(plan.steps).toEqual([{ day: 1, title: 'Get fitted for running shoes', minutes: 60, rationale: 'The right shoes prevent injury.',
+      resources: [{ title: 'NHS Couch to 5K', url: 'https://www.nhs.uk/better-health/get-active/get-running-with-couch-to-5k/' }] }]);
+    expect(plan.tasks[0].resources).toEqual([]);
+    const r = await app.inject({ method: 'POST', url: '/v1/ai/steps', headers: h(a.accessToken), payload: {
+      goalText: 'Run a half marathon in under 2 hours', deadline: '2027-02-09', today: '2026-10-21', done: ['Get fitted for running shoes'], habits: ['Easy run 5 km'] } });
+    expect(r.statusCode).toBe(200);
+    // In day order, plain text, and a search phrase becomes a YouTube search link.
+    expect(r.json().steps.map((s: { day: number }) => s.day)).toEqual([1, 2]);
+    expect(r.json().steps[0]).toMatchObject({ rationale: 'Learn the pace, before trying it.',
+      resources: [{ title: 'Tempo runs explained', url: 'https://www.youtube.com/results?search_query=tempo%20run%20explained%20beginner' }] });
+    expect((await app.inject({ method: 'POST', url: '/v1/ai/steps', headers: h(a.accessToken), payload: { goalText: 'Run', deadline: '2026-10-01', today: '2026-10-14' } })).statusCode).toBe(400);
   });
 
   it('plans from a free-text routine and gives a Reality Check without touching the deadline', async () => {

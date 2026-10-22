@@ -19,8 +19,8 @@ import { billingRoutes } from './billing.js';
 import { exportRoutes } from './export.js';
 import { dmRoutes } from './social/dm.js';
 import { linkRoutes } from './links.js';
-import { PlanRequest } from './ai/planSchema.js';
-import { generatePlan } from './ai/goalPlanner.js';
+import { PlanRequest, StepsRequest } from './ai/planSchema.js';
+import { generatePlan, generateSteps } from './ai/goalPlanner.js';
 import { AIUnavailable } from './ai/replicate.js';
 import { HttpError } from './util.js';
 
@@ -89,6 +89,20 @@ export async function buildApp() {
       return { plan, deadline: body.data.deadline };
     } catch (e) {
       if (e instanceof AIUnavailable || (e as Error)?.name === 'TimeoutError') { req.log.warn({ err: (e as Error).message }, 'plan_unavailable'); return reply.code(503).send({ error: 'plan_unavailable' }); }
+      throw e;
+    }
+  });
+
+  // The next week of steps for a goal under way (the first week comes with the plan).
+  app.post('/v1/ai/steps', { onRequest: auth, config: { rateLimit: { max: 10, timeWindow: '1 day' } } }, async (req, reply) => {
+    const body = StepsRequest.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request', issues: body.error.issues });
+    const ctrl = new AbortController();
+    reply.raw.on('close', () => { if (!reply.raw.writableFinished) ctrl.abort(); });
+    try {
+      return { steps: await generateSteps(body.data, AbortSignal.any([ctrl.signal, AbortSignal.timeout(PLAN_TIMEOUT_MS)])) };
+    } catch (e) {
+      if (e instanceof AIUnavailable || (e as Error)?.name === 'TimeoutError') { req.log.warn({ err: (e as Error).message }, 'steps_unavailable'); return reply.code(503).send({ error: 'steps_unavailable' }); }
       throw e;
     }
   });
