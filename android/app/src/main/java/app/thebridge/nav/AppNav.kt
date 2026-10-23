@@ -332,7 +332,8 @@ private fun BottomBar(nav: NavHostController, dest: androidx.navigation.NavDesti
         tabs.forEach { tab ->
             val selected = dest?.hierarchy?.any { it.hasRoute(tab.graph::class) } == true
             Column(
-                Modifier.weight(1f).heightIn(min = 48.dp).selectable(selected = selected, role = Role.Tab, onClick = {
+                // No press ripple: the pill behind the icon already shows the tab that is open.
+                Modifier.weight(1f).heightIn(min = 48.dp).selectable(selected = selected, role = Role.Tab, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = {
                     nav.navigate(tab.graph) {
                         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                         launchSingleTop = true
