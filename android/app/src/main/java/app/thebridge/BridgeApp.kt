@@ -29,8 +29,7 @@ class BridgeApp : Application(), Configuration.Provider {
         SyncWorker.schedulePeriodic(this)
         billing.configure(this)
         analytics.setup(this)
-        reminders.createChannel()
-        app.thebridge.data.PushService.createChannel(this)
+        app.thebridge.data.AlertChannels.create(this)
         reminders.rescheduleAsync()
         // Sync whenever the app comes to the foreground.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {

@@ -55,6 +55,7 @@ actor NotificationScheduler {
                 content.title = title
                 if let body { content.body = body }
                 content.sound = .default
+                content.interruptionLevel = .timeSensitive
                 requests.append(UNNotificationRequest(identifier: "\(id)|\(day)", content: content, trigger: UNCalendarNotificationTrigger(dateMatching: c, repeats: false)))
             }
             if let d = settings.daily { at(d, id: "daily", title: String(localized: "Today's plan is ready."), body: nil) }

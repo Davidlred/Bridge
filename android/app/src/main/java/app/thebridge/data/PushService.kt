@@ -1,7 +1,5 @@
 package app.thebridge.data
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -35,18 +33,14 @@ class PushService : FirebaseMessagingService() {
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val built = NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(n.title).setContentText(n.body).setContentIntent(open).setAutoCancel(true).build()
+            .setContentTitle(n.title).setContentText(n.body).setContentIntent(open).setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL).setPriority(NotificationCompat.PRIORITY_HIGH).build()
         // One notification per collapse key, so a repeated nudge replaces the previous one.
         val id = (message.collapseKey ?: message.messageId ?: n.title.orEmpty()).hashCode()
         runCatching { NotificationManagerCompat.from(this).notify(id, built) }   // SecurityException if permission was revoked meanwhile
     }
 
     companion object {
-        const val CHANNEL = "updates"
-        fun createChannel(ctx: Context) {
-            val ch = NotificationChannel(CHANNEL, ctx.getString(R.string.notif_channel_updates), NotificationManager.IMPORTANCE_DEFAULT)
-                .apply { description = ctx.getString(R.string.notif_channel_updates_desc) }
-            ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
-        }
+        const val CHANNEL = AlertChannels.UPDATES
     }
 }

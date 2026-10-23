@@ -38,7 +38,7 @@ async function sendFcm(deviceToken: string, p: Push): Promise<boolean> {
   if (!a) return false;
   const r = await fetch(`https://fcm.googleapis.com/v1/projects/${a.project}/messages:send`, {
     method: 'POST', headers: { Authorization: `Bearer ${a.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: { token: deviceToken, notification: { title: p.title, body: p.body }, data: p.data, android: { collapse_key: p.collapseKey } } }),
+    body: JSON.stringify({ message: { token: deviceToken, notification: { title: p.title, body: p.body }, data: p.data, android: { collapse_key: p.collapseKey, priority: 'high', notification: { channel_id: 'updates_alert', default_vibrate_timings: false, vibrate_timings: ['0s', '0.6s', '0.25s', '0.6s', '0.25s', '0.6s'], notification_priority: 'PRIORITY_HIGH' } } } }),
   });
   return r.ok;
 }

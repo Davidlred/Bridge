@@ -1,8 +1,6 @@
 package app.thebridge.data.reminders
 
 import android.app.AlarmManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -76,12 +74,6 @@ class ReminderScheduler @Inject constructor(
     suspend fun setDaily(t: LocalTime?) { store.edit { it[DAILY] = t?.toString() ?: "off" }; reschedule() }
     suspend fun setStreakRisk(t: LocalTime?) { store.edit { it[RISK] = t?.toString() ?: "off" }; reschedule() }
 
-    fun createChannel() {
-        val ch = NotificationChannel(CHANNEL, ctx.getString(R.string.notif_channel_reminders), NotificationManager.IMPORTANCE_DEFAULT)
-            .apply { description = ctx.getString(R.string.notif_channel_reminders_desc) }
-        ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
-    }
-
     fun rescheduleAsync() { scope.launch { reschedule() } }
 
     suspend fun reschedule() {
@@ -121,12 +113,13 @@ class ReminderScheduler @Inject constructor(
         if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return
         val open = PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground).setContentTitle(title)
-            .apply { if (body != null) setContentText(body) }.setContentIntent(open).setAutoCancel(true).build()
+            .apply { if (body != null) setContentText(body) }.setContentIntent(open).setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER).setPriority(NotificationCompat.PRIORITY_HIGH).build()
         runCatching { NotificationManagerCompat.from(ctx).notify(id, n) }   // SecurityException if permission was revoked meanwhile
     }
 
     companion object {
-        const val CHANNEL = "reminders"
+        const val CHANNEL = app.thebridge.data.AlertChannels.REMINDERS
         const val ACTION_DAILY = "app.thebridge.reminder.DAILY"
         const val ACTION_RISK = "app.thebridge.reminder.RISK"
         const val ACTION_TASK = "app.thebridge.reminder.TASK"
