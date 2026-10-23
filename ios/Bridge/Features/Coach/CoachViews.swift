@@ -89,10 +89,18 @@ final class CoachModel {
         }
         let reply = ChatMessageEntity(conversation: conv, role: "coach", text: "", status: "streaming", createdAt: .now.addingTimeInterval(0.001), goalId: focus?.id)
         // Ids let the server store this exchange so it follows the account to other devices.
-        let body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
+        var body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
                                    "focusGoalId": focus?.id.uuidString.lowercased() ?? NSNull(),
                                    "conversation": conv.uuidString.lowercased(), "messageId": user.id.uuidString.lowercased(), "replyId": reply.id.uuidString.lowercased(),
                                    "sentAt": Int(user.createdAt.timeIntervalSince1970 * 1000)]
+        // Only with "Let Arc learn my routine": hours and a Wi-Fi share, never the raw opens.
+        if let r = RhythmStore.current() {
+            var rhythm: [String: Any] = ["days": r.days, "openHour": r.openHour]
+            if let h = r.doneHour { rhythm["doneHour"] = h }
+            if let h = r.finishedBy { rhythm["finishedBy"] = h }
+            if let w = r.wifiShare { rhythm["wifiShare"] = (w * 100).rounded() / 100 }
+            body["rhythm"] = rhythm
+        }
         awaiting = true; notice = nil
         let payload = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
         let replyId = reply.id, userId = user.id

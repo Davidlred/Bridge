@@ -39,6 +39,7 @@ struct ProfileView: View {
     @State private var renaming = false
     @State private var coachName = ""
     @AppStorage("coachReadsJournal") private var coachReadsJournal = false
+    @AppStorage("rhythmOn") private var learnRoutine = false
     @AppStorage("themeOverride") private var themeOverride = "system"
     @Environment(SocialStore.self) private var social
     @Environment(AppRouter.self) private var router
@@ -78,14 +79,32 @@ struct ProfileView: View {
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.accLine, lineWidth: 1))
             }
             SettingsSection(title: "Notifications") {
-                SettingsValue(label: "Daily reminder", value: Self.clock(reminders.daily)) { reminders.daily = Self.next(reminders.daily, [7, 8, 9]); saveReminders() }
+                // With learned times a tap switches the reminder on or off; the routine picks the time.
+                let shown = RhythmStore.effective(reminders)
+                SettingsValue(label: "Daily reminder", value: Self.reminderTime(shown.daily, shown.learned)) {
+                    reminders.daily = shown.learned ? (reminders.daily == nil ? DateComponents(hour: 8, minute: 0) : nil) : Self.next(reminders.daily, [7, 8, 9]); saveReminders()
+                }
                 Divider().overlay(Theme.line)
-                SettingsValue(label: "Streak at risk", value: Self.clock(reminders.streakRisk)) { reminders.streakRisk = Self.next(reminders.streakRisk, [19, 20, 21]); saveReminders() }
+                SettingsValue(label: "Streak at risk", value: Self.reminderTime(shown.streakRisk, shown.learned)) {
+                    reminders.streakRisk = shown.learned ? (reminders.streakRisk == nil ? DateComponents(hour: 20, minute: 0) : nil) : Self.next(reminders.streakRisk, [19, 20, 21]); saveReminders()
+                }
             }
             SettingsSection(title: "Coach") {
                 SettingsValue(label: "Coach name", value: session.user?.coachName ?? "Arc") { coachName = session.user?.coachName ?? "Arc"; renaming = true }
                 Divider().overlay(Theme.line)
                 SettingsValue(label: "Coaching style", value: styleInUse.title) { sheet = .coachStyle }
+                Divider().overlay(Theme.line)
+                Toggle(isOn: Binding(get: { learnRoutine }, set: { on in
+                    RhythmStore.setEnabled(on); learnRoutine = on
+                    if on { RhythmStore.recordOpen(wifi: nil) }
+                    Task { await NotificationScheduler.shared.reschedule() }
+                })) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Let Arc learn my routine").font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                        Text("When you open the app and finish tasks, and whether you're on Wi-Fi. Kept on this phone to time your reminders and tailor the coach. Never your location.").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                    }
+                }
+                .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)
                 Divider().overlay(Theme.line)
                 Toggle(isOn: Binding(get: { coachReadsJournal }, set: { on in
                     coachReadsJournal = on
@@ -169,6 +188,10 @@ struct ProfileView: View {
         let all: [DateComponents?] = hours.map { DateComponents(hour: $0, minute: 0) } + [nil]
         let i = all.firstIndex { $0?.hour == c?.hour && ($0 == nil) == (c == nil) } ?? -1
         return all[(i + 1) % all.count]
+    }
+    private static func reminderTime(_ c: DateComponents?, _ learned: Bool) -> String {
+        guard learned, c != nil else { return clock(c) }
+        return String(localized: "\(clock(c)), learned")
     }
     private static func clock(_ c: DateComponents?) -> String {
         guard let c, let d = Calendar.current.date(from: DateComponents(hour: c.hour, minute: c.minute)) else { return String(localized: "Off") }

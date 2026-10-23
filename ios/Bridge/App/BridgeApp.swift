@@ -38,7 +38,10 @@ struct BridgeApp: App {
         }
         .modelContainer(Persistence.container)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await SyncEngine.shared.drain(reason: .foreground); await NotificationScheduler.shared.reschedule() } }
+            if phase == .active {
+                RhythmStore.recordOpen(wifi: network.wifi)          // only with "Let Arc learn my routine"
+                Task { await SyncEngine.shared.drain(reason: .foreground); await NotificationScheduler.shared.reschedule() }
+            }
         }
         .backgroundTask(.appRefresh("app.thebridge.sync")) {
             await SyncEngine.shared.drain(reason: .background)
@@ -118,11 +121,14 @@ final class SessionStore {
 @MainActor @Observable
 final class NetworkStatus {
     var online = true
+    /// On Wi-Fi (or a cable), on mobile data, or unknown: a rough "at home or out" signal for the routine, never a location.
+    var wifi: Bool?
     @ObservationIgnored private let monitor = NWPathMonitor()
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
             let ok = path.status == .satisfied
-            Task { @MainActor in self?.online = ok }
+            let wifi: Bool? = !ok ? nil : path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) ? true : path.usesInterfaceType(.cellular) ? false : nil
+            Task { @MainActor in self?.online = ok; self?.wifi = wifi }
         }
         monitor.start(queue: .global(qos: .utility))
     }

@@ -2,10 +2,12 @@ import Foundation
 import SwiftData
 @preconcurrency import UserNotifications
 
-/// Reminder times chosen in Profile → Notifications. nil = off.
+/// Reminder times chosen in Profile → Notifications. nil = off. `learned`: the times come from the user's routine
+/// ("Let Arc learn my routine"); it is never saved.
 struct ReminderSettings: Equatable, Sendable {
     var daily: DateComponents? = DateComponents(hour: 8, minute: 0)
     var streakRisk: DateComponents? = DateComponents(hour: 20, minute: 0)
+    var learned = false
 
     static func load() -> ReminderSettings {
         let d = UserDefaults.standard
@@ -42,7 +44,7 @@ actor NotificationScheduler {
         let snapshot = await MainActor.run { Self.snapshot() }
         center.removeAllPendingNotificationRequests()
         guard snapshot.hasGoals else { return }
-        let settings = ReminderSettings.load()
+        let settings = await MainActor.run { RhythmStore.effective(ReminderSettings.load()) }
         var requests: [UNNotificationRequest] = []
         for offset in 0..<days {
             let day = Day.add(offset, to: LocalDay.today())
