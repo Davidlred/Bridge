@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 import javax.inject.Inject
 
 /** State shared by every signed-in screen: who the user is, connectivity, unsynced changes, account actions. */
@@ -46,7 +47,10 @@ class ShellViewModel @Inject constructor(
     private val analytics: app.thebridge.data.Analytics,
     private val inviteReferrer: app.thebridge.data.InviteReferrer,
     private val appearanceStore: app.thebridge.data.Appearance,
+    private val rhythm: app.thebridge.data.RhythmStore,
 ) : ViewModel() {
+    val learnRoutine = rhythm.enabled
+    fun setLearnRoutine(on: Boolean) = viewModelScope.launch { rhythm.setEnabled(on); if (on) rhythm.recordOpen(); reminderScheduler.reschedule() }
     val appearance = appearanceStore.mode
     fun setAppearance(mode: String) = viewModelScope.launch { appearanceStore.set(mode) }
     /** Invite code from a Play Store install that started on thebridge.app/join (once per install). */
@@ -121,8 +125,15 @@ class ShellViewModel @Inject constructor(
         val all = options.map { java.time.LocalTime.of(it, 0) } + listOf<java.time.LocalTime?>(null)
         return all[(all.indexOf(current) + 1).mod(all.size)]
     }
-    fun cycleDaily() = viewModelScope.launch { reminderScheduler.setDaily(next(reminders.first().daily, listOf(7, 8, 9))) }
-    fun cycleRisk() = viewModelScope.launch { reminderScheduler.setStreakRisk(next(reminders.first().streakRisk, listOf(19, 20, 21))) }
+    // With learned times a tap switches the reminder on or off; the routine picks the time.
+    fun cycleDaily() = viewModelScope.launch {
+        val now = reminders.first()
+        reminderScheduler.setDaily(if (now.learned) (if (now.daily == null) LocalTime.of(8, 0) else null) else next(now.daily, listOf(7, 8, 9)))
+    }
+    fun cycleRisk() = viewModelScope.launch {
+        val now = reminders.first()
+        reminderScheduler.setStreakRisk(if (now.learned) (if (now.streakRisk == null) LocalTime.of(20, 0) else null) else next(now.streakRisk, listOf(19, 20, 21)))
+    }
 
     val hasPlus = billing.active.map { "plus" in it }
 

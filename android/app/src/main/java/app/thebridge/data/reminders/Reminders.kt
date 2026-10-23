@@ -32,7 +32,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Reminder times chosen in Profile → Notifications. null = off. */
-data class ReminderSettings(val daily: LocalTime? = LocalTime.of(8, 0), val streakRisk: LocalTime? = LocalTime.of(20, 0))
+/** [learned]: the times come from the user's routine ("Let Arc learn my routine"); turning a reminder off still wins. */
+data class ReminderSettings(val daily: LocalTime? = LocalTime.of(8, 0), val streakRisk: LocalTime? = LocalTime.of(20, 0), val learned: Boolean = false)
 
 object TaskTime {
     private val clock = Regex("""^\s*(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?\s*$""", RegexOption.IGNORE_CASE)
@@ -62,12 +63,18 @@ class ReminderScheduler @Inject constructor(
     @ApplicationContext private val ctx: Context,
     private val db: BridgeDb,
     private val store: DataStore<Preferences>,
+    private val rhythm: app.thebridge.data.RhythmStore,
 ) {
     private val alarms = ctx.getSystemService(AlarmManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val settings: Flow<ReminderSettings> = store.data.map { p ->
+    /** What the user picked in Profile. */
+    val stored: Flow<ReminderSettings> = store.data.map { p ->
         ReminderSettings(daily = p[DAILY].toTime(LocalTime.of(8, 0)), streakRisk = p[RISK].toTime(LocalTime.of(20, 0)))
+    }
+    /** What actually fires: the learned times when there is a routine to learn from, else the picked ones. */
+    val settings: Flow<ReminderSettings> = kotlinx.coroutines.flow.combine(stored, rhythm.rhythm) { s, r ->
+        if (r == null) s else ReminderSettings(daily = s.daily?.let { r.dailyReminder }, streakRisk = s.streakRisk?.let { r.streakRisk }, learned = true)
     }
     private fun String?.toTime(default: LocalTime): LocalTime? = when (this) { null -> default; "off" -> null; else -> runCatching { LocalTime.parse(this) }.getOrDefault(default) }
 

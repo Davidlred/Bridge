@@ -452,6 +452,9 @@
     <string name="appearance_light">Light</string>
     <string name="appearance_dark">Dark</string>
     <string name="settings_coach_name">Coach name</string>
+    <string name="settings_learn_routine">Let Arc learn my routine</string>
+    <string name="settings_learn_routine_sub">When you open the app and finish tasks, and whether you\'re on Wi-Fi. Kept on this phone to time your reminders and tailor the coach. Never your location.</string>
+    <string name="settings_reminder_learned">%1$s, learned</string>
     <string name="settings_coach_journal">Let my coach read my journal</string>
     <string name="settings_coach_journal_sub">Your last three entries are shared with the coach for context. Never used for training.</string>
     <string name="coach_rename_title">Rename your coach</string>

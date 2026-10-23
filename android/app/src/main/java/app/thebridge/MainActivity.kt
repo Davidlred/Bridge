@@ -11,6 +11,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import app.thebridge.data.Appearance
 import app.thebridge.feature.auth.AuthViewModel
 import app.thebridge.nav.AppRoot
@@ -22,6 +24,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     private val auth: AuthViewModel by viewModels()
     @Inject lateinit var appearance: Appearance
+    @Inject lateinit var rhythm: app.thebridge.data.RhythmStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,5 +40,11 @@ class MainActivity : ComponentActivity() {
             }
             BridgeTheme(mode) { AppRoot(auth) }
         }
+    }
+
+    /** Only recorded when the user turned on "Let Arc learn my routine". */
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch { rhythm.recordOpen() }
     }
 }

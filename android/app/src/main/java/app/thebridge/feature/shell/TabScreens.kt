@@ -87,6 +87,7 @@ fun ProfileScreen(
     share: app.thebridge.data.ShareLevel = app.thebridge.data.ShareLevel.Streaks, onShare: () -> Unit = {}, onHall: (() -> Unit)? = null, onExport: () -> Unit = {},
     analytics: Boolean = false, onAnalytics: (Boolean) -> Unit = {},
     appearance: String = "system", onAppearance: (String) -> Unit = {},
+    learnRoutine: Boolean = false, onLearnRoutine: (Boolean) -> Unit = {},
 ) {
     var choosingLook by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
@@ -112,9 +113,9 @@ fun ProfileScreen(
             androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_chevron_right), null, tint = c.mut, modifier = Modifier.size(22.dp))
         }
         SettingsSection(stringResource(R.string.settings_notifications)) {
-            SettingsValue(stringResource(R.string.settings_daily_reminder), reminders.daily?.let(::clock) ?: stringResource(R.string.settings_off), onDaily)
+            SettingsValue(stringResource(R.string.settings_daily_reminder), reminders.daily?.let { reminderTime(it, reminders.learned) } ?: stringResource(R.string.settings_off), onDaily)
             HorizontalDivider(color = c.line)
-            SettingsValue(stringResource(R.string.settings_streak_risk), reminders.streakRisk?.let(::clock) ?: stringResource(R.string.settings_off), onRisk)
+            SettingsValue(stringResource(R.string.settings_streak_risk), reminders.streakRisk?.let { reminderTime(it, reminders.learned) } ?: stringResource(R.string.settings_off), onRisk)
         }
         SettingsSection(stringResource(R.string.settings_coach)) {
             SettingsValue(stringResource(R.string.settings_coach_name), coachName) { renaming = true }
@@ -122,6 +123,8 @@ fun ProfileScreen(
             SettingsValue(stringResource(R.string.coach_style_title), stringResource(COACH_STYLES.firstOrNull { it.id == styleInUse }?.label ?: R.string.coach_style_balanced)) { picking = true }
             HorizontalDivider(color = c.line)
             SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
+            HorizontalDivider(color = c.line)
+            SettingsToggle(stringResource(R.string.settings_learn_routine), stringResource(R.string.settings_learn_routine_sub), learnRoutine, onLearnRoutine)
         }
         SettingsSection(stringResource(R.string.settings_display)) {
             SettingsValue(stringResource(R.string.settings_appearance), stringResource(APPEARANCES.firstOrNull { it.first == appearance }?.second ?: R.string.appearance_system)) { choosingLook = true }
@@ -236,6 +239,9 @@ private fun RenameCoachSheet(current: String, onSave: (String) -> Unit, onDismis
         }
     }
 }
+
+@Composable
+private fun reminderTime(t: java.time.LocalTime, learned: Boolean): String = if (learned) stringResource(R.string.settings_reminder_learned, clock(t)) else clock(t)
 
 private fun clock(t: java.time.LocalTime): String = t.format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
 

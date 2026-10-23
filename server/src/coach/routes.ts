@@ -30,6 +30,14 @@ export const CoachRequest = z.object({
   messageId: z.string().uuid().optional(),
   replyId: z.string().uuid().optional(),
   sentAt: z.number().int().optional(),
+  // "Let Arc learn my routine" (opt-in, computed on the phone): hours only and a Wi-Fi share, never raw usage or location.
+  rhythm: z.object({
+    days: z.number().int().min(1).max(28),
+    openHour: z.number().int().min(0).max(23),
+    doneHour: z.number().int().min(0).max(23).optional(),
+    finishedBy: z.number().int().min(1).max(27).optional(),
+    wifiShare: z.number().min(0).max(1).optional(),
+  }).optional(),
 });
 type CoachRequest = z.infer<typeof CoachRequest>;
 
@@ -98,6 +106,17 @@ export class SuggestionSplitter {
  * Each goal has its own conversation. The goal in focus gets full detail; the others only appear by name, so the coach can
  * avoid clashes (time, energy) without drifting into them. Without a focus (older apps) every goal is described.
  */
+const clock = (h: number) => { const x = h % 24; return x === 0 ? 'midnight' : x === 12 ? 'noon' : x < 12 ? `${x} AM` : `${x - 12} PM`; };
+
+/** One line on when the user actually uses the app, so suggestions fit their day. */
+export function routineLine(r: NonNullable<CoachRequest['rhythm']>): string {
+  const parts = [`usually opens the app around ${clock(r.openHour)}`];
+  if (r.doneHour !== undefined) parts.push(`gets tasks done around ${clock(r.doneHour)}`);
+  if (r.finishedBy !== undefined) parts.push(`is done by ${clock(r.finishedBy)} on most days`);
+  if (r.wifiShare !== undefined) parts.push(r.wifiShare >= 0.7 ? 'mostly on Wi-Fi (home or work)' : r.wifiShare <= 0.3 ? 'mostly on mobile data (out and about)' : 'on Wi-Fi about half the time');
+  return `Their routine over the last ${r.days} days (they allowed the app to learn it): ${parts.join(', ')}. Use it to time suggestions; don't mention that it is tracked unless they ask.`;
+}
+
 function prompt(req: CoachRequest, journal: string[]): string {
   const focus = req.focusGoalId ? req.goals.find(g => g.id === req.focusGoalId) : undefined;
   const detail = (g: CoachRequest['goals'][number]) => {
@@ -114,6 +133,7 @@ function prompt(req: CoachRequest, journal: string[]): string {
   return [
     `Today is ${req.localDate}.`,
     goals || 'The user has no active goals yet.',
+    req.rhythm ? routineLine(req.rhythm) : '',
     journal.length ? `Recent journal entries (the user allowed you to read these):\n${journal.join('\n')}` : '',
     history ? `Conversation so far:\n${history}` : '',
     `User: ${req.message}\nCoach:`,

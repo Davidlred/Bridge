@@ -248,6 +248,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     val share by shell.share.collectAsStateWithLifecycle(app.thebridge.data.ShareLevel.Streaks)
     val analyticsOn by shell.analyticsOn.collectAsStateWithLifecycle(false)
     val appearance by shell.appearance.collectAsStateWithLifecycle("system")
+    val learnRoutine by shell.learnRoutine.collectAsStateWithLifecycle(false)
     // "Download my data": the system Save dialog picks where the JSON goes.
     val saveExport = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(shell::exportData) }
     // One coach ViewModel for the tab and Study Mode, so they share the conversation.
@@ -307,6 +308,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                         share = share, onShare = shell::cycleShare, onHall = { nav.navigate(HallOfFame) }, onExport = { saveExport.launch("the-bridge-export.json") },
                         analytics = analyticsOn, onAnalytics = shell::setAnalytics,
                         appearance = appearance, onAppearance = shell::setAppearance,
+                        learnRoutine = learnRoutine, onLearnRoutine = { shell.setLearnRoutine(it) },
                     )
                 }
                 composable<HallOfFame> { app.thebridge.feature.community.HallRoute(onBack = { nav.popBackStack() }) }

@@ -38,6 +38,7 @@ class CoachRepository @Inject constructor(
     private val goals: GoalRepository,
     private val store: DataStore<Preferences>,
     @dagger.hilt.android.qualifiers.ApplicationContext private val ctx: android.content.Context,
+    private val rhythm: RhythmStore,
 ) {
     val messages: Flow<List<ChatMessageEntity>> = db.chat().all()
 
@@ -82,6 +83,7 @@ class CoachRepository @Inject constructor(
         db.chat().upsert(userMsg)
         val active = goals.activeGoals().first()
         val reply = ChatMessageEntity(UuidV7.next(), conv, "coach", "", status = "streaming", createdAt = System.currentTimeMillis() + 1, goalId = focusGoalId)
+        val routine = rhythm.rhythm.first()
         val body = buildJsonObject {
             put("message", userMsg.text); put("mode", mode); put("localDate", LocalDay.today()); put("focusGoalId", focusGoalId)
             // Ids let the server store this exchange so it follows the account to other devices.
@@ -96,6 +98,12 @@ class CoachRepository @Inject constructor(
                     })
                 }
             }
+            // Only with "Let Arc learn my routine": hours and a Wi-Fi share, never the raw opens.
+            if (routine != null) put("rhythm", buildJsonObject {
+                put("days", routine.days); put("openHour", routine.openHour)
+                routine.doneHour?.let { put("doneHour", it) }; routine.finishedBy?.let { put("finishedBy", it) }
+                routine.wifiShare?.let { put("wifiShare", (it * 100).toInt() / 100.0) }
+            })
         }
         var started = false
         val text = StringBuilder()

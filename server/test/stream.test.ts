@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { StreamJoiner } from '../src/ai/replicate.js';
+import { routineLine } from '../src/coach/routes.js';
+
+describe('routine summary for the coach', () => {
+  it('says when the user is usually active, in plain words', () => {
+    expect(routineLine({ days: 12, openHour: 21, doneHour: 20, finishedBy: 22, wifiShare: 0.8 })).toBe(
+      "Their routine over the last 12 days (they allowed the app to learn it): usually opens the app around 9 PM, gets tasks done around 8 PM, is done by 10 PM on most days, mostly on Wi-Fi (home or work). Use it to time suggestions; don't mention that it is tracked unless they ask.");
+    expect(routineLine({ days: 5, openHour: 0, finishedBy: 25, wifiShare: 0.2 })).toContain('around midnight, is done by 1 AM on most days, mostly on mobile data');
+  });
+});
 
 const join = (chunks: string[]) => { const j = new StreamJoiner(); return chunks.map(c => j.push(c)).join(''); };
 
