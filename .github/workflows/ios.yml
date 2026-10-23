@@ -43,7 +43,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test-without-building -project Bridge.xcodeproj -scheme Bridge \
-            -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests -only-testing:BridgeTests/GoalsCoreTests -only-testing:BridgeTests/CryptoTests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationTests -only-testing:BridgeTests/GoalsCoreTests -only-testing:BridgeTests/RhythmTests -only-testing:BridgeTests/CryptoTests \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" || true
           grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/test.log"
       # No reference images yet: record them (they are published with the log, then committed). Otherwise verify against them.
