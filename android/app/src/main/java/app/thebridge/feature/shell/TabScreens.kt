@@ -122,9 +122,9 @@ fun ProfileScreen(
             HorizontalDivider(color = c.line)
             SettingsValue(stringResource(R.string.coach_style_title), stringResource(COACH_STYLES.firstOrNull { it.id == styleInUse }?.label ?: R.string.coach_style_balanced)) { picking = true }
             HorizontalDivider(color = c.line)
-            SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
-            HorizontalDivider(color = c.line)
             SettingsToggle(stringResource(R.string.settings_learn_routine), stringResource(R.string.settings_learn_routine_sub), learnRoutine, onLearnRoutine)
+            HorizontalDivider(color = c.line)
+            SettingsToggle(stringResource(R.string.settings_coach_journal), stringResource(R.string.settings_coach_journal_sub), coachReadsJournal, onCoachReadsJournal)
         }
         SettingsSection(stringResource(R.string.settings_display)) {
             SettingsValue(stringResource(R.string.settings_appearance), stringResource(APPEARANCES.firstOrNull { it.first == appearance }?.second ?: R.string.appearance_system)) { choosingLook = true }
