@@ -79,6 +79,7 @@ data class CommunityActions(
     val create: () -> Unit = {}, val join: () -> Unit = {}, val select: (String) -> Unit = {}, val invite: (AllianceDto) -> Unit = {}, val sampleInvite: () -> Unit = {},
     val openChat: (AllianceDto) -> Unit = {}, val options: (AllianceDto) -> Unit = {}, val applyNow: (AllianceDto) -> Unit = {},
     val openDms: () -> Unit = {}, val alliancePlus: () -> Unit = {}, val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
+    val setListed: (AllianceDto, Boolean) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -389,8 +390,8 @@ private fun AllianceCard(a: AllianceDto, ui: CommunityUi, actions: CommunityActi
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(a.name, style = BType.display(22), color = c.ink, modifier = Modifier.semantics { heading() })
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Icon(painterResource(R.drawable.ic_lock), null, tint = c.mut, modifier = Modifier.size(13.dp))
-                    Text(stringResource(R.string.ally_invite_only), style = BType.label(10f, 0.12f), color = c.mut)
+                    Icon(painterResource(if (a.listed) R.drawable.ic_groups else R.drawable.ic_lock), null, tint = c.mut, modifier = Modifier.size(13.dp))
+                    Text(stringResource(if (a.listed) R.string.ally_findable else R.string.ally_invite_only), style = BType.label(10f, 0.12f), color = c.mut)
                 }
             }
             Box(Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { if (sample) actions.sampleInvite() else actions.invite(a) }, contentAlignment = Alignment.Center) {
@@ -404,6 +405,7 @@ private fun AllianceCard(a: AllianceDto, ui: CommunityUi, actions: CommunityActi
             }
         }
         a.shared?.let { SharedPanel(a, it, ui, actions, today) }
+        if (!sample && a.role == "owner") ListingSwitch(a.listed) { actions.setListed(a, it) }
         FillButton(stringResource(R.string.ally_open_chat), { if (!sample) actions.openChat(a) }, icon = R.drawable.ic_forum)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

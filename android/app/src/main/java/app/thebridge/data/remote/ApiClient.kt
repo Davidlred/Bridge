@@ -67,8 +67,10 @@ class StreamInterrupted : Exception()
 @Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList())
 @Serializable data class JournalDto(val id: String, val goalId: String? = null, val localDate: String, val mood: Int? = null, val body: String = "", val version: Int = 1, val conflictOf: String? = null, val updatedAt: Long = 0)
 @Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList(), val chat: List<ChatDto> = emptyList(), val removedChat: List<String> = emptyList())
-@Serializable data class ChatDto(val id: String, val conversation: String, val goalId: String? = null, val role: String, val text: String, val suggestion: SuggestionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
+@Serializable data class ChatDto(val id: String, val conversation: String, val goalId: String? = null, val role: String, val text: String, val suggestion: SuggestionDto? = null, val alliance: AllianceSuggestionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
 @Serializable data class SuggestionDto(val title: String, val rationale: String = "", val priority: String = "Medium", val timeOfDay: String? = null)
+/** A findable alliance the coach recommended; [code] opens its join preview. */
+@Serializable data class AllianceSuggestionDto(val id: String, val name: String, val about: String? = null, val planMode: String = "own", val members: Int = 1, val cap: Int = 15, val code: String, val reason: String = "")
 
 // --- Social (milestone 4). Names are first names only; the server never sends other people's goal text or tasks. ---
 @Serializable data class ReactionCounts(val respect: Int = 0, val keepGoing: Int = 0, val inspired: Int = 0)
@@ -81,6 +83,8 @@ class StreamInterrupted : Exception()
 @Serializable data class AllianceDto(
     val id: String, val name: String, val planMode: String, val inviteCode: String, val cap: Int = 15, val startDate: String, val role: String? = null, val goalId: String? = null,
     val streak: Int = 0, val members: List<MemberDto> = emptyList(), val memberCount: Int = 0, val shared: SharedPlanDto? = null, val feed: List<AllianceFeedDto> = emptyList(),
+    /** Findable: others (and the coach) can find it and join without a code. */
+    val listed: Boolean = false, val about: String? = null,
 ) { val isShared: Boolean get() = planMode == "shared" }
 @Serializable data class PreviewTaskDto(val title: String, val priority: String = "Medium", val timeOfDay: String? = null)
 @Serializable data class PaceDto(val groupDay: Int, val groupTotal: Int, val yourTotal: Int)
@@ -130,6 +134,7 @@ class StreamInterrupted : Exception()
 sealed interface CoachEvent {
     data class Token(val text: String) : CoachEvent
     data class Suggest(val suggestion: SuggestionDto) : CoachEvent
+    data class Alliance(val alliance: AllianceSuggestionDto) : CoachEvent
 }
 
 /** All HTTP goes through here. Repositories call it; ViewModels never do. */
@@ -191,6 +196,7 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
                             when (event) {
                                 "token" -> onEvent(CoachEvent.Token(data["text"]!!.jsonPrimitive.content))
                                 "suggestion" -> onEvent(CoachEvent.Suggest(json.decodeFromJsonElement(SuggestionDto.serializer(), data)))
+                                "alliance" -> onEvent(CoachEvent.Alliance(json.decodeFromJsonElement(AllianceSuggestionDto.serializer(), data)))
                                 "done" -> finished = true
                                 "error" -> throw StreamInterrupted()
                             }
@@ -254,8 +260,13 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     }
 
     suspend fun alliances(): List<AllianceDto> = json.decodeFromString<AlliancesResponse>(call("GET", "/v1/alliances", null, authed = true)).alliances
-    suspend fun createAlliance(name: String, planMode: String, goalId: String): AllianceDto =
-        json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances", buildJsonObject { put("name", name); put("planMode", planMode); put("goalId", goalId) }, authed = true)).alliance
+    suspend fun createAlliance(name: String, planMode: String, goalId: String, listed: Boolean = false, about: String? = null): AllianceDto =
+        json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances", buildJsonObject {
+            put("name", name); put("planMode", planMode); put("goalId", goalId); put("listed", listed); if (!about.isNullOrBlank()) put("about", about)
+        }, authed = true)).alliance
+    /** The lead makes the alliance findable or private again. */
+    suspend fun setAllianceListed(id: String, listed: Boolean): AllianceDto =
+        json.decodeFromString<AllianceResponse>(call("PATCH", "/v1/alliances/$id", buildJsonObject { put("listed", listed) }, authed = true)).alliance
     suspend fun previewAlliance(code: String): InvitePreviewDto = json.decodeFromString<PreviewResponse>(call("GET", "/v1/alliances/preview/$code", null, authed = true)).preview
     suspend fun joinAlliance(code: String, goalId: String?): AllianceDto =
         json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances/join", buildJsonObject { put("code", code); if (goalId != null) put("goalId", goalId) }, authed = true)).alliance

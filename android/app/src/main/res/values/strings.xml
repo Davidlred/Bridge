@@ -390,6 +390,9 @@
     <string name="coach_add_to_plan">ADD TO PLAN</string>
     <string name="coach_add_to">Add to %1$s</string>
     <string name="coach_dismiss">Dismiss</string>
+    <string name="coach_alliance_meta_own">%1$d of %2$d members, everyone keeps their own plan</string>
+    <string name="coach_alliance_meta_shared">%1$d of %2$d members, one shared plan</string>
+    <string name="coach_alliance_open">See alliance</string>
     <string name="coach_added">Added: %1$s</string>
     <string name="coach_dismissed">Suggestion dismissed</string>
     <string name="coach_added_toast">Added to today\'s plan.</string>
@@ -514,6 +517,9 @@
     <string name="ally_join">Join</string>
     <string name="ally_sample">SAMPLE ALLIANCE · HOW YOURS WILL WORK</string>
     <string name="ally_invite_only">INVITE ONLY</string>
+    <string name="ally_findable">FINDABLE</string>
+    <string name="ally_listed">Let people find this alliance</string>
+    <string name="ally_listed_sub">Arc can suggest it to people with a goal like yours, and they can join without a code.</string>
     <string name="ally_invite">Invite</string>
     <string name="ally_invite_share">Join my alliance %1$s on The Bridge: %2$s (code %3$s)</string>
     <string name="toast_sample_invite">Sample alliance. Invites unlock with Community.</string>
@@ -572,6 +578,9 @@
     <string name="create_shared_meta">Due %1$s · %2$d daily tasks</string>
     <string name="create_shared_note">Only you can change the tasks. People who join late start at day 1 with the same deadline.</string>
     <string name="create_private">Private by default. Up to 15 members, invite-only by link or code.</string>
+    <string name="create_findable">Findable. Up to 15 members; people with a similar goal can find it and join.</string>
+    <string name="create_about">WHAT IT\'S ABOUT</string>
+    <string name="create_about_hint">e.g. Training for a first half marathon</string>
     <string name="create_cta_own">Create alliance</string>
     <string name="create_cta_shared">Create and share plan</string>
     <string name="toast_created">Alliance created. Invite up to 14 people.</string>

@@ -265,6 +265,18 @@ class ScreenshotTest {
     @Test fun communityFeedError() = snap("community-feed-error") { CommunityScreen(open.copy(community = null, feedError = true), CommunityActions(), day, now) }
     @Test fun allianceNone() = snap("alliance-none") { CommunityScreen(open.copy(tab = CommunityTab.Alliance), CommunityActions(), day, now) }
     @Test fun allianceShared() = snap("alliance-shared") { CommunityScreen(open.copy(tab = CommunityTab.Alliance, alliances = listOf(calc, dawn)), CommunityActions(), day, now) }
+    // Arc recommends a findable alliance that fits the goal.
+    @Test fun coachAlliance() = snap("coach-alliance") {
+        val pick = app.thebridge.data.remote.AllianceSuggestionDto("a1", "Half marathon crew", "Training for a first half marathon together", "own", 6, 15, "HALF-1234",
+            "Six people training for their first half, most of them running in the evenings like you.")
+        CoachScreen(CoachUi(loaded = true, goals = listOf(marathon), focus = marathon, items = listOf(
+            msg("m1", "user", "Is there a group I could train with?"),
+            ChatItem(ChatMessageEntity("m2", "c1", "coach", "Yes. Running with others makes the long weeks easier. This one fits your race.", "done", null, "pending"), null, false, pick),
+        )), CoachActions())
+    }
+    @Test fun allianceCreateFindable() = snap("alliance-create-findable") {
+        Box(Modifier.padding(24.dp)) { CreateAllianceContent(CommunitySheet.Create("Dawn Runners", listed = true, about = "Early runs before work"), marathon, {}, {}, {}) }
+    }
     @Test fun allianceCreate() = snap("alliance-create") {
         Box(Modifier.padding(24.dp)) { CreateAllianceContent(CommunitySheet.Create("Dawn Runners", shared = true), marathon, {}, {}, {}) }
     }

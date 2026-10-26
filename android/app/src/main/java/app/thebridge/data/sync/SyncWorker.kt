@@ -118,7 +118,8 @@ class RemoteSyncApi @Inject constructor(
         db.chat().delete(page.removedChat)
         db.chat().upsert(page.chat.map {
             app.thebridge.data.local.ChatMessageEntity(it.id, it.conversation, it.role, it.text, it.status,
-                it.suggestion?.let { s -> api.json.encodeToString(app.thebridge.data.remote.SuggestionDto.serializer(), s) }, it.suggestionState, it.createdAt, it.goalId)
+                it.suggestion?.let { s -> api.json.encodeToString(app.thebridge.data.remote.SuggestionDto.serializer(), s) }, it.suggestionState, it.createdAt, it.goalId,
+                it.alliance?.let { a -> api.json.encodeToString(app.thebridge.data.remote.AllianceSuggestionDto.serializer(), a) })
         })
         // Synced settings that the app shows locally
         page.settings?.get("share")?.let { v ->

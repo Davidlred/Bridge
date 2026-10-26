@@ -140,7 +140,9 @@ class SocialRepository @Inject constructor(
 
     private suspend fun upsertAlliance(a: AllianceDto) = saveAlliances(alliances().first().filterNot { it.id == a.id } + a)
 
-    suspend fun create(name: String, planMode: String, goalId: String): AllianceDto = api.createAlliance(name.trim(), planMode, goalId).also { upsertAlliance(it) }
+    suspend fun create(name: String, planMode: String, goalId: String, listed: Boolean = false, about: String? = null): AllianceDto =
+        api.createAlliance(name.trim(), planMode, goalId, listed, about?.trim()?.take(140)).also { upsertAlliance(it) }
+    suspend fun setListed(id: String, listed: Boolean): AllianceDto = api.setAllianceListed(id, listed).also { upsertAlliance(it) }
 
     suspend fun preview(code: String): InvitePreviewDto = api.previewAlliance(code.trim().uppercase())
 

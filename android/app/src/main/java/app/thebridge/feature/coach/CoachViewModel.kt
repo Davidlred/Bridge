@@ -27,7 +27,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class ChatItem(val message: ChatMessageEntity, val suggestion: SuggestionDto?, val dividerBefore: Boolean)
+data class ChatItem(val message: ChatMessageEntity, val suggestion: SuggestionDto?, val dividerBefore: Boolean, val alliance: app.thebridge.data.remote.AllianceSuggestionDto? = null)
 
 data class CoachUi(
     /** False until the goals, messages and coach name have been read once: no empty state or default name flashes. */
@@ -84,7 +84,7 @@ class CoachViewModel @Inject constructor(
         l.copy(
             loaded = true, coachName = name, goals = goals.sortedBy { it.goal.id }, focus = goals.firstOrNull { it.goal.id == focusId },
             hasEarlier = !earlier && thread.any { it.conversation != conv },
-            items = shown.mapIndexed { i, m -> ChatItem(m, coach.suggestion(m), i > 0 && shown[i - 1].conversation != m.conversation) },
+            items = shown.mapIndexed { i, m -> ChatItem(m, coach.suggestion(m), i > 0 && shown[i - 1].conversation != m.conversation, coach.alliance(m)) },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CoachUi())
 

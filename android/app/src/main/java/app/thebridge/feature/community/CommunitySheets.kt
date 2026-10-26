@@ -1,5 +1,7 @@
 package app.thebridge.feature.community
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,12 +60,14 @@ import java.util.Locale
 
 /** Name and plan type. A shared plan shows what members will get. */
 @Composable
-fun CreateAllianceSheet(s: CommunitySheet.Create, goal: GoalState?, onName: (String) -> Unit, onShared: (Boolean) -> Unit, onCreate: () -> Unit, onDismiss: () -> Unit) {
-    BridgeSheet(onDismiss) { CreateAllianceContent(s, goal, onName, onShared, onCreate) }
+fun CreateAllianceSheet(s: CommunitySheet.Create, goal: GoalState?, onName: (String) -> Unit, onShared: (Boolean) -> Unit, onCreate: () -> Unit, onDismiss: () -> Unit,
+                        onListed: (Boolean) -> Unit = {}, onAbout: (String) -> Unit = {}) {
+    BridgeSheet(onDismiss) { CreateAllianceContent(s, goal, onName, onShared, onCreate, onListed, onAbout) }
 }
 
 @Composable
-fun CreateAllianceContent(s: CommunitySheet.Create, goal: GoalState?, onName: (String) -> Unit, onShared: (Boolean) -> Unit, onCreate: () -> Unit) {
+fun CreateAllianceContent(s: CommunitySheet.Create, goal: GoalState?, onName: (String) -> Unit, onShared: (Boolean) -> Unit, onCreate: () -> Unit,
+                          onListed: (Boolean) -> Unit = {}, onAbout: (String) -> Unit = {}) {
     val c = LocalBridgeColors.current
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SheetTitle(stringResource(R.string.create_title))
@@ -80,11 +84,30 @@ fun CreateAllianceContent(s: CommunitySheet.Create, goal: GoalState?, onName: (S
             Text(stringResource(R.string.create_shared_meta, LocalDate.parse(goal.goal.deadline).format(DATE), goal.tasks.size), style = BType.body(12), color = c.ink2)
             Text(stringResource(R.string.create_shared_note), style = BType.body(12, lineHeight = 1.45f), color = c.mut)
         }
+        ListingSwitch(s.listed, onListed)
+        if (s.listed) BridgeField(stringResource(R.string.create_about), s.about, onAbout, stringResource(R.string.create_about_hint))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(painterResource(R.drawable.ic_lock), null, tint = c.mut, modifier = Modifier.size(16.dp))
-            Text(stringResource(R.string.create_private), style = BType.body(12, lineHeight = 1.4f), color = c.mut)
+            Icon(painterResource(if (s.listed) R.drawable.ic_groups else R.drawable.ic_lock), null, tint = c.mut, modifier = Modifier.size(16.dp))
+            Text(stringResource(if (s.listed) R.string.create_findable else R.string.create_private), style = BType.body(12, lineHeight = 1.4f), color = c.mut)
         }
         PrimaryButton(stringResource(if (s.shared) R.string.create_cta_shared else R.string.create_cta_own), onCreate, loading = s.busy)
+    }
+}
+
+/** "Let people find this alliance": Arc can suggest it to people with a goal like it, and they join without a code. */
+@Composable
+fun ListingSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+    val c = LocalBridgeColors.current
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp))
+        .toggleable(on, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(stringResource(R.string.ally_listed), style = BType.body(15, FontWeight.Medium), color = c.ink)
+            Text(stringResource(R.string.ally_listed_sub), style = BType.body(12, lineHeight = 1.4f), color = c.mut)
+        }
+        Box(Modifier.size(width = 44.dp, height = 24.dp).background(if (on) c.okFill else c.track, CircleShape).padding(2.dp), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.size(20.dp).background(c.s1, CircleShape))
+        }
     }
 }
 

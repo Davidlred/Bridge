@@ -289,7 +289,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 }
             }
             navigation<CoachGraph>(startDestination = Coach) {
-                composable<Coach> { CoachRoute(coachVm, onStudy = { nav.navigate(StudyMode) }) }
+                composable<Coach> { CoachRoute(coachVm, onStudy = { nav.navigate(StudyMode) }, onOpenAlliance = { goalId, code -> nav.navigate(Community(goalId, code)) }) }
                 composable<StudyMode> { StudyRoute(coachVm, onExit = { nav.popBackStack() }) }
             }
             navigation<JournalGraph>(startDestination = Journal) {

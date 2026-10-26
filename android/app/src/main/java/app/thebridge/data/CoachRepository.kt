@@ -116,6 +116,7 @@ class CoachRepository @Inject constructor(
                         db.chat().update(reply.id, text.toString(), "streaming")
                     }
                     is CoachEvent.Suggest -> db.chat().upsert(reply.copy(text = text.toString(), status = "streaming", suggestion = api.json.encodeToString(SuggestionDto.serializer(), e.suggestion), suggestionState = "pending"))
+                    is CoachEvent.Alliance -> db.chat().upsert(reply.copy(text = text.toString(), status = "streaming", alliance = api.json.encodeToString(app.thebridge.data.remote.AllianceSuggestionDto.serializer(), e.alliance), suggestionState = "pending"))
                 }
             }
             // Keep the suggestion fields written above; only the text and status change here.
@@ -134,6 +135,8 @@ class CoachRepository @Inject constructor(
         }
     }
 
+    fun alliance(m: ChatMessageEntity): app.thebridge.data.remote.AllianceSuggestionDto? =
+        m.alliance?.let { runCatching { api.json.decodeFromString(app.thebridge.data.remote.AllianceSuggestionDto.serializer(), it) }.getOrNull() }
     fun suggestion(m: ChatMessageEntity): SuggestionDto? = m.suggestion?.let { runCatching { api.json.decodeFromString(SuggestionDto.serializer(), it) }.getOrNull() }
 
     /** "Add to plan": the suggestion becomes an AI task on the goal in focus. */

@@ -36,7 +36,7 @@ enum class CommunityTab { Feed, Alliance }
 
 /** Sheets over the Community screen. Form state lives here so it survives rotation. */
 sealed interface CommunitySheet {
-    data class Create(val name: String = "", val shared: Boolean = false, val error: UiText? = null, val busy: Boolean = false) : CommunitySheet
+    data class Create(val name: String = "", val shared: Boolean = false, val error: UiText? = null, val busy: Boolean = false, val listed: Boolean = false, val about: String = "") : CommunitySheet
     data class Join(val code: String = "", val error: UiText? = null, val busy: Boolean = false, val preview: InvitePreviewDto? = null) : CommunitySheet
     data class PostMenu(val post: PostDto) : CommunitySheet
     data class Leave(val alliance: AllianceDto) : CommunitySheet
@@ -168,6 +168,13 @@ class CommunityViewModel @Inject constructor(
 
     fun onName(v: String) = editSheet<CommunitySheet.Create> { it.copy(name = v.take(40), error = null) }
     fun onShared(v: Boolean) = editSheet<CommunitySheet.Create> { it.copy(shared = v) }
+    fun onListed(v: Boolean) = editSheet<CommunitySheet.Create> { it.copy(listed = v) }
+    fun onAbout(v: String) = editSheet<CommunitySheet.Create> { it.copy(about = v.take(140)) }
+
+    /** The lead makes the alliance findable (Arc can suggest it; people join without a code) or private again. */
+    fun setListed(a: app.thebridge.data.remote.AllianceDto, on: Boolean) = viewModelScope.launch {
+        try { social.setListed(a.id, on); refresh() } catch (e: Exception) { toaster.show(UiText.Res(R.string.error_generic), ToastKind.Warn) }
+    }
 
     fun create() {
         val s = local.value.sheet as? CommunitySheet.Create ?: return
@@ -176,7 +183,7 @@ class CommunityViewModel @Inject constructor(
         editSheet<CommunitySheet.Create> { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                val a = social.create(s.name, if (s.shared) "shared" else "own", goalId)
+                val a = social.create(s.name, if (s.shared) "shared" else "own", goalId, s.listed, s.about.ifBlank { null })
                 local.update { it.copy(sheet = null, tab = CommunityTab.Alliance, selectedId = a.id) }
                 analytics.track(app.thebridge.data.Event.AllianceCreated, "mode" to a.planMode)
                 toaster.show(UiText.Res(if (s.shared) R.string.toast_created_shared else R.string.toast_created), ToastKind.Ok)

@@ -7,12 +7,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** Coach tab. Study Mode shares the same ViewModel (and conversation) through the activity-scoped [vm]. */
 @Composable
-fun CoachRoute(vm: CoachViewModel, onStudy: () -> Unit) {
+/** [onOpenAlliance]: (goal id, join code) of an alliance the coach recommended. */
+fun CoachRoute(vm: CoachViewModel, onStudy: () -> Unit, onOpenAlliance: (String, String) -> Unit = { _, _ -> }) {
     val ui by vm.state.collectAsStateWithLifecycle()
     CoachScreen(ui, CoachActions(
         onInput = vm::onInput, send = { vm.send() }, chip = vm::useChip, retry = { vm.retry(it.message) },
         add = { vm.addSuggestion(it) }, dismiss = { vm.dismissSuggestion(it) }, showEarlier = vm::showEarlier, newChat = { vm.newConversation() },
         study = { vm.enterStudy(); onStudy() }, focus = { vm.setFocus(it) },
+        openAlliance = { item -> val g = ui.focus?.goal?.id; val a = item.alliance; if (g != null && a != null) onOpenAlliance(g, a.code) },
     ))
 }
 

@@ -79,7 +79,7 @@ import kotlinx.coroutines.delay
 data class CoachActions(
     val onInput: (String) -> Unit = {}, val send: () -> Unit = {}, val chip: (String) -> Unit = {}, val retry: (ChatItem) -> Unit = {},
     val add: (ChatItem) -> Unit = {}, val dismiss: (ChatItem) -> Unit = {}, val showEarlier: () -> Unit = {}, val newChat: () -> Unit = {}, val study: () -> Unit = {},
-    val focus: (String) -> Unit = {},
+    val focus: (String) -> Unit = {}, val openAlliance: (ChatItem) -> Unit = {},
 )
 
 /** Mascot status line and dot colour for each mood (copy from the prototype). */
@@ -224,12 +224,34 @@ private fun CoachBubble(item: ChatItem, ui: CoachUi, actions: CoachActions) {
             }
             "dismissed" -> Text(stringResource(R.string.coach_dismissed), style = BType.body(12), color = c.mut2, modifier = Modifier.padding(start = 4.dp))
             else -> Column(Modifier.fillMaxWidth().background(c.accTint, RoundedCornerShape(16.dp)).border(1.dp, c.accLine, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.coach_add_to_plan), style = BType.label(10f, 0.14f), color = c.acc)
+                Text(stringResource(R.string.coach_add_to_plan), style = BType.label(10f, 0.14f), color = c.mut)
                 Text(s.title, style = BType.display(15, 1.3f), color = c.ink)
                 if (s.rationale.isNotBlank()) Text(s.rationale, style = BType.body(13, lineHeight = 1.45f), color = c.mut)
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f).heightIn(min = 44.dp).background(c.acc, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(enabled = ui.focus != null, role = Role.Button) { actions.add(item) }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.coach_add_to, ui.focus?.goal?.label.orEmpty()), style = BType.body(14, FontWeight.SemiBold), color = c.onAcc, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Box(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { actions.dismiss(item) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.coach_dismiss), style = BType.body(14, FontWeight.Medium), color = c.ink2)
+                    }
+                }
+            }
+        }
+        // An alliance the coach recommended: see it (its join preview opens in Community), or dismiss it.
+        val a = item.alliance
+        if (a != null && m.status == "done") {
+            if (m.suggestionState == "dismissed") Text(stringResource(R.string.coach_dismissed), style = BType.body(12), color = c.mut2, modifier = Modifier.padding(start = 4.dp))
+            else Column(Modifier.fillMaxWidth().background(c.accTint, RoundedCornerShape(16.dp)).border(1.dp, c.accLine, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(painterResource(R.drawable.ic_groups), null, tint = c.ink2, modifier = Modifier.size(18.dp))
+                    Text(a.name, style = BType.display(15, 1.3f), color = c.ink, modifier = Modifier.weight(1f))
+                }
+                Text(stringResource(if (a.planMode == "shared") R.string.coach_alliance_meta_shared else R.string.coach_alliance_meta_own, a.members, a.cap), style = BType.body(12), color = c.mut)
+                a.about?.takeIf { it.isNotBlank() }?.let { Text(it, style = BType.body(13, lineHeight = 1.45f), color = c.ink2) }
+                if (a.reason.isNotBlank()) Text(a.reason, style = BType.body(13, lineHeight = 1.45f), color = c.mut)
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f).heightIn(min = 44.dp).background(c.acc, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { actions.openAlliance(item) }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.coach_alliance_open), style = BType.body(14, FontWeight.SemiBold), color = c.onAcc, maxLines = 1)
                     }
                     Box(Modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { actions.dismiss(item) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.coach_dismiss), style = BType.body(14, FontWeight.Medium), color = c.ink2)
