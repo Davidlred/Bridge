@@ -9,6 +9,8 @@ import { AIUnavailable, streamText } from '../ai/replicate.js';
 import { STYLE_VOICE, effectiveStyle, type CoachStyle } from './styles.js';
 import { takeQuota } from '../goals/routes.js';
 import { PLAIN_VOICE } from '../ai/voice.js';
+import { suggestAlliances, type AllianceOption } from '../social/alliances.js';
+import { communityUnlocked } from '../social/progress.js';
 
 const COACH_DAILY_LIMIT = 30;
 
@@ -48,6 +50,11 @@ export const Suggestion = z.object({
   timeOfDay: z.string().max(24).nullish(),
 });
 
+/** The coach's pick among the alliances it was shown, with why; the server fills in the rest from its own list. */
+const AlliancePick = z.object({ id: z.string().uuid(), reason: z.string().trim().max(200).default('') });
+/** What the app shows and stores: enough to open the alliance's join preview. */
+export type AllianceCard = { id: string; name: string; about: string | null; planMode: 'own' | 'shared'; members: number; cap: number; code: string; reason: string };
+
 const persona = (name: string, mode: string, style: CoachStyle = 'balanced') => `You are ${name}, the coach inside The Bridge, a goal app. You know the user's goals, today's tasks and their streak.
 ${STYLE_VOICE[style]} Never shame missed days. Always end with one concrete next step.
 ${PLAIN_VOICE}
@@ -69,7 +76,7 @@ export const CRISIS_REPLY = "I'm really sorry you're feeling this way, and I'm g
 export class SuggestionSplitter {
   private pending = '';
   private block: string | null = null;
-  private static markers = ['```', '{"suggestTask"'];
+  private static markers = ['```', '{"suggestTask"', '{"suggestAlliance"'];
 
   push(chunk: string): string {
     if (this.block !== null) { this.block += chunk; return ''; }
@@ -89,15 +96,16 @@ export class SuggestionSplitter {
     return out;
   }
 
-  finish(): { rest: string; suggestion: z.infer<typeof Suggestion> | null } {
-    if (this.block === null) return { rest: this.pending, suggestion: null };
+  finish(): { rest: string; suggestion: z.infer<typeof Suggestion> | null; alliance: z.infer<typeof AlliancePick> | null } {
+    if (this.block === null) return { rest: this.pending, suggestion: null, alliance: null };
     try {
       const raw = this.block.replace(/```(?:json)?/gi, '').trim();
       const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
       const s = Suggestion.safeParse(json.suggestTask);
-      return { rest: '', suggestion: s.success ? s.data : null };
+      const a = AlliancePick.safeParse(json.suggestAlliance);
+      return { rest: '', suggestion: s.success ? s.data : null, alliance: a.success ? a.data : null };
     } catch {
-      return { rest: '', suggestion: null };
+      return { rest: '', suggestion: null, alliance: null };
     }
   }
 }
@@ -117,7 +125,20 @@ export function routineLine(r: NonNullable<CoachRequest['rhythm']>): string {
   return `Their routine over the last ${r.days} days (they allowed the app to learn it): ${parts.join(', ')}. Use it to time suggestions; don't mention that it is tracked unless they ask.`;
 }
 
-function prompt(req: CoachRequest, journal: string[]): string {
+/** Findable alliances that fit the goal in focus, and how the coach may recommend one. */
+export function alliancesBlock(options: AllianceOption[]): string {
+  if (!options.length) return '';
+  const lines = options.map(o => `- id ${o.id}: "${o.name}", ${o.planMode === 'shared' ? `one shared plan ("${o.goal}")` : 'everyone keeps their own plan'}, ${o.members} of ${o.cap} members${o.about ? `. About: "${o.about}"` : ''}`);
+  return [
+    'Alliances in The Bridge the user could join (small groups that keep each other going; their leads made them findable):',
+    ...lines,
+    'If the user asks about groups, company or accountability, or one of these clearly fits what they are working on and they would benefit, you may recommend one: say in a sentence why it fits, then append a fenced JSON block exactly like this, in place of a task suggestion:',
+    '```json\n{"suggestAlliance":{"id":"<an id from this list>","reason":"one sentence"}}\n```',
+    'At most one, and not in every reply. Never invent an alliance or an id.',
+  ].join('\n');
+}
+
+function prompt(req: CoachRequest, journal: string[], alliances: AllianceOption[] = []): string {
   const focus = req.focusGoalId ? req.goals.find(g => g.id === req.focusGoalId) : undefined;
   const detail = (g: CoachRequest['goals'][number]) => {
     const tasks = g.tasks.map(t => `  - [${t.done ? 'x' : ' '}] ${t.title} (${t.priority}${t.timeOfDay ? `, ${t.timeOfDay}` : ''})`).join('\n');
@@ -134,6 +155,7 @@ function prompt(req: CoachRequest, journal: string[]): string {
     `Today is ${req.localDate}.`,
     goals || 'The user has no active goals yet.',
     req.rhythm ? routineLine(req.rhythm) : '',
+    alliancesBlock(alliances),
     journal.length ? `Recent journal entries (the user allowed you to read these):\n${journal.join('\n')}` : '',
     history ? `Conversation so far:\n${history}` : '',
     `User: ${req.message}\nCoach:`,
@@ -142,14 +164,14 @@ function prompt(req: CoachRequest, journal: string[]): string {
 
 /** Stores one message (encrypted with the user's key) and logs it for sync. */
 export async function saveMessage(userId: string, id: string, conversation: string, role: 'user' | 'coach', text: string,
-  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date, goalId: string | null = null) {
+  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date, goalId: string | null = null, alliance: AllianceCard | null = null) {
   await sql.begin(async tx => {
     const [other] = await tx`select user_id from coach_messages where id = ${id}`;
     if (other && other.user_id !== userId) return;                 // never touch another user's row
     const key = await journalKey(tx, userId);
-    const body = encryptText(key, JSON.stringify({ text, suggestion }));
+    const body = encryptText(key, JSON.stringify({ text, suggestion, alliance }));
     await tx`insert into coach_messages (id, user_id, conversation, role, body_ciphertext, status, suggestion_state, created_at, goal_id)
-             values (${id}, ${userId}, ${conversation}, ${role}, ${body}, ${status}, ${suggestion ? 'pending' : null}, ${at}, ${goalId})
+             values (${id}, ${userId}, ${conversation}, ${role}, ${body}, ${status}, ${suggestion || alliance ? 'pending' : null}, ${at}, ${goalId})
              on conflict (id) do update set body_ciphertext = excluded.body_ciphertext, status = excluded.status,
                suggestion_state = coalesce(coach_messages.suggestion_state, excluded.suggestion_state)`;
     await tx`insert into changes (user_id, entity, entity_id, op) values (${userId}, 'chat', ${id}, 'upsert')`;
@@ -157,7 +179,7 @@ export async function saveMessage(userId: string, id: string, conversation: stri
 }
 
 export async function coachRoutes(app: FastifyInstance) {
-  // Server-Sent Events: "token" {text}* → "suggestion" {…}? → "done" {} | "error" {error}
+  // Server-Sent Events: "token" {text}* → "suggestion" {…}? | "alliance" {…}? → "done" {} | "error" {error}
   app.post('/v1/coach/messages', { onRequest: auth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = CoachRequest.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, 'invalid_request');
@@ -193,6 +215,9 @@ export async function coachRoutes(app: FastifyInstance) {
     if (store) await saveMessage(req.userId, r.messageId!, r.conversation!, 'user', r.message, null, 'sent', sentAt, goalId);
     let replyText = '';
     let suggestion: z.infer<typeof Suggestion> | null = null;
+    let alliance: AllianceCard | null = null;
+    // Alliances to recommend: only once Community is open for this goal (joining needs it), never in a crisis.
+    const options = goalId && !crisis && (await communityUnlocked(sql, req.userId, goalId)).unlocked ? await suggestAlliances(req.userId, goalId) : [];
     let status: 'done' | 'interrupted' = 'interrupted';
     try {
       if (crisis) {
@@ -200,7 +225,7 @@ export async function coachRoutes(app: FastifyInstance) {
       } else {
         const splitter = new SuggestionSplitter();
         const style = await effectiveStyle(req.userId, u?.coach_style as string | undefined);
-        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode, style), prompt: prompt(r, journal), max_tokens: 1024, temperature: 0.6 };
+        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode, style), prompt: prompt(r, journal, options), max_tokens: 1024, temperature: 0.6 };
         for await (const chunk of streamText(env.MODEL_COACH, input, ctrl.signal)) {
           const text = splitter.push(chunk);
           if (text) { replyText += text; send('token', { text }); }
@@ -209,6 +234,12 @@ export async function coachRoutes(app: FastifyInstance) {
         if (end.rest) { replyText += end.rest; send('token', { text: end.rest }); }
         suggestion = end.suggestion;
         if (suggestion) send('suggestion', suggestion);
+        // Only an alliance the coach was actually shown, filled in from the server's own list.
+        const pick = !suggestion && end.alliance ? options.find(o => o.id === end.alliance!.id) : undefined;
+        if (pick) {
+          alliance = { id: pick.id, name: pick.name, about: pick.about, planMode: pick.planMode, members: pick.members, cap: pick.cap, code: pick.code, reason: end.alliance!.reason };
+          send('alliance', alliance);
+        }
       }
       status = 'done';
       send('done', {});
@@ -221,7 +252,7 @@ export async function coachRoutes(app: FastifyInstance) {
       // Saved before the stream closes, so the reply is already there when the app syncs right after.
       // A partial reply is kept as "interrupted" (the app shows "Reply interrupted · Retry"); an empty one isn't stored.
       if (store && replyText) {
-        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1), goalId)
+        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1), goalId, alliance)
           .catch(e => req.log.error({ err: e.message }, 'coach_save_failed'));
       }
       out.end();

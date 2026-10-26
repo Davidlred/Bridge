@@ -349,8 +349,8 @@ export async function syncRoutes(app: FastifyInstance) {
       journal: journalRows.map(j => ({ id: j.id, goalId: j.goal_id, localDate: j.local_date, mood: j.mood, body: decryptText(key!, j.body_ciphertext), version: j.version, conflictOf: j.conflict_of, updatedAt: ms(j.updated_at) })),
       removedJournal: journalIds.filter(id => !journalRows.some(j => j.id === id)),
       chat: chatRows.map(c => {
-        const body = JSON.parse(decryptText(key!, c.body_ciphertext)) as { text: string; suggestion: unknown };
-        return { id: c.id, conversation: c.conversation, goalId: c.goal_id, role: c.role, text: body.text, suggestion: body.suggestion ?? null, status: c.status, suggestionState: c.suggestion_state, createdAt: ms(c.created_at) };
+        const body = JSON.parse(decryptText(key!, c.body_ciphertext)) as { text: string; suggestion: unknown; alliance?: unknown };
+        return { id: c.id, conversation: c.conversation, goalId: c.goal_id, role: c.role, text: body.text, suggestion: body.suggestion ?? null, alliance: body.alliance ?? null, status: c.status, suggestionState: c.suggestion_state, createdAt: ms(c.created_at) };
       }),
       removedChat: chatIds.filter(id => !chatRows.some(c => c.id === id)),
     };

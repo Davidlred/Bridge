@@ -127,7 +127,7 @@ export async function leave(db: Tx, allianceId: string, userId: string) {
 
 /** Members, collective streak and the shared-plan progress for one alliance, as seen by [userId]. */
 async function summary(allianceId: string, userId: string) {
-  const [a] = await sql`select a.id, a.name, a.plan_mode, a.cap, a.invite_code, a.start_date::text, a.owner_id, a.lead_goal_id, a.category,
+  const [a] = await sql`select a.id, a.name, a.plan_mode, a.cap, a.invite_code, a.start_date::text, a.owner_id, a.lead_goal_id, a.category, a.listed, a.about,
                                g.statement as goal, g.label, g.deadline::text, u.display_name as lead
                         from alliances a join goals g on g.id = a.lead_goal_id join users u on u.id = a.owner_id where a.id = ${allianceId}`;
   if (!a) throw new HttpError(404, 'not_found');
@@ -172,6 +172,7 @@ async function summary(allianceId: string, userId: string) {
     order by at desc limit 20`;
   return {
     id: a.id, name: a.name, planMode: a.plan_mode, inviteCode: a.invite_code, cap: await capFor(sql, a.owner_id), startDate: a.start_date,
+    listed: a.listed as boolean, about: (a.about as string | null) ?? null,
     role: me?.role ?? null, goalId: me?.goal_id ?? null,
     streak: streakOf(all, today),
     members: members.filter(m => !blocked.has(m.user_id)).map(m => ({ userId: m.user_id, name: firstName(m.display_name), role: m.role, away: away(m.goal_id), me: m.user_id === userId })),
@@ -182,26 +183,93 @@ async function summary(allianceId: string, userId: string) {
   };
 }
 
-const CreateBody = z.object({ name: z.string().trim().min(3).max(40), planMode: z.enum(['own', 'shared']), goalId: z.string().uuid() });
+const CreateBody = z.object({
+  name: z.string().trim().min(3).max(40), planMode: z.enum(['own', 'shared']), goalId: z.string().uuid(),
+  listed: z.boolean().default(false), about: z.string().trim().max(140).optional(),
+});
+const ListingBody = z.object({ listed: z.boolean(), about: z.string().trim().max(140).nullable() }).partial().strict();
+
+/** Lowercase words of four letters or more, without the filler that every goal shares. */
+const STOP = new Set(['with', 'that', 'this', 'from', 'into', 'every', 'daily', 'want', 'goal', 'have', 'more', 'less', 'than', 'under', 'over', 'months', 'weeks', 'days', 'year', 'years', 'about', 'your', 'their']);
+const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !STOP.has(w)));
+
+export type AllianceOption = { id: string; name: string; about: string | null; planMode: 'own' | 'shared'; members: number; cap: number; goal: string | null; label: string; code: string };
+
+/**
+ * Findable alliances that fit one of the user's goals, best first: the same kind of goal, words in common with the goal,
+ * and members who are actually active this week. Never one the user is already in, one that is full, a shared plan
+ * that has ended, or one led by someone either side has blocked. Used by the coach to recommend an alliance.
+ */
+export async function suggestAlliances(userId: string, goalId: string, limit = 3): Promise<AllianceOption[]> {
+  const [g] = await sql`select label, statement, category from goals where id = ${goalId} and user_id = ${userId} and status = 'active'`;
+  if (!g) return [];
+  const today = await localToday(sql, userId);
+  const blocked = await blockedWith(sql, userId);
+  const rows = await sql`
+    select a.id, a.name, a.about, a.category, a.plan_mode, a.invite_code, a.owner_id, lg.label, lg.statement, lg.deadline::text as deadline,
+      (select count(*)::int from alliance_members m where m.alliance_id = a.id and m.status <> 'left') as members,
+      (select count(*)::int from task_completions c join tasks t on t.id = c.task_id
+         join alliance_members m on m.goal_id = t.goal_id and m.alliance_id = a.id and m.status <> 'left'
+         where c.completed_at > now() - interval '7 days') as recent
+    from alliances a join goals lg on lg.id = a.lead_goal_id
+    where a.listed and a.archived_at is null
+      and not exists (select 1 from alliance_members me where me.alliance_id = a.id and me.user_id = ${userId} and me.status <> 'left')
+      ${blocked.length ? sql`and a.owner_id not in ${sql(blocked)}` : sql``}
+    order by (a.category is not distinct from ${g.category}) desc, recent desc
+    limit 40`;
+  const mine = words(`${g.label} ${g.statement}`);
+  const scored = rows
+    .filter(a => a.plan_mode !== 'shared' || a.deadline > today)
+    .map(a => {
+      const theirs = words(`${a.name} ${a.about ?? ''} ${a.label} ${a.plan_mode === 'shared' ? a.statement : ''}`);
+      const common = [...mine].filter(w => theirs.has(w)).length;
+      const same = g.category && a.category === g.category && g.category !== 'other';
+      return { a, common, score: (same ? 3 : 0) + common * 2 + Math.min(a.recent as number, 20) / 10 };
+    })
+    .filter(x => x.common > 0 || (x.a.category === g.category && g.category && g.category !== 'other'))
+    .sort((x, y) => y.score - x.score);
+  const out: AllianceOption[] = [];
+  for (const { a } of scored) {
+    const cap = await capFor(sql, a.owner_id);
+    if (a.members >= cap) continue;
+    out.push({ id: a.id, name: a.name, about: a.about, planMode: a.plan_mode, members: a.members, cap, goal: a.plan_mode === 'shared' ? a.statement : null, label: a.label, code: a.invite_code });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
 
 export async function allianceRoutes(app: FastifyInstance) {
   app.post('/v1/alliances', { onRequest: auth, config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async req => {
     const p = CreateBody.safeParse(req.body);
     if (!p.success) throw new HttpError(400, 'invalid_request', { field: p.error.issues[0]?.path.join('.') });
     const b = p.data;
-    if (NAME_BLOCK.test(b.name)) throw new HttpError(422, 'name_not_allowed');
+    if (NAME_BLOCK.test(b.name) || (b.about && NAME_BLOCK.test(b.about))) throw new HttpError(422, 'name_not_allowed');
     const [g] = await sql`select category from goals where id = ${b.goalId} and user_id = ${req.userId} and status = 'active'`;
     if (!g) throw new HttpError(404, 'goal_missing');
     if (!(await communityUnlocked(sql, req.userId, b.goalId)).unlocked) throw new HttpError(403, 'community_locked');
     const id = uuidv7();
     await sql.begin(async tx => {
       const today = await localToday(tx, req.userId);
-      await tx`insert into alliances (id, owner_id, name, category, plan_mode, lead_goal_id, start_date, cap, invite_code)
-               values (${id}, ${req.userId}, ${b.name}, ${g.category}, ${b.planMode}, ${b.goalId}, ${today}, ${await capFor(tx, req.userId)}, ${await newCode(tx, b.name)})`;
+      await tx`insert into alliances (id, owner_id, name, category, plan_mode, lead_goal_id, start_date, cap, invite_code, listed, about)
+               values (${id}, ${req.userId}, ${b.name}, ${g.category}, ${b.planMode}, ${b.goalId}, ${today}, ${await capFor(tx, req.userId)}, ${await newCode(tx, b.name)},
+                       ${b.listed}, ${b.about || null})`;
       await tx`insert into alliance_members (alliance_id, user_id, goal_id, role, start_date) values (${id}, ${req.userId}, ${b.goalId}, 'owner', ${today})`;
       if (b.planMode === 'shared') await publishPlanVersion(tx, id, today);
     });
     return { alliance: await summary(id, req.userId) };
+  });
+
+  // The lead decides whether others can find the alliance, and the line they see.
+  app.patch<{ Params: { id: string } }>('/v1/alliances/:id', { onRequest: auth }, async req => {
+    const p = ListingBody.safeParse(req.body);
+    if (!p.success) throw new HttpError(400, 'invalid_request');
+    if (p.data.about && NAME_BLOCK.test(p.data.about)) throw new HttpError(422, 'name_not_allowed');
+    const [a] = await sql`select owner_id from alliances where id = ${req.params.id} and archived_at is null`;
+    if (!a) throw new HttpError(404, 'not_found');
+    if (a.owner_id !== req.userId) throw new HttpError(403, 'not_lead');
+    if (p.data.listed !== undefined) await sql`update alliances set listed = ${p.data.listed} where id = ${req.params.id}`;
+    if (p.data.about !== undefined) await sql`update alliances set about = ${p.data.about || null} where id = ${req.params.id}`;
+    return { alliance: await summary(req.params.id, req.userId) };
   });
 
   app.get('/v1/alliances', { onRequest: auth }, async req => {

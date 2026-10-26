@@ -29,7 +29,7 @@ run('community, alliances and chat', () => {
   type U = { user: { id: string }; accessToken: string; name: string };
   const signUp = async (name = 'Sharon'): Promise<U> => ({ ...(await app.inject({ method: 'POST', url: '/v1/auth/email/signup', payload: { email: `${uuidv7()}@example.com`, password: 'correct horse', displayName: name } })).json(), name });
   const h = (u: U) => ({ authorization: `Bearer ${u.accessToken}` });
-  const call = (u: U, method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: object) => app.inject({ method, url, headers: h(u), payload });
+  const call = (u: U, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object) => app.inject({ method, url, headers: h(u), payload });
   const push = (u: U, mutations: object[]) => call(u, 'POST', '/v1/sync/push', { mutations }).then(r => r.json() as { accepted: string[]; rejected: Record<string, string> });
   const pull = (u: U, since = 0) => call(u, 'GET', `/v1/sync?since=${since}`).then(r => r.json());
   const mut = (entity: string, entityId: string, op: string, patch: object = {}) => ({ id: uuidv7(), entity, entityId, op, patch, clientTs: Date.now() });
@@ -107,6 +107,31 @@ run('community, alliances and chat', () => {
   });
 
   describe('alliances', () => {
+    it('finds listed alliances that fit a goal, for the coach to suggest', async () => {
+      const { suggestAlliances } = await import('../src/social/alliances.js');
+      const lead1 = await signUp('Ada'), lead2 = await signUp('Bo'), lead3 = await signUp('Cy'), lead4 = await signUp('Di'), me = await signUp('Eve');
+      const g1 = await goalWithStreak(lead1, 7), g2 = await goalWithStreak(lead2, 7), g3 = await goalWithStreak(lead3, 7, 'study'), g4 = await goalWithStreak(lead4, 7);
+      await sql`update goals set label = 'Rust CLI', statement = 'Learn Rust well enough to build a command-line tool' where id = ${g3.g}`;
+      const runners = (await call(lead1, 'POST', '/v1/alliances', { name: 'Half marathon crew', planMode: 'own', goalId: g1.g, listed: true, about: 'Training for a first half marathon together' })).json().alliance;
+      const secret = (await call(lead2, 'POST', '/v1/alliances', { name: 'Secret runners', planMode: 'own', goalId: g2.g })).json().alliance;      // not listed
+      const coders = (await call(lead3, 'POST', '/v1/alliances', { name: 'Rust learners', planMode: 'own', goalId: g3.g, listed: true })).json().alliance;  // another kind of goal
+      const blocked = (await call(lead4, 'POST', '/v1/alliances', { name: 'Marathon mornings', planMode: 'own', goalId: g4.g, listed: true })).json().alliance;
+      expect(runners.listed).toBe(true);
+      expect(secret.listed).toBe(false);
+      await call(me, 'PUT', '/v1/blocks/' + lead4.user.id);
+      const mine = await goalWithStreak(me, 7);
+      const found = await suggestAlliances(me.user.id, mine.g);
+      expect(found.map(a => a.id)).toEqual([runners.id]);
+      expect(found[0]).toMatchObject({ name: 'Half marathon crew', about: 'Training for a first half marathon together', members: 1, cap: 15, planMode: 'own' });
+      expect(found[0]!.code).toMatch(/^[A-Z]{4}-\d{4}$/);
+      // Once I'm a member it isn't suggested again; only the lead can change the listing.
+      await call(me, 'POST', '/v1/alliances/join', { code: found[0]!.code, goalId: mine.g });
+      expect(await suggestAlliances(me.user.id, mine.g)).toEqual([]);
+      expect((await call(me, 'PATCH', '/v1/alliances/' + coders.id, { listed: false })).statusCode).toBe(403);
+      const hidden = (await call(lead1, 'PATCH', '/v1/alliances/' + runners.id, { listed: false, about: null })).json().alliance;
+      expect(hidden).toMatchObject({ listed: false, about: null });
+    });
+
     it('needs an open Community to create one, and rejects bad names', async () => {
       const a = await signUp();
       const locked = await goalWithStreak(a, 2);

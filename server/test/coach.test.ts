@@ -33,6 +33,19 @@ describe('SuggestionSplitter', async () => {
     expect(r.suggestion).toEqual({ title: 'Prep breakfast before 9 PM', rationale: 'Frees 15 minutes.', priority: 'Medium', timeOfDay: '8:30 PM' });
   });
 
+  it('reads an alliance pick, and the prompt only offers listed alliances by id', async () => {
+    const s = new SuggestionSplitter();
+    const id = '0190a000-0000-7000-8000-000000000001';
+    const visible = ['Running with others helps on long weeks. ', '```json\n{"suggestAlliance":{"id":"' + id + '","reason":"Same race, same pace."}}\n```'].map(c => s.push(c)).join('');
+    expect(visible).toBe('Running with others helps on long weeks. ');
+    expect(s.finish()).toEqual({ rest: '', suggestion: null, alliance: { id, reason: 'Same race, same pace.' } });
+    const { alliancesBlock } = await import('../src/coach/routes.js');
+    expect(alliancesBlock([])).toBe('');
+    const block = alliancesBlock([{ id, name: 'Half marathon crew', about: 'First half together', planMode: 'own', members: 4, cap: 15, goal: null, label: 'Half marathon', code: 'HALF-1234' }]);
+    expect(block).toContain('- id ' + id + ': "Half marathon crew", everyone keeps their own plan, 4 of 15 members. About: "First half together"');
+    expect(block).not.toContain('HALF-1234');      // the join code never goes to the model
+  });
+
   it('handles a bare JSON suggestion and text with stray backticks', () => {
     expect(run(['Use `git` daily. ', '{"suggestTask":{"title":"Commit once a day","priority":"Low"}}'])).toEqual({ text: 'Use `git` daily. ', suggestion: { title: 'Commit once a day', rationale: '', priority: 'Low' } });
     expect(run(['No suggestion today.'])).toEqual({ text: 'No suggestion today.', suggestion: null });
