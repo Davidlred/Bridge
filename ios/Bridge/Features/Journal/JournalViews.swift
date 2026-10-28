@@ -8,8 +8,8 @@ enum SaveState { case idle, saving, saved, savedOffline }
 struct MoodRing: View {
     let index: Int, on: Bool, size: CGFloat
     var body: some View {
-        Circle().stroke(on ? Theme.acc : Theme.line, lineWidth: 1.5)
-            .background(alignment: .bottom) { Rectangle().fill(on ? Theme.acc : Theme.mut2).frame(height: size * CGFloat(index + 1) * 0.2) }
+        Circle().stroke(on ? Theme.ink : Theme.line, lineWidth: 1.5)
+            .background(alignment: .bottom) { Rectangle().fill(on ? Theme.ink : Theme.mut2).frame(height: size * CGFloat(index + 1) * 0.2) }
             .clipShape(Circle()).frame(width: size, height: size)
     }
 }
@@ -89,7 +89,7 @@ struct JournalView: View {
     private func chip(_ label: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label).font(BFont.body(13, .semibold)).foregroundStyle(on ? Theme.ink : Theme.ink2).padding(.horizontal, 14).frame(minHeight: 40)
-                .background(on ? Theme.accTint : Theme.s1, in: Capsule()).overlay(Capsule().stroke(on ? Theme.acc : Theme.line, lineWidth: 1))
+                .background(on ? Theme.accTint : Theme.s1, in: Capsule()).overlay(Capsule().stroke(on ? Theme.line2 : Theme.line, lineWidth: 1))
         }
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }

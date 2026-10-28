@@ -177,11 +177,11 @@ struct PaywallContent: View {
                                     if !plus { Text("paid by the founder").font(BFont.body(12)).foregroundStyle(Theme.mut) }
                                 }
                                 Spacer()
-                                Image(systemName: on ? "largecircle.fill.circle" : "circle").font(.system(size: 20)).foregroundStyle(on ? Theme.acc : Theme.mut)
+                                Image(systemName: on ? "largecircle.fill.circle" : "circle").font(.system(size: 20)).foregroundStyle(on ? Theme.ink : Theme.mut)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 60)
                             .background(on ? Theme.accTint : Theme.s1, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.acc : Theme.line, lineWidth: on ? 1.5 : 1))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.line2 : Theme.line, lineWidth: on ? 1.5 : 1))
                         }
                         .accessibilityAddTraits(on ? [.isSelected] : [])
                     }

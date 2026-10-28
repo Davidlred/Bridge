@@ -329,8 +329,9 @@ struct CommunityContent: View {
             ForEach([(CommunityTab.feed, "Feed"), (CommunityTab.alliance, "Alliance")] as [(CommunityTab, LocalizedStringKey)], id: \.0) { t, label in
                 let on = ui.tab == t
                 Button { actions.showTab(t) } label: {
-                    Text(label).font(BFont.body(14, .semibold)).foregroundStyle(on ? Theme.onAcc : Theme.mut).frame(maxWidth: .infinity, minHeight: 40)
-                        .background(on ? Theme.acc : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Text(label).font(BFont.body(14, .semibold)).foregroundStyle(on ? Theme.ink : Theme.mut).frame(maxWidth: .infinity, minHeight: 40)
+                        .background(on ? Theme.segOn : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(on ? Theme.line2 : .clear, lineWidth: 1))
                 }
                 .accessibilityAddTraits(on ? [.isSelected] : [])
             }
@@ -421,7 +422,7 @@ private struct PostCard: View {
                     Button { actions.react(post, r) } label: {
                         HStack(spacing: 6) { Text(r.label).font(BFont.body(12, .medium)); Text("\(n)").font(BFont.label(12)) }
                             .foregroundStyle(on ? Theme.accInk : Theme.ink2).padding(.horizontal, 12).frame(minHeight: 36)
-                            .background(on ? Theme.accTint : .clear, in: Capsule()).overlay(Capsule().strokeBorder(on ? Theme.acc : Theme.line, lineWidth: 1))
+                            .background(on ? Theme.accTint : .clear, in: Capsule()).overlay(Capsule().strokeBorder(on ? Theme.line2 : Theme.line, lineWidth: 1))
                             .frame(minHeight: 44)
                     }
                     .accessibilityLabel(Text("\(r.label), \(n)")).accessibilityAddTraits(on ? [.isSelected] : [])
@@ -497,8 +498,8 @@ private struct AllianceSection: View {
                     ForEach(ui.alliances) { a in
                         let on = a.id == ally.id
                         Button { actions.select(a.id) } label: {
-                            Label(a.name, systemImage: a.isShared ? "list.clipboard" : "shield.lefthalf.filled").font(BFont.body(13, .medium)).foregroundStyle(on ? Theme.onAcc : Theme.ink2).lineLimit(1)
-                                .padding(.horizontal, 14).frame(minHeight: 40).background(on ? Theme.acc : Theme.s1, in: Capsule()).overlay(Capsule().strokeBorder(on ? Theme.acc : Theme.line, lineWidth: 1))
+                            Label(a.name, systemImage: a.isShared ? "list.clipboard" : "shield.lefthalf.filled").font(BFont.body(13, .medium)).foregroundStyle(on ? Theme.ink : Theme.ink2).lineLimit(1)
+                                .padding(.horizontal, 14).frame(minHeight: 40).background(on ? Theme.accTint : Theme.s1, in: Capsule()).overlay(Capsule().strokeBorder(on ? Theme.line2 : Theme.line, lineWidth: 1))
                                 .frame(minHeight: 44)
                         }
                         .accessibilityAddTraits(on ? [.isSelected] : [])
@@ -719,14 +720,14 @@ struct CreateAllianceSheet: View {
     private func option(_ on: Bool, _ title: LocalizedStringKey, _ sub: LocalizedStringKey, _ pick: @escaping () -> Void) -> some View {
         Button(action: pick) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: on ? "largecircle.fill.circle" : "circle").font(.system(size: 20)).foregroundStyle(on ? Theme.acc : Theme.mut)
+                Image(systemName: on ? "largecircle.fill.circle" : "circle").font(.system(size: 20)).foregroundStyle(on ? Theme.ink : Theme.mut)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(BFont.body(15, .semibold)).foregroundStyle(Theme.ink)
                     Text(sub).font(BFont.body(13)).foregroundStyle(Theme.mut).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(14).overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.acc : Theme.line, lineWidth: on ? 1.5 : 1))
+            .padding(14).overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.line2 : Theme.line, lineWidth: on ? 1.5 : 1))
         }
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }
