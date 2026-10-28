@@ -31,6 +31,7 @@ struct CommunityActions {
     var create: () -> Void = {}, join: () -> Void = {}, select: (String) -> Void = { _ in }, sampleInvite: () -> Void = {}
     var openChat: (AllianceDTO) -> Void = { _ in }, leave: (AllianceDTO) -> Void = { _ in }, applyNow: (AllianceDTO) -> Void = { _ in }
     var openDms: () -> Void = {}, alliancePlus: () -> Void = {}, playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
+    var setListed: (AllianceDTO, Bool) -> Void = { _, _ in }
 }
 
 /// Sheet and form state for the Community screen.
@@ -49,6 +50,8 @@ final class CommunityModel {
     // Create
     var name = ""
     var shared = false
+    var listed = false
+    var about = ""
     var createError: String?
     var busy = false
     // Join
@@ -59,7 +62,7 @@ final class CommunityModel {
     var games: [String: GameStatusDTO] = [:]
     var ratings: [String: RatingDTO] = [:]
 
-    func reset(_ s: Sheet) { name = ""; shared = false; createError = nil; code = ""; joinError = nil; preview = nil; busy = false; sheet = s }
+    func reset(_ s: Sheet) { name = ""; shared = false; listed = false; about = ""; createError = nil; code = ""; joinError = nil; preview = nil; busy = false; sheet = s }
 }
 
 /// Community inside a goal: Feed and Alliance. Wires `CommunityContent` to the stores.
@@ -92,6 +95,7 @@ struct CommunityScreen: View {
             sampleInvite: { toaster.show(String(localized: "Sample alliance. Invites unlock with Community.")) },
             openChat: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceChat(id)) } },
             leave: { model.leaving = $0 }, applyNow: applyNow,
+            setListed: { a, on in Task { do { try await social.setListed(a, on) } catch { toaster.show(offlineOr(error), .warn) } } },
             openDms: { router.today.append(Route.messages) },
             alliancePlus: { paywall = true },
             playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
@@ -182,7 +186,7 @@ struct CommunityScreen: View {
         Task {
             defer { model.busy = false }
             do {
-                let a = try await social.create(name: model.name, shared: model.shared, goalId: goalId)
+                let a = try await social.create(name: model.name, shared: model.shared, goalId: goalId, listed: model.listed, about: model.about)
                 model.sheet = nil; model.tab = .alliance; model.selectedId = a.id
                 Analytics.track(.allianceCreated, ["mode": a.planMode])
                 toaster.show(model.shared ? String(localized: "Alliance created. Everyone who joins gets your goal, deadline and daily tasks.") : String(localized: "Alliance created. Invite up to 14 people."), .ok)
@@ -541,7 +545,7 @@ private struct AllianceCard: View {
             HStack(alignment: .top, spacing: 4) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(a.name).font(BFont.display(22)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                    Label("INVITE ONLY", systemImage: "lock.fill").bridgeLabel(10)
+                    Label(a.isListed ? "FINDABLE" : "INVITE ONLY", systemImage: a.isListed ? "person.3.fill" : "lock.fill").bridgeLabel(10)
                 }
                 Spacer(minLength: 0)
                 inviteButton
@@ -553,6 +557,7 @@ private struct AllianceCard: View {
                 }
             }
             if let sh = a.shared { SharedPanel(a: a, sh: sh, ui: ui, actions: actions, today: today) }
+            if !sample && a.role == "owner" { ListingToggle(on: Binding(get: { a.isListed }, set: { actions.setListed(a, $0) })) }
             FillButton(title: "Open alliance chat", symbol: "bubble.left.and.bubble.right.fill") { if !sample { actions.openChat(a) } }
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -656,6 +661,21 @@ private struct FeedRow: View {
 
 // MARK: - Sheets
 
+/// "Let people find this alliance": Arc can suggest it to people with a goal like it, and they join without a code.
+struct ListingToggle: View {
+    @Binding var on: Bool
+    var body: some View {
+        Toggle(isOn: $on) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Let people find this alliance").font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                Text("Arc can suggest it to people with a goal like yours, and they can join without a code.").font(BFont.body(12)).foregroundStyle(Theme.mut)
+            }
+        }
+        .tint(Theme.okFill).padding(.horizontal, 14).padding(.vertical, 10)
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
+    }
+}
+
 struct CreateAllianceSheet: View {
     @Bindable var model: CommunityModel
     let goal: GoalState?
@@ -680,7 +700,13 @@ struct CreateAllianceSheet: View {
                     }
                     .padding(14).frame(maxWidth: .infinity, alignment: .leading).background(Theme.accTint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                Label("Private by default. Up to 15 members, invite-only by link or code.", systemImage: "lock.fill").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                ListingToggle(on: $model.listed)
+                if model.listed { BridgeField(label: "WHAT IT'S ABOUT", placeholder: "e.g. Training for a first half marathon", text: Binding(get: { model.about }, set: { model.about = String($0.prefix(140)) })) }
+                if model.listed {
+                    Label("Findable. Up to 15 members; people with a similar goal can find it and join.", systemImage: "person.3.fill").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                } else {
+                    Label("Private by default. Up to 15 members, invite-only by link or code.", systemImage: "lock.fill").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                }
                 Button(action: onCreate) {
                     if model.busy { ProgressView().tint(Theme.onAcc) } else { Text(model.shared ? "Create and share plan" : "Create alliance") }
                 }

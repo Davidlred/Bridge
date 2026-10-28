@@ -135,8 +135,12 @@ final class SocialStore {
     private func setAlliances(_ list: [AllianceDTO]) { alliances = list; store("alliances", list) }
     private func upsert(_ a: AllianceDTO) { setAlliances(alliances.filter { $0.id != a.id } + [a]) }
 
-    func create(name: String, shared: Bool, goalId: UUID) async throws -> AllianceDTO {
-        let a = try await api.createAlliance(name: name.trimmingCharacters(in: .whitespaces), planMode: shared ? "shared" : "own", goalId: goalId)
+    func setListed(_ a: AllianceDTO, _ on: Bool) async throws {
+        upsert(try await api.setAllianceListed(a.id, listed: on))
+    }
+    func create(name: String, shared: Bool, goalId: UUID, listed: Bool = false, about: String = "") async throws -> AllianceDTO {
+        let a = try await api.createAlliance(name: name.trimmingCharacters(in: .whitespaces), planMode: shared ? "shared" : "own", goalId: goalId,
+                                             listed: listed, about: String(about.trimmingCharacters(in: .whitespaces).prefix(140)))
         upsert(a); realtime.resubscribe()
         return a
     }

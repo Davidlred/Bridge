@@ -34,7 +34,9 @@ struct AuthResponse: Decodable, Sendable {
 }
 
 struct Suggestion: Codable, Equatable, Sendable { let title: String; var rationale: String = ""; var priority: String = "Medium"; var timeOfDay: String? }
-enum CoachEvent: Sendable { case token(String), suggestion(Suggestion) }
+enum CoachEvent: Sendable { case token(String), suggestion(Suggestion), alliance(AllianceSuggestion) }
+/// A findable alliance the coach recommended; `code` opens its join preview.
+struct AllianceSuggestion: Codable, Equatable, Sendable { let id: String; let name: String; let about: String?; let planMode: String; let members: Int; let cap: Int; let code: String; let reason: String }
 enum CoachStreamError: Error { case interrupted }
 
 struct Feasibility: Codable, Equatable, Sendable { let verdict: String; let reason: String; let suggestedDeadline: String? }
@@ -69,7 +71,7 @@ struct Changes: Decodable, Sendable {
     let cursor: Int; let hasMore: Bool
     let goals: [Goal]; let tasks: [Task]; let completions: [Completion]; let removed: Removed
     let journal: [Journal]?; let removedJournal: [UUID]?
-    struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let goalId: UUID?; let role: String; let text: String; let suggestion: Suggestion?; let status: String; let suggestionState: String?; let createdAt: Double }
+    struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let goalId: UUID?; let role: String; let text: String; let suggestion: Suggestion?; let alliance: AllianceSuggestion?; let status: String; let suggestionState: String?; let createdAt: Double }
     let chat: [Chat]?; let removedChat: [UUID]?
     /// Synced settings the app shows locally (unknown keys are ignored).
     struct Settings: Decodable, Sendable { let coachReadsJournal: Bool?; let share: String? }
@@ -90,7 +92,10 @@ struct AllianceFeedDTO: Codable, Equatable, Sendable { var name: String?; let wh
 struct AllianceDTO: Codable, Equatable, Sendable, Identifiable {
     let id: String; let name: String; let planMode: String; let inviteCode: String; var cap = 15; let startDate: String; var role: String?; var goalId: String?
     var streak = 0; var members: [MemberDTO] = []; var memberCount = 0; var shared: SharedPlanDTO?; var feed: [AllianceFeedDTO] = []
+    /// Findable: others (and the coach) can find it and join without a code. Optional: older servers leave it out.
+    var listed: Bool?; var about: String?
     var isShared: Bool { planMode == "shared" }
+    var isListed: Bool { listed == true }
 }
 struct PreviewTaskDTO: Codable, Equatable, Sendable { let title: String; var priority = "Medium"; var timeOfDay: String? }
 struct PaceDTO: Codable, Equatable, Sendable { let groupDay: Int; let groupTotal: Int; let yourTotal: Int }
@@ -201,6 +206,7 @@ actor APIClient {
                     switch event {
                     case "token": if let t = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["text"] as? String { await onEvent(.token(t)) }
                     case "suggestion": if let s = try? JSONDecoder().decode(Suggestion.self, from: data) { await onEvent(.suggestion(s)) }
+                    case "alliance": if let a = try? JSONDecoder().decode(AllianceSuggestion.self, from: data) { await onEvent(.alliance(a)) }
                     case "done": finished = true
                     case "error": throw CoachStreamError.interrupted
                     default: break
@@ -271,8 +277,14 @@ actor APIClient {
         struct R: Decodable { let alliances: [AllianceDTO] }
         return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/alliances", nil, authed: true)).alliances
     }
-    func createAlliance(name: String, planMode: String, goalId: UUID) async throws -> AllianceDTO {
-        try JSONDecoder().decode(AllianceEnvelope.self, from: try await raw("POST", "/v1/alliances", ["name": name, "planMode": planMode, "goalId": goalId.uuidString.lowercased()], authed: true)).alliance
+    func createAlliance(name: String, planMode: String, goalId: UUID, listed: Bool = false, about: String? = nil) async throws -> AllianceDTO {
+        var body: [String: Any] = ["name": name, "planMode": planMode, "goalId": goalId.uuidString.lowercased(), "listed": listed]
+        if let about, !about.isEmpty { body["about"] = about }
+        return try JSONDecoder().decode(AllianceEnvelope.self, from: try await raw("POST", "/v1/alliances", body, authed: true)).alliance
+    }
+    /// The lead makes the alliance findable or private again.
+    func setAllianceListed(_ id: String, listed: Bool) async throws -> AllianceDTO {
+        try JSONDecoder().decode(AllianceEnvelope.self, from: try await raw("PATCH", "/v1/alliances/\(id)", ["listed": listed], authed: true)).alliance
     }
     func previewAlliance(code: String) async throws -> InvitePreviewDTO {
         struct R: Decodable { let preview: InvitePreviewDTO }

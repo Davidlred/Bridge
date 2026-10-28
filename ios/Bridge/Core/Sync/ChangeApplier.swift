@@ -58,6 +58,7 @@ enum ChangeApplier {
             }()
             row.text = c.text; row.status = c.status; row.suggestionState = c.suggestionState; if let g = c.goalId { row.goalId = g }
             row.suggestionJSON = try c.suggestion.map { try JSONEncoder().encode($0) }
+            row.allianceJSON = try c.alliance.map { try JSONEncoder().encode($0) }
         }
         if let on = page.settings?.coachReadsJournal { UserDefaults.standard.set(on, forKey: "coachReadsJournal") }
         if let share = page.settings?.share { UserDefaults.standard.set(share, forKey: "communityShare") }

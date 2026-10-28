@@ -70,6 +70,7 @@ final class CoachModel {
     /// Starts a fresh conversation for this goal; earlier ones stay on the device behind "Show earlier conversation".
     func newConversation(goalId: UUID?) { showEarlier = false; UserDefaults.standard.set(UUIDv7.next().uuidString, forKey: Self.conversationKey(goalId)); reload() }
 
+    static func alliance(_ m: ChatMessageEntity) -> AllianceSuggestion? { m.allianceJSON.flatMap { try? JSONDecoder().decode(AllianceSuggestion.self, from: $0) } }
     static func suggestion(_ m: ChatMessageEntity) -> Suggestion? { m.suggestionJSON.flatMap { try? JSONDecoder().decode(Suggestion.self, from: $0) } }
 
     func send(store: GoalStore, focus: GoalState?, study: Bool = false, retry: ChatMessageEntity? = nil) {
@@ -139,6 +140,8 @@ final class CoachModel {
             reply.text += t
         case .suggestion(let s):
             reply.suggestionJSON = try? JSONEncoder().encode(s); reply.suggestionState = "pending"
+        case .alliance(let a):
+            reply.allianceJSON = try? JSONEncoder().encode(a); reply.suggestionState = "pending"
         }
         reload()
     }
@@ -283,7 +286,7 @@ struct CoachView: View {
                                 if i > 0 && t.shown[i - 1].conversation != m.conversation {
                                     HStack(spacing: 10) { Rectangle().fill(Theme.track).frame(height: 1); Text("NEW CONVERSATION").bridgeLabel(10, color: Theme.mut2).fixedSize(); Rectangle().fill(Theme.track).frame(height: 1) }
                                 }
-                                if m.role == "coach" { coachMessage(m, focus: focus) } else { userMessage(m, focus: focus) }
+                                if m.role == "coach" { coachMessage(m, focus: focus); allianceCard(m, focus: focus).frame(maxWidth: 320, alignment: .leading) } else { userMessage(m, focus: focus) }
                             }
                             if model.awaiting { TypingDots() }
                             Color.clear.frame(height: 1).id("end")
@@ -336,7 +339,7 @@ struct CoachView: View {
                     Text("Suggestion dismissed").font(BFont.body(12)).foregroundStyle(Theme.mut2).padding(.leading, 4)
                 default:
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("ADD TO PLAN").bridgeLabel(10, color: Theme.acc)
+                        Text("ADD TO PLAN").bridgeLabel(10, color: Theme.mut)
                         Text(s.title).font(BFont.display(15)).foregroundStyle(Theme.ink)
                         if !s.rationale.isEmpty { Text(s.rationale).font(BFont.body(13)).foregroundStyle(Theme.mut) }
                         HStack(spacing: 8) {
@@ -353,6 +356,33 @@ struct CoachView: View {
             }
         }
         .frame(maxWidth: 320, alignment: .leading)
+    }
+
+    /// An alliance the coach recommended: see it (its join preview opens in Community), or dismiss it.
+    @ViewBuilder private func allianceCard(_ m: ChatMessageEntity, focus: GoalState?) -> some View {
+        if let a = CoachModel.alliance(m), m.status == "done" {
+            if m.suggestionState == "dismissed" {
+                Text("Suggestion dismissed").font(BFont.body(12)).foregroundStyle(Theme.mut2).padding(.leading, 4)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label { Text(a.name).font(BFont.display(15)).foregroundStyle(Theme.ink) } icon: { Image(systemName: "person.3.fill").foregroundStyle(Theme.ink2) }
+                    Text(a.planMode == "shared" ? "\(a.members) of \(a.cap) members, one shared plan" : "\(a.members) of \(a.cap) members, everyone keeps their own plan").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                    if let about = a.about, !about.isEmpty { Text(about).font(BFont.body(13)).foregroundStyle(Theme.ink2) }
+                    if !a.reason.isEmpty { Text(a.reason).font(BFont.body(13)).foregroundStyle(Theme.mut) }
+                    HStack(spacing: 8) {
+                        Button {
+                            if let g = focus { router.coach.append(Route.community(goalId: g.id, code: a.code)) }
+                        } label: {
+                            Text("See alliance").font(BFont.body(14, .semibold)).foregroundStyle(Theme.onAcc).frame(maxWidth: .infinity, minHeight: 44).background(Theme.acc, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .disabled(focus == nil)
+                        Button("Dismiss") { model.dismiss(m, store: store) }.font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).padding(.horizontal, 16).frame(minHeight: 44).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(14).background(Theme.accTint, in: RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.accLine, lineWidth: 1))
+            }
+        }
     }
 
     @ViewBuilder private func userMessage(_ m: ChatMessageEntity, focus: GoalState?) -> some View {
