@@ -23,6 +23,7 @@ import { PlanRequest, StepsRequest } from './ai/planSchema.js';
 import { generatePlan, generateSteps } from './ai/goalPlanner.js';
 import { AIUnavailable } from './ai/replicate.js';
 import { HttpError } from './util.js';
+import { requestOrigin } from './storage.js';
 
 const PLAN_TIMEOUT_MS = 75_000;
 
@@ -51,13 +52,15 @@ export async function buildApp() {
     keyGenerator: req => (req.userId ? `u:${req.userId}` : req.raw.socket ? req.ip : 'local'),
   });
 
+  if (env.NODE_ENV === 'development') app.addHook('onRequest', (req, _reply, done) => { requestOrigin.run(`${req.protocol}://${req.headers.host}`, done); });
   app.addHook('onRequest', async (req, reply) => {
     const min = { ios: '1.0.0', android: '1.0.0' }[String(req.headers['x-platform'])];
     const v = String(req.headers['x-app-version'] ?? '');
     if (min && v && v.localeCompare(min, undefined, { numeric: true }) < 0) return reply.code(426).send({ error: 'upgrade_required', min });
   });
 
-  app.get('/healthz', async () => { await sql`select 1`; return { ok: true }; });
+  // "service" lets development builds of the apps find this server on the Wi-Fi when the PC's address changes.
+  app.get('/healthz', async () => { await sql`select 1`; return { ok: true, service: 'the-bridge' }; });
 
   await app.register(authRoutes);
   await app.register(syncRoutes);

@@ -26,6 +26,7 @@ class BridgeApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        app.thebridge.data.remote.DevServer.init(this)
         SyncWorker.schedulePeriodic(this)
         billing.configure(this)
         analytics.setup(this)

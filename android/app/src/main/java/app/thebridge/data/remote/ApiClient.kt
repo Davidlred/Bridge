@@ -139,7 +139,8 @@ sealed interface CoachEvent {
 
 /** All HTTP goes through here. Repositories call it; ViewModels never do. */
 @Singleton
-class ApiClient @Inject constructor(private val http: OkHttpClient, private val vault: TokenVault, private val network: app.thebridge.data.NetworkMonitor) {
+class ApiClient @Inject constructor(private val http: OkHttpClient, private val vault: TokenVault, private val network: app.thebridge.data.NetworkMonitor,
+                                    @dagger.hilt.android.qualifiers.ApplicationContext private val ctx: android.content.Context) {
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val refreshLock = Mutex()
     /** Coach replies can stream for a while; no read timeout between tokens beyond a minute. */
@@ -174,7 +175,7 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
      */
     suspend fun coach(body: JsonObject, onEvent: suspend (CoachEvent) -> Unit) = withContext(Dispatchers.IO) {
         suspend fun open(bearer: String): okhttp3.Response {
-            val req = Request.Builder().url(BuildConfig.API_BASE + "/v1/coach/messages").post(body.toString().toRequestBody(JSON))
+            val req = Request.Builder().url(DevServer.base + "/v1/coach/messages").post(body.toString().toRequestBody(JSON))
                 .header("Accept", "text/event-stream").header("X-Platform", "android").header("X-App-Version", BuildConfig.VERSION_NAME)
                 .header("Authorization", "Bearer $bearer").build()
             return try { streamHttp.newCall(req).execute() } catch (e: IOException) { throw OfflineException(e) }
@@ -327,7 +328,7 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     fun accessToken(): String? = vault.read()?.access
     /** Opens the realtime socket; the caller sends the auth frame. */
     fun openSocket(listener: okhttp3.WebSocketListener): okhttp3.WebSocket =
-        socketHttp.newWebSocket(Request.Builder().url(BuildConfig.API_BASE.replaceFirst("http", "ws") + "/v1/rt").header("X-Platform", "android").header("X-App-Version", BuildConfig.VERSION_NAME).build(), listener)
+        socketHttp.newWebSocket(Request.Builder().url(DevServer.base.replaceFirst("http", "ws") + "/v1/rt").header("X-Platform", "android").header("X-App-Version", BuildConfig.VERSION_NAME).build(), listener)
 
     suspend fun push(mutations: List<MutationDto>): PushResponse =
         json.decodeFromString(call("POST", "/v1/sync/push", buildJsonObject { put("mutations", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(MutationDto.serializer()), mutations)) }, authed = true))
@@ -362,8 +363,8 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
         throw ApiException(status, runCatching { obj["error"]!!.jsonPrimitive.content }.getOrDefault("http_$status"), obj)
     }
 
-    private fun execute(method: String, path: String, body: okhttp3.RequestBody?, bearer: String?, extraHeaders: Map<String, String> = emptyMap(), slow: Boolean = false): Raw {
-        val req = Request.Builder().url(BuildConfig.API_BASE + path)
+    private fun execute(method: String, path: String, body: okhttp3.RequestBody?, bearer: String?, extraHeaders: Map<String, String> = emptyMap(), slow: Boolean = false, retried: Boolean = false): Raw {
+        val req = Request.Builder().url(DevServer.base + path)
             .method(method, body ?: if (method == "PUT" || method == "POST") ByteArray(0).toRequestBody(null) else null)
             .apply { extraHeaders.forEach { (k, v) -> header(k, v) } }
             .header("X-Platform", "android").header("X-App-Version", BuildConfig.VERSION_NAME)
@@ -373,8 +374,11 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
             (if (slow) slowHttp else http).newCall(req).execute().use { network.reported(true); return Raw(it.code, it.body?.string().orEmpty()) }
         } catch (e: IOException) {
             // Couldn't connect at all (not a slow reply): the server is unreachable from this network.
-            if (e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.NoRouteToHostException ||
-                (e is java.net.SocketTimeoutException && e.message.orEmpty().contains("connect", ignoreCase = true))) network.reported(false)
+            val unreachable = e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.NoRouteToHostException ||
+                (e is java.net.SocketTimeoutException && e.message.orEmpty().contains("connect", ignoreCase = true))
+            // Debug builds: the dev PC may have a new Wi-Fi address; find it and try once more.
+            if (unreachable && !retried && DevServer.rediscover(ctx)) return execute(method, path, body, bearer, extraHeaders, slow, retried = true)
+            if (unreachable) network.reported(false)
             throw OfflineException(e)
         }
     }

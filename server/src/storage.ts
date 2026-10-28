@@ -2,7 +2,14 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { env } from './env.js';
+
+/**
+ * Development only: the address a phone reached this server on. The PC's Wi-Fi address changes, so media links follow
+ * the request instead of PUBLIC_URL (the Host header is the client's word, which is fine for a dev server only).
+ */
+export const requestOrigin = new AsyncLocalStorage<string>();
 
 /** Private object storage for photos and generated images. Keys always start with `u/<userId>/`. */
 export interface Storage {
@@ -69,7 +76,8 @@ export function signedUrl(key: string, v?: number | string, now = Date.now()): s
   const exp = Math.ceil(now / 1000 / 600) * 600 + MEDIA_TTL_S;
   const q = new URLSearchParams({ exp: String(exp), sig: sign(key, exp) });
   if (v !== undefined) q.set('v', String(v));
-  return `${env.PUBLIC_URL}/v1/media/${key}?${q}`;
+  const base = (env.NODE_ENV === 'development' && requestOrigin.getStore()) || env.PUBLIC_URL;
+  return `${base}/v1/media/${key}?${q}`;
 }
 
 export function verifySignature(key: string, exp: string | undefined, sig: string | undefined, now = Date.now()): boolean {
