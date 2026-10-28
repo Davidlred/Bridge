@@ -137,14 +137,14 @@ fun PaywallContent(ui: PaywallUi, select: (String) -> Unit, buy: () -> Unit, res
                 ui.offers.forEach { o ->
                     val on = o.id == ui.selected
                     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(if (on) c.accTint else c.s1)
-                        .border(if (on) 1.5.dp else 1.dp, if (on) c.acc else c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable(role = Role.RadioButton) { select(o.id) }
+                        .border(if (on) 1.5.dp else 1.dp, if (on) c.line2 else c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable(role = Role.RadioButton) { select(o.id) }
                         .semantics(mergeDescendants = true) { selected = on }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(when (o.period) { Period.Year -> stringResource(R.string.pw_per_year, o.price); Period.Month -> stringResource(R.string.pw_per_month, o.price); Period.Other -> o.price },
                                 style = BType.display(18), color = c.ink)
                             if (!plus) Text(stringResource(R.string.pw_alliance_who), style = BType.body(12), color = c.mut)
                         }
-                        Icon(painterResource(if (on) R.drawable.ic_radio_on else R.drawable.ic_radio_off), null, tint = if (on) c.acc else c.mut, modifier = Modifier.size(22.dp))
+                        Icon(painterResource(if (on) R.drawable.ic_radio_on else R.drawable.ic_radio_off), null, tint = if (on) c.ink else c.mut, modifier = Modifier.size(22.dp))
                     }
                 }
             }

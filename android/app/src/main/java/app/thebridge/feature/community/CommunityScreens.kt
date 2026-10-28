@@ -193,9 +193,9 @@ private fun Segments(tab: CommunityTab, onChange: (CommunityTab) -> Unit) {
     Row(Modifier.fillMaxWidth().background(c.s0, RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf(CommunityTab.Feed to R.string.seg_feed, CommunityTab.Alliance to R.string.seg_alliance).forEach { (t, label) ->
             val on = t == tab
-            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(t) }
+            Box(Modifier.weight(1f).heightIn(min = 40.dp).background(if (!on) Color.Transparent else if (c.isDark) c.s2 else c.s1, RoundedCornerShape(10.dp)).border(1.dp, if (on) c.line2 else Color.Transparent, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { onChange(t) }
                 .semantics { selected = on }, contentAlignment = Alignment.Center) {
-                Text(stringResource(label), style = BType.body(14, FontWeight.SemiBold), color = if (on) c.onAcc else c.mut)
+                Text(stringResource(label), style = BType.body(14, FontWeight.SemiBold), color = if (on) c.ink else c.mut)
             }
         }
     }
@@ -268,7 +268,7 @@ private fun ReactionChip(label: String, n: Int, on: Boolean, onClick: () -> Unit
     val a11y = stringResource(R.string.react_a11y, label, n)
     // 36dp chip inside a 44dp touch target
     Box(Modifier.heightIn(min = 44.dp).clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) { contentDescription = a11y; selected = on }, contentAlignment = Alignment.Center) {
-        Row(Modifier.heightIn(min = 36.dp).background(if (on) c.accTint else Color.Transparent, RoundedCornerShape(18.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(18.dp)).padding(horizontal = 12.dp),
+        Row(Modifier.heightIn(min = 36.dp).background(if (on) c.accTint else Color.Transparent, RoundedCornerShape(18.dp)).border(1.dp, if (on) c.line2 else c.line, RoundedCornerShape(18.dp)).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(label, style = BType.body(12, FontWeight.Medium), color = if (on) c.accInk else c.ink2, maxLines = 1)
             Text("$n", style = BType.label(12f, 0f), color = if (on) c.accInk else c.ink2)
@@ -367,11 +367,11 @@ private fun Chip(text: String, icon: Int, on: Boolean = false, dashed: Boolean =
     val c = LocalBridgeColors.current
     val shape = RoundedCornerShape(20.dp)
     Row(Modifier.heightIn(min = 44.dp).clip(shape).clickable(role = Role.Tab, onClick = onClick).semantics { selected = on }, verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.heightIn(min = 40.dp).background(if (on) c.acc else if (dashed) Color.Transparent else c.s1, shape)
-            .then(if (dashed) Modifier.dashed(c.line2, 20.dp) else Modifier.border(1.dp, if (on) c.acc else c.line, shape)).padding(horizontal = 14.dp),
+        Row(Modifier.heightIn(min = 40.dp).background(if (on) c.accTint else if (dashed) Color.Transparent else c.s1, shape)
+            .then(if (dashed) Modifier.dashed(c.line2, 20.dp) else Modifier.border(1.dp, if (on) c.line2 else c.line, shape)).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(painterResource(icon), null, tint = if (on) c.onAcc else c.ink2, modifier = Modifier.size(16.dp))
-            Text(text, style = BType.body(13, FontWeight.Medium), color = if (on) c.onAcc else c.ink2, maxLines = 1)
+            Icon(painterResource(icon), null, tint = if (on) c.ink else c.ink2, modifier = Modifier.size(16.dp))
+            Text(text, style = BType.body(13, FontWeight.Medium), color = if (on) c.ink else c.ink2, maxLines = 1)
         }
     }
 }

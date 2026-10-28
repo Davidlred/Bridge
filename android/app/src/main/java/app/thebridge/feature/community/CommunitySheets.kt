@@ -115,9 +115,9 @@ fun ListingSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
 private fun PlanOption(on: Boolean, title: String, sub: String, onClick: () -> Unit) {
     val c = LocalBridgeColors.current
     val shape = RoundedCornerShape(16.dp)
-    Row(Modifier.fillMaxWidth().clip(shape).border(if (on) 1.5.dp else 1.dp, if (on) c.acc else c.line, shape).clickable(role = Role.RadioButton, onClick = onClick)
+    Row(Modifier.fillMaxWidth().clip(shape).border(if (on) 1.5.dp else 1.dp, if (on) c.line2 else c.line, shape).clickable(role = Role.RadioButton, onClick = onClick)
         .semantics { selected = on }.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(painterResource(if (on) R.drawable.ic_radio_on else R.drawable.ic_radio_off), null, tint = if (on) c.acc else c.mut, modifier = Modifier.size(22.dp))
+        Icon(painterResource(if (on) R.drawable.ic_radio_on else R.drawable.ic_radio_off), null, tint = if (on) c.ink else c.mut, modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = BType.body(15, FontWeight.SemiBold), color = c.ink)
             Text(sub, style = BType.body(13, lineHeight = 1.45f), color = c.mut)

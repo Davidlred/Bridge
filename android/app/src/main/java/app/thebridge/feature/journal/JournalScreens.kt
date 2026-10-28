@@ -90,8 +90,8 @@ fun JournalScreen(ui: JournalUi, actions: JournalActions, dayIndex: (JournalEnti
             Row(Modifier.background(c.s0, RoundedCornerShape(12.dp)).border(1.dp, c.line, RoundedCornerShape(12.dp)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 listOf(JournalTab.Today to R.string.seg_today, JournalTab.History to R.string.journal_history).forEach { (t, label) ->
                     val on = ui.tab == t
-                    Box(Modifier.heightIn(min = 36.dp).background(if (on) c.acc else Color.Transparent, RoundedCornerShape(9.dp)).clip(RoundedCornerShape(9.dp)).clickable(role = Role.Tab) { actions.tab(t) }.semantics { selected = on }.padding(horizontal = 14.dp),
-                        contentAlignment = Alignment.Center) { Text(stringResource(label), style = BType.body(13, FontWeight.SemiBold), color = if (on) c.onAcc else c.mut) }
+                    Box(Modifier.heightIn(min = 36.dp).background(if (!on) Color.Transparent else if (c.isDark) c.s2 else c.s1, RoundedCornerShape(9.dp)).border(1.dp, if (on) c.line2 else Color.Transparent, RoundedCornerShape(9.dp)).clip(RoundedCornerShape(9.dp)).clickable(role = Role.Tab) { actions.tab(t) }.semantics { selected = on }.padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center) { Text(stringResource(label), style = BType.body(13, FontWeight.SemiBold), color = if (on) c.ink else c.mut) }
                 }
             }
         }
@@ -108,7 +108,7 @@ private fun GoalChips(ui: JournalUi, selected: String?, allowAll: Boolean, onPic
         options.forEach { (id, label) ->
             val on = selected == id
             Text(label, style = BType.body(13, FontWeight.SemiBold), color = if (on) c.ink else c.ink2, maxLines = 1,
-                modifier = Modifier.heightIn(min = 40.dp).background(if (on) c.accTint else c.s1, RoundedCornerShape(20.dp)).border(1.dp, if (on) c.acc else c.line, RoundedCornerShape(20.dp))
+                modifier = Modifier.heightIn(min = 40.dp).background(if (on) c.accTint else c.s1, RoundedCornerShape(20.dp)).border(1.dp, if (on) c.line2 else c.line, RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp)).clickable(role = Role.RadioButton) { onPick(id) }.semantics { this.selected = on }.padding(horizontal = 14.dp, vertical = 10.dp))
         }
     }
@@ -180,8 +180,8 @@ private fun MoodButton(index: Int, label: String, on: Boolean, modifier: Modifie
 @Composable
 fun MoodRing(index: Int, on: Boolean, size: Int) {
     val c = LocalBridgeColors.current
-    Box(Modifier.size(size.dp).clip(CircleShape).border(1.5.dp, if (on) c.acc else c.line, CircleShape), contentAlignment = Alignment.BottomCenter) {
-        Box(Modifier.fillMaxWidth().fillMaxHeight((index + 1) * 0.2f).background(if (on) c.acc else c.mut2))
+    Box(Modifier.size(size.dp).clip(CircleShape).border(1.5.dp, if (on) c.ink else c.line, CircleShape), contentAlignment = Alignment.BottomCenter) {
+        Box(Modifier.fillMaxWidth().fillMaxHeight((index + 1) * 0.2f).background(if (on) c.ink else c.mut2))
     }
 }
 
