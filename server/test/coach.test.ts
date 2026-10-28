@@ -44,6 +44,8 @@ describe('SuggestionSplitter', async () => {
     const block = alliancesBlock([{ id, name: 'Half marathon crew', about: 'First half together', planMode: 'own', members: 4, cap: 15, goal: null, label: 'Half marathon', code: 'HALF-1234' }]);
     expect(block).toContain('- id ' + id + ': "Half marathon crew", everyone keeps their own plan, 4 of 15 members. About: "First half together"');
     expect(block).not.toContain('HALF-1234');      // the join code never goes to the model
+    expect(alliancesBlock([{ id, name: 'Crew', about: null, planMode: 'own', members: 2, cap: 15, goal: null, label: 'Run', code: 'CREW-1111' }], 3))
+      .toContain('opens for this goal at a 7-day streak; they are at 3');
   });
 
   it('handles a bare JSON suggestion and text with stray backticks', () => {

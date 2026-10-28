@@ -126,7 +126,7 @@ export function routineLine(r: NonNullable<CoachRequest['rhythm']>): string {
 }
 
 /** Findable alliances that fit the goal in focus, and how the coach may recommend one. */
-export function alliancesBlock(options: AllianceOption[]): string {
+export function alliancesBlock(options: AllianceOption[], streak: number | null = null): string {
   if (!options.length) return '';
   const lines = options.map(o => `- id ${o.id}: "${o.name}", ${o.planMode === 'shared' ? `one shared plan ("${o.goal}")` : 'everyone keeps their own plan'}, ${o.members} of ${o.cap} members${o.about ? `. About: "${o.about}"` : ''}`);
   return [
@@ -135,10 +135,11 @@ export function alliancesBlock(options: AllianceOption[]): string {
     'If the user asks about groups, company or accountability, or one of these clearly fits what they are working on and they would benefit, you may recommend one: say in a sentence why it fits, then append a fenced JSON block exactly like this, in place of a task suggestion:',
     '```json\n{"suggestAlliance":{"id":"<an id from this list>","reason":"one sentence"}}\n```',
     'At most one, and not in every reply. Never invent an alliance or an id.',
-  ].join('\n');
+    streak !== null ? `Community (and joining alliances) opens for this goal at a 7-day streak; they are at ${streak}. If you recommend one, say it opens for them then.` : '',
+  ].filter(Boolean).join('\n');
 }
 
-function prompt(req: CoachRequest, journal: string[], alliances: AllianceOption[] = []): string {
+function prompt(req: CoachRequest, journal: string[], alliances: AllianceOption[] = [], lockedStreak: number | null = null): string {
   const focus = req.focusGoalId ? req.goals.find(g => g.id === req.focusGoalId) : undefined;
   const detail = (g: CoachRequest['goals'][number]) => {
     const tasks = g.tasks.map(t => `  - [${t.done ? 'x' : ' '}] ${t.title} (${t.priority}${t.timeOfDay ? `, ${t.timeOfDay}` : ''})`).join('\n');
@@ -155,7 +156,7 @@ function prompt(req: CoachRequest, journal: string[], alliances: AllianceOption[
     `Today is ${req.localDate}.`,
     goals || 'The user has no active goals yet.',
     req.rhythm ? routineLine(req.rhythm) : '',
-    alliancesBlock(alliances),
+    alliancesBlock(alliances, lockedStreak),
     journal.length ? `Recent journal entries (the user allowed you to read these):\n${journal.join('\n')}` : '',
     history ? `Conversation so far:\n${history}` : '',
     `User: ${req.message}\nCoach:`,
@@ -216,8 +217,10 @@ export async function coachRoutes(app: FastifyInstance) {
     let replyText = '';
     let suggestion: z.infer<typeof Suggestion> | null = null;
     let alliance: AllianceCard | null = null;
-    // Alliances to recommend: only once Community is open for this goal (joining needs it), never in a crisis.
-    const options = goalId && !crisis && (await communityUnlocked(sql, req.userId, goalId)).unlocked ? await suggestAlliances(req.userId, goalId) : [];
+    // Alliances to recommend (never in a crisis). Before Community opens for the goal the coach is told, so it can say when.
+    const unlock = goalId && !crisis ? await communityUnlocked(sql, req.userId, goalId) : null;
+    const options = unlock ? await suggestAlliances(req.userId, goalId!) : [];
+    const lockedStreak = unlock && !unlock.unlocked ? unlock.streak : null;
     let status: 'done' | 'interrupted' = 'interrupted';
     try {
       if (crisis) {
@@ -225,7 +228,7 @@ export async function coachRoutes(app: FastifyInstance) {
       } else {
         const splitter = new SuggestionSplitter();
         const style = await effectiveStyle(req.userId, u?.coach_style as string | undefined);
-        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode, style), prompt: prompt(r, journal, options), max_tokens: 1024, temperature: 0.6 };
+        const input = { system_prompt: persona(String(u?.coach_name ?? 'Arc'), r.mode, style), prompt: prompt(r, journal, options, lockedStreak), max_tokens: 1024, temperature: 0.6 };
         for await (const chunk of streamText(env.MODEL_COACH, input, ctrl.signal)) {
           const text = splitter.push(chunk);
           if (text) { replyText += text; send('token', { text }); }
