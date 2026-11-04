@@ -173,7 +173,11 @@ class OnboardingViewModel @Inject constructor(
     // --- Step 2 · Routine ---
     fun onRoutine(v: String) = edit { it.copy(routine = v.take(1000)) }
     fun useExampleRoutine(text: String) = edit { it.copy(routine = text) }
-    fun toPhoto() { if (state.value?.routineReady == true) { edit { it.copy(step = Step.Photo) }; analytics.track(app.thebridge.data.Event.OnboardingStep, "step" to "photo") } }
+    fun toPhoto() {
+        if (state.value?.routineReady != true) return
+        if (session.user.value?.minor == true) { skipPhoto(); return }        // under 18: no AI images from a photo
+        edit { it.copy(step = Step.Photo) }; analytics.track(app.thebridge.data.Event.OnboardingStep, "step" to "photo")
+    }
 
     // --- Step 3 · Photo (the screen shows the consent sheet before calling this) ---
     fun uploadPhoto(uri: Uri) {

@@ -38,7 +38,8 @@ class OfflineException(cause: IOException) : Exception(cause)
 /** A coach reply stopped part way. The partial text is kept and the user can retry. */
 class StreamInterrupted : Exception()
 
-@Serializable data class UserDto(val id: String, val email: String? = null, val displayName: String, val coachName: String = "Arc", val coachStyle: String = "balanced", val createdAt: Long = 0, val photoUrl: String? = null)
+/** [minor]: under 18, so the app hides what minors can't use (photo images, findable alliances, DMs with adults). */
+@Serializable data class UserDto(val minor: Boolean = false, val id: String, val email: String? = null, val displayName: String, val coachName: String = "Arc", val coachStyle: String = "balanced", val createdAt: Long = 0, val photoUrl: String? = null)
 /** [isNew]: the account was just created, so the user goes to goal onboarding. */
 @Serializable data class AuthResponse(val user: UserDto, val accessToken: String, val refreshToken: String, val isNew: Boolean = false)
 @Serializable private data class MeResponse(val user: UserDto)
@@ -155,12 +156,13 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
 
     private val tz get() = TimeZone.getDefault().id
 
-    suspend fun signUp(name: String, email: String, password: String, deviceId: String): AuthResponse =
-        post("/v1/auth/email/signup", buildJsonObject { put("displayName", name); put("email", email); put("password", password); put("timezone", tz); put("deviceId", deviceId) })
+    suspend fun signUp(name: String, email: String, password: String, deviceId: String, birthDate: String): AuthResponse =
+        post("/v1/auth/email/signup", buildJsonObject { put("displayName", name); put("email", email); put("password", password); put("timezone", tz); put("deviceId", deviceId); put("birthDate", birthDate) })
     suspend fun logIn(email: String, password: String, deviceId: String): AuthResponse =
         post("/v1/auth/email/login", buildJsonObject { put("email", email); put("password", password); put("deviceId", deviceId) })
-    suspend fun google(idToken: String, nonce: String, deviceId: String): AuthResponse =
-        post("/v1/auth/google", buildJsonObject { put("idToken", idToken); put("nonce", nonce); put("timezone", tz); put("deviceId", deviceId) })
+    /** [birthDate]: asked on sign-up; only used when this Google account is new. */
+    suspend fun google(idToken: String, nonce: String, deviceId: String, birthDate: String? = null): AuthResponse =
+        post("/v1/auth/google", buildJsonObject { put("idToken", idToken); put("nonce", nonce); put("timezone", tz); put("deviceId", deviceId); if (birthDate != null) put("birthDate", birthDate) })
     suspend fun forgotPassword(email: String) { call("POST", "/v1/auth/password/forgot", buildJsonObject { put("email", email) }, authed = false) }
     suspend fun logOut() { call("POST", "/v1/auth/logout", JsonObject(emptyMap()), authed = true) }
     suspend fun deleteAccount() { call("DELETE", "/v1/account", null, authed = true) }

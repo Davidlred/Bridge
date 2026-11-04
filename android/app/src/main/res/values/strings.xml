@@ -43,6 +43,13 @@
     <string name="field_password">PASSWORD</string>
     <string name="field_password_hint_new">At least 8 characters</string>
     <string name="field_password_hint">Your password</string>
+    <string name="field_birth_date">DATE OF BIRTH</string>
+    <string name="field_birth_date_hint">Day, month and year</string>
+    <string name="field_birth_date_note">The Bridge is for people 12 and over.</string>
+    <string name="err_birth_missing">Enter your date of birth.</string>
+    <string name="err_too_young">The Bridge is for people 12 and over.</string>
+    <string name="join_minor_listed">This alliance is open to anyone, so it\'s for members 18 and over. Ask a friend to invite you to theirs.</string>
+    <string name="ally_minor_unlisted">Alliances with members under 18 stay private.</string>
     <string name="create_account">Create account</string>
     <string name="log_in">Log in</string>
     <string name="login_title">Welcome back</string>

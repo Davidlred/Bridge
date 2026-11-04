@@ -136,8 +136,8 @@ class ScreenshotTest {
         }
     }
 
-    private val filled = AuthUiState(name = "Sharon", email = "sharon@example.com", password = "correct horse")
-    private val errors = AuthUiState(name = "S", email = "sharon@", nameError = UiText.Res(R.string.err_name), emailError = UiText.Res(R.string.err_email),
+    private val filled = AuthUiState(name = "Sharon", email = "sharon@example.com", password = "correct horse", birthDate = LocalDate.of(2001, 5, 14))
+    private val errors = AuthUiState(name = "S", email = "sharon@", nameError = UiText.Res(R.string.err_name), emailError = UiText.Res(R.string.err_email), birthDate = LocalDate.of(2016, 3, 2), birthError = UiText.Res(R.string.err_too_young),
         passwordError = UiText.Res(R.string.err_password_short), formError = UiText.Res(R.string.err_signup_offline))
 
     @Test fun splash() = snap("splash") { SplashScreen(animate = false) }

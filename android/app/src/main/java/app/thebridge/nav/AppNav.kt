@@ -201,7 +201,7 @@ private fun AuthFlow(auth: AuthViewModel) {
     ) {
         composable<Welcome> { WelcomeScreen(onGetStarted = { go(SignUp) }, onLogIn = { go(LogIn) }) }
         composable<SignUp> {
-            SignUpScreen(state, auth::onName, auth::onEmail, auth::onPassword, onSubmit = auth::signUp, onGoogle = { auth.google(ctx) },
+            SignUpScreen(state, auth::onName, auth::onEmail, auth::onPassword, onSubmit = auth::signUp, onGoogle = { auth.google(ctx) }, onBirthDate = auth::onBirthDate,
                 onBack = { nav.popBackStack() }, onLogIn = { go(LogIn) })
         }
         composable<LogIn> {

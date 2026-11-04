@@ -29,6 +29,12 @@ class FoundationTest {
     }
 
     @Test fun `auth validation matches the prototype rules`() {
+        // 12 and over (same rule as the server and iOS)
+        val today = java.time.LocalDate.of(2026, 11, 4)
+        assertEquals(R.string.err_birth_missing, AuthValidation.birthDate(null, today))
+        assertEquals(R.string.err_too_young, AuthValidation.birthDate(java.time.LocalDate.of(2014, 11, 5), today))   // 12 tomorrow
+        assertEquals(null, AuthValidation.birthDate(java.time.LocalDate.of(2014, 11, 4), today))                    // 12 today
+        assertEquals(R.string.err_birth_missing, AuthValidation.birthDate(java.time.LocalDate.of(2027, 1, 1), today))
         assertEquals(R.string.err_name, AuthValidation.name(" S "))
         assertNull(AuthValidation.name("Sharon"))
         assertEquals(R.string.err_email, AuthValidation.email("sharon@example"))

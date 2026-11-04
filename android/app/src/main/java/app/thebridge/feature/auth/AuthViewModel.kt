@@ -31,6 +31,8 @@ import javax.inject.Inject
 data class AuthUiState(
     val name: String = "", val email: String = "", val password: String = "",
     val nameError: UiText? = null, val emailError: UiText? = null, val passwordError: UiText? = null,
+    /** Asked on sign-up: The Bridge is for 12 and over. */
+    val birthDate: java.time.LocalDate? = null, val birthError: UiText? = null,
     /** Errors that aren't about one field (offline, provider unavailable, account linked elsewhere). */
     val formError: UiText? = null,
     val busy: Boolean = false,
@@ -40,6 +42,13 @@ data class AuthUiState(
 object AuthValidation {
     private val email = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$")
     fun name(v: String): Int? = if (v.trim().length < 2) R.string.err_name else null
+    const val MIN_AGE = 12
+    fun birthDate(d: java.time.LocalDate?, today: java.time.LocalDate = java.time.LocalDate.now()): Int? = when {
+        d == null -> R.string.err_birth_missing
+        d.isAfter(today) -> R.string.err_birth_missing
+        java.time.Period.between(d, today).years < MIN_AGE -> R.string.err_too_young
+        else -> null
+    }
     fun email(v: String): Int? = if (!email.matches(v.trim())) R.string.err_email else null
     fun newPassword(v: String): Int? = if (v.length < 8) R.string.err_password_short else null
     /** A password shorter than 8 can't be right, so don't spend a request (or a lockout attempt) on it. */
@@ -60,16 +69,18 @@ class AuthViewModel @Inject constructor(
     fun onName(v: String) { saved["name"] = v; _state.update { it.copy(name = v.take(40), nameError = null, formError = null) } }
     fun onEmail(v: String) { saved["email"] = v; _state.update { it.copy(email = v.take(254), emailError = null, formError = null) } }
     fun onPassword(v: String) = _state.update { it.copy(password = v.take(128), passwordError = null, formError = null) }
+    fun onBirthDate(d: java.time.LocalDate) = _state.update { it.copy(birthDate = d, birthError = null, formError = null) }
     fun clearErrors() = _state.update { it.copy(nameError = null, emailError = null, passwordError = null, formError = null, password = "") }
 
     fun signUp() {
         val s = _state.value
         val errors = Triple(AuthValidation.name(s.name), AuthValidation.email(s.email), AuthValidation.newPassword(s.password))
-        if (errors.toList().any { it != null }) {
-            _state.update { it.copy(nameError = errors.first?.let(UiText::Res), emailError = errors.second?.let(UiText::Res), passwordError = errors.third?.let(UiText::Res)) }
+        val birth = AuthValidation.birthDate(s.birthDate)
+        if (errors.toList().any { it != null } || birth != null) {
+            _state.update { it.copy(nameError = errors.first?.let(UiText::Res), emailError = errors.second?.let(UiText::Res), passwordError = errors.third?.let(UiText::Res), birthError = birth?.let(UiText::Res)) }
             return
         }
-        submit(R.string.err_signup_offline) { api.signUp(s.name.trim().substringBefore(' '), s.email.trim(), s.password, session.deviceId()) }
+        submit(R.string.err_signup_offline) { api.signUp(s.name.trim().substringBefore(' '), s.email.trim(), s.password, session.deviceId(), s.birthDate!!.toString()) }
     }
 
     fun logIn() {
@@ -98,7 +109,10 @@ class AuthViewModel @Inject constructor(
     }
 
     /** Google One Tap / account picker through Credential Manager. [activity] must be an Activity context. */
-    fun google(activity: Context) {
+    /** [signingUp]: from Create account, where the date of birth is asked first (a new Google account needs it). */
+    fun google(activity: Context, signingUp: Boolean = true) {
+        val birth = _state.value.birthDate
+        if (signingUp) AuthValidation.birthDate(birth)?.let { e -> _state.update { it.copy(birthError = UiText.Res(e)) }; return }
         if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()) { _state.update { it.copy(formError = UiText.ResArg(R.string.err_provider_unavailable, R.string.provider_google)) }; return }
         submit(R.string.error_offline, provider = R.string.provider_google) {
             val nonce = UuidV7.next()
@@ -110,7 +124,7 @@ class AuthViewModel @Inject constructor(
             } catch (e: GetCredentialException) {
                 throw ApiException(503, "provider_not_configured", kotlinx.serialization.json.JsonObject(emptyMap()))
             }
-            api.google(GoogleIdTokenCredential.createFrom(result.credential.data).idToken, nonce, session.deviceId())
+            api.google(GoogleIdTokenCredential.createFrom(result.credential.data).idToken, nonce, session.deviceId(), birth?.toString())
         }
     }
 
@@ -132,6 +146,7 @@ class AuthViewModel @Inject constructor(
                 when (e.code) {
                     "invalid_credentials" -> _state.update { it.copy(passwordError = UiText.Res(R.string.err_credentials)) }
                     "email_taken" -> _state.update { it.copy(emailError = UiText.Res(R.string.err_email_taken)) }
+                    "too_young", "invalid_birth_date" -> _state.update { it.copy(birthError = UiText.Res(if (e.code == "too_young") R.string.err_too_young else R.string.err_birth_missing)) }
                     else -> _state.update { it.copy(formError = message(e, provider)) }
                 }
             } catch (e: Exception) {

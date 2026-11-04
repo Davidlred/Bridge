@@ -173,7 +173,9 @@ class CommunityViewModel @Inject constructor(
 
     /** The lead makes the alliance findable (Arc can suggest it; people join without a code) or private again. */
     fun setListed(a: app.thebridge.data.remote.AllianceDto, on: Boolean) = viewModelScope.launch {
-        try { social.setListed(a.id, on); refresh() } catch (e: Exception) { toaster.show(UiText.Res(R.string.error_generic), ToastKind.Warn) }
+        try { social.setListed(a.id, on); refresh() } catch (e: Exception) {
+            toaster.show(UiText.Res(if ((e as? ApiException)?.code == "minor_unlisted") R.string.ally_minor_unlisted else R.string.error_generic), ToastKind.Warn)
+        }
     }
 
     fun create() {
@@ -188,7 +190,7 @@ class CommunityViewModel @Inject constructor(
                 analytics.track(app.thebridge.data.Event.AllianceCreated, "mode" to a.planMode)
                 toaster.show(UiText.Res(if (s.shared) R.string.toast_created_shared else R.string.toast_created), ToastKind.Ok)
             } catch (e: Exception) {
-                val err = when ((e as? ApiException)?.code) { "name_not_allowed" -> UiText.Res(R.string.create_name_blocked); else -> offlineOr(e) }
+                val err = when ((e as? ApiException)?.code) { "name_not_allowed" -> UiText.Res(R.string.create_name_blocked); "minor_unlisted" -> UiText.Res(R.string.ally_minor_unlisted); else -> offlineOr(e) }
                 editSheet<CommunitySheet.Create> { it.copy(busy = false, error = err) }
             }
         }
@@ -230,6 +232,7 @@ class CommunityViewModel @Inject constructor(
             "alliance_full" -> UiText.Res(R.string.join_full, listOf(api.body["cap"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() } ?: 15))
             "plan_ended" -> UiText.Res(R.string.join_ended)
             "goal_limit" -> UiText.Res(R.string.join_goal_limit)
+            "minor_listed" -> UiText.Res(R.string.join_minor_listed)
             else -> UiText.Res(R.string.error_generic)
         }
     }

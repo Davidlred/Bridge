@@ -1,5 +1,6 @@
 package app.thebridge.feature.auth
 
+import androidx.compose.runtime.setValue
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.compose.animation.core.LinearEasing
@@ -97,6 +98,39 @@ fun BridgeMark(color: Color, modifier: Modifier = Modifier, width: Int = 92) {
         val ring = 12f * u
         drawArc(color, 180f, 180f, false, topLeft = androidx.compose.ui.geometry.Offset(10f * u + ring / 2, ring / 2), size = androidx.compose.ui.geometry.Size(72f * u - ring, 72f * u - ring), style = Stroke(ring))
         drawLine(color, androidx.compose.ui.geometry.Offset(3.5f * u, 46.5f * u), androidx.compose.ui.geometry.Offset(88.5f * u, 46.5f * u), strokeWidth = 7f * u, cap = StrokeCap.Round)
+    }
+}
+
+/** Date of birth, typed (or picked from the calendar). The Bridge is for 12 and over. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun BirthDateField(value: java.time.LocalDate?, error: String?, onPick: (java.time.LocalDate) -> Unit) {
+    val c = LocalBridgeColors.current
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val shown = value?.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text(stringResource(R.string.field_birth_date), style = BType.label(11f, 0.12f), color = c.mut)
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(Radius.input)).background(c.s1).border(1.dp, if (error != null) c.bad else c.line, RoundedCornerShape(Radius.input))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button) { open = true }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(shown ?: stringResource(R.string.field_birth_date_hint), style = BType.body(16), color = if (shown != null) c.ink else c.mut2, modifier = Modifier.weight(1f))
+            androidx.compose.material3.Icon(painterResource(R.drawable.ic_event), null, tint = c.mut, modifier = Modifier.size(20.dp))
+        }
+        Text(error ?: stringResource(R.string.field_birth_date_note), style = BType.body(12), color = if (error != null) c.bad else c.mut)
+    }
+    if (open) {
+        val zone = java.time.ZoneOffset.UTC
+        val state = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = value?.atStartOfDay(zone)?.toInstant()?.toEpochMilli(),
+            yearRange = (java.time.LocalDate.now().year - 100)..java.time.LocalDate.now().year,
+            initialDisplayMode = androidx.compose.material3.DisplayMode.Input,
+        )
+        androidx.compose.material3.DatePickerDialog(onDismissRequest = { open = false }, confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                state.selectedDateMillis?.let { onPick(java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate()) }; open = false
+            }) { Text(stringResource(R.string.save), color = c.ink) }
+        }, dismissButton = { androidx.compose.material3.TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel), color = c.mut) } }) {
+            androidx.compose.material3.DatePicker(state, showModeToggle = true)
+        }
     }
 }
 
@@ -201,7 +235,7 @@ private fun FormError(error: UiText?) {
 @Composable
 fun SignUpScreen(
     state: AuthUiState, onName: (String) -> Unit, onEmail: (String) -> Unit, onPassword: (String) -> Unit,
-    onSubmit: () -> Unit, onGoogle: () -> Unit, onBack: () -> Unit, onLogIn: () -> Unit,
+    onSubmit: () -> Unit, onGoogle: () -> Unit, onBack: () -> Unit, onLogIn: () -> Unit, onBirthDate: (java.time.LocalDate) -> Unit = {},
 ) {
     val c = LocalBridgeColors.current
     val focus = LocalFocusManager.current
@@ -211,6 +245,8 @@ fun SignUpScreen(
     ) {
         BackButton(onBack, Modifier.offset(x = (-10).dp))
         AuthHeader(stringResource(R.string.signup_title), stringResource(R.string.signup_subtitle))
+        // First, for both ways of signing up: The Bridge is for 12 and over.
+        BirthDateField(state.birthDate, state.birthError?.resolve(), onBirthDate)
         // Android offers Google only; Sign in with Apple is on iOS.
         SocialButton(stringResource(R.string.continue_google), filled = true, enabled = !state.busy, onClick = onGoogle)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
