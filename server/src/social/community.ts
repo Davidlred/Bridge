@@ -37,6 +37,7 @@ export async function communityRoutes(app: FastifyInstance) {
              coalesce((select array_agg(r.kind) from reactions r where r.post_id = p.id and r.user_id = ${req.userId}), '{}') as mine
       from community_posts p join users u on u.id = p.user_id
       where p.moderation = 'allow' and u.deleted_at is null and p.created_at < ${before}
+        and not (u.birth_date is not null and u.birth_date > current_date - interval '18 years')                                    -- under 18: not shown to strangers
         and (${anyCategory} or p.category = ${category})
         and not (p.user_id = any(${blocked}::uuid[]))
         and not exists (select 1 from reports r where r.reporter_id = ${req.userId} and r.target_kind = 'post' and r.target_id = p.id)

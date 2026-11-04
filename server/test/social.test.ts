@@ -132,6 +132,22 @@ run('community, alliances and chat', () => {
       expect(hidden).toMatchObject({ listed: false, about: null });
     });
 
+    it('keeps people under 18 out of findable alliances and the coach\'s suggestions', async () => {
+      const { suggestAlliances } = await import('../src/social/alliances.js');
+      const lead = await signUp('Ada'), teen = await signUp('Tobi');
+      const lg = await goalWithStreak(lead, 7), tg = await goalWithStreak(teen, 7);
+      const open = (await call(lead, 'POST', '/v1/alliances', { name: 'Half marathon crew', planMode: 'own', goalId: lg.g, listed: true })).json().alliance;
+      const born = new Date(); born.setUTCFullYear(born.getUTCFullYear() - 15);
+      await sql`update users set birth_date = ${born.toISOString().slice(0, 10)} where id = ${teen.user.id}`;
+      expect(await suggestAlliances(teen.user.id, tg.g)).toEqual([]);
+      expect((await call(teen, 'POST', '/v1/alliances/join', { code: open.inviteCode, goalId: tg.g })).json().error).toBe('minor_listed');
+      // A private alliance they are invited to is fine; it then can't be made findable while they are in it.
+      const priv = (await call(lead, 'POST', '/v1/alliances', { name: 'Close friends', planMode: 'own', goalId: lg.g })).json().alliance;
+      expect((await call(teen, 'POST', '/v1/alliances/join', { code: priv.inviteCode, goalId: tg.g })).statusCode).toBe(200);
+      expect((await call(lead, 'PATCH', '/v1/alliances/' + priv.id, { listed: true })).json().error).toBe('minor_unlisted');
+      expect((await call(teen, 'POST', '/v1/alliances', { name: 'Teen runners', planMode: 'own', goalId: tg.g, listed: true })).json().error).toBe('minor_unlisted');
+    });
+
     it('needs an open Community to create one, and rejects bad names', async () => {
       const a = await signUp();
       const locked = await goalWithStreak(a, 2);

@@ -129,6 +129,25 @@ run('api', () => {
     });
   });
 
+  describe('age', () => {
+    const born = (years: number) => { const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - years); d.setUTCDate(d.getUTCDate() - 2); return d.toISOString().slice(0, 10); };
+    const signUpBorn = (birthDate: string) => call('POST', '/v1/auth/email/signup', { email: `${uuidv7()}@example.com`, password: 'correct horse', displayName: 'Tolu', birthDate });
+    it('is for 12 and over, and marks under-18 accounts so the apps can protect them', async () => {
+      const young = await signUpBorn(born(11));
+      expect(young.statusCode).toBe(403);
+      expect(young.json()).toMatchObject({ error: 'too_young', minAge: 12 });
+      expect((await signUpBorn('2999-01-01')).json().error).toBe('invalid_birth_date');
+      expect((await signUpBorn(born(13))).json().user.minor).toBe(true);
+      expect((await signUpBorn(born(19))).json().user.minor).toBe(false);
+    });
+    it('turns away a photo for AI images from someone under 18', async () => {
+      const teen = (await signUpBorn(born(13))).json();
+      const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(2048, 7)]);
+      const r = await app.inject({ method: 'PUT', url: '/v1/me/photo', headers: { authorization: `Bearer ${teen.accessToken}`, 'x-photo-consent': '1', 'content-type': 'image/jpeg' }, payload: jpeg });
+      expect(r.json().error).toBe('minor_photo');
+    });
+  });
+
   describe('sync', () => {
     it('creates goals and tasks, is idempotent, and pulls them back with a cursor', async () => {
       const a = await signUp();

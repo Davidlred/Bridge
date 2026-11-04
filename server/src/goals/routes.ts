@@ -8,6 +8,7 @@ import { goalImageKey, photoKey, signedUrl, storage, userPrefix, verifySignature
 import { AIUnavailable, runImage, runText } from '../ai/replicate.js';
 import { assessReality } from '../ai/goalPlanner.js';
 import { RealityRequest } from '../ai/planSchema.js';
+import { isMinor } from '../age.js';
 
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -140,6 +141,8 @@ export async function goalRoutes(app: FastifyInstance) {
   // Upload (or replace) the profile photo. The client shows the consent text and sends X-Photo-Consent: 1.
   app.put('/v1/me/photo', { onRequest: auth, config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async req => {
     if (req.headers['x-photo-consent'] !== '1') throw new HttpError(400, 'consent_required');
+    // Under 18: no AI images from a photo (they get the images without a face).
+    if (await isMinor(sql, req.userId)) throw new HttpError(403, 'minor_photo');
     const body = req.body;
     if (!Buffer.isBuffer(body) || body.length < 1024) throw new HttpError(400, 'invalid_image');
     const jpeg = body[0] === 0xff && body[1] === 0xd8, png = body.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));

@@ -11,6 +11,7 @@ import { signedUrl, storage, userPrefix } from '../storage.js';
 import { deletePhotoAndFaceImages } from '../goals/routes.js';
 import { COACH_STYLES, effectiveStyle } from '../coach/styles.js';
 import { leave } from '../social/alliances.js';
+import { checkBirthDate, isMinorAge } from '../age.js';
 
 const ARGON = { type: argon2.argon2id, memoryCost: 64 * 1024, timeCost: 3 } as const;
 const MAX_FAILED_LOGINS = 5;
@@ -21,10 +22,12 @@ const Password = z.string().min(8).max(128);
 const Name = z.string().trim().min(2).max(40);
 const Timezone = z.string().min(2).max(64).default('UTC');
 const DeviceId = z.string().uuid().optional();
+// Asked at sign-up (12 and over); optional for older app versions.
+const BirthDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
 
-const SignUp = z.object({ email: Email, password: Password, displayName: Name, timezone: Timezone, deviceId: DeviceId });
+const SignUp = z.object({ email: Email, password: Password, displayName: Name, timezone: Timezone, deviceId: DeviceId, birthDate: BirthDate });
 const LogIn = z.object({ email: Email, password: z.string().min(1).max(128), deviceId: DeviceId });
-const Social = z.object({ idToken: z.string().min(20).max(4096), nonce: z.string().max(128).optional(), displayName: Name.optional(), timezone: Timezone, deviceId: DeviceId });
+const Social = z.object({ idToken: z.string().min(20).max(4096), nonce: z.string().max(128).optional(), displayName: Name.optional(), timezone: Timezone, deviceId: DeviceId, birthDate: BirthDate });
 
 const parse = <T extends z.ZodTypeAny>(schema: T, body: unknown): z.infer<T> => {
   const r = schema.safeParse(body);
@@ -36,9 +39,11 @@ const userJson = (u: Record<string, unknown>) => ({
   id: u.id, email: u.email, emailVerified: u.email_verified, displayName: u.display_name,
   coachName: u.coach_name, coachStyle: u.coach_style ?? 'balanced', homeTimezone: u.home_timezone, settings: u.settings, createdAt: (u.created_at as Date).getTime(),
   photoUrl: u.photo_key && u.photo_consent_at ? signedUrl(u.photo_key as string, (u.photo_consent_at as Date).getTime()) : null,
+  // Under 18: the apps hide what minors can't use (direct messages with adults, findable alliances, photo images).
+  minor: isMinorAge(u.birth_date as string | null),
 });
 const loadUser = async (db: Tx | typeof sql, id: string) => {
-  const [u] = await db`select id, email, email_verified, display_name, coach_name, coach_style, home_timezone, settings, created_at, photo_key, photo_consent_at from users where id = ${id} and deleted_at is null`;
+  const [u] = await db`select id, email, email_verified, display_name, coach_name, coach_style, home_timezone, settings, created_at, photo_key, photo_consent_at, birth_date::text from users where id = ${id} and deleted_at is null`;
   if (!u) throw new HttpError(401, 'unauthorized');
   return userJson(u);
 };
@@ -56,16 +61,17 @@ async function emailLink(db: Tx | typeof sql, userId: string, kind: 'reset' | 'v
 }
 
 /** Finds or creates the account behind a verified Apple/Google identity. Never links by email silently. */
-async function accountFor(tx: Tx, id: Identity, displayName: string | undefined, timezone: string): Promise<{ id: string; created: boolean }> {
+async function accountFor(tx: Tx, id: Identity, displayName: string | undefined, timezone: string, birthDate?: string): Promise<{ id: string; created: boolean }> {
   const [known] = await tx`select u.id from auth_identities i join users u on u.id = i.user_id where i.provider = ${id.provider} and i.subject = ${id.subject} and u.deleted_at is null`;
   if (known) return { id: known.id as string, created: false };
   if (id.email) {
     const owner = await emailOwner(tx, id.email);
     if (owner) throw new HttpError(409, 'email_linked', { provider: owner.provider });
   }
+  const birth = checkBirthDate(birthDate);              // only a new account is asked
   const userId = uuidv7();
   const name = (displayName ?? id.name ?? id.email?.split('@')[0] ?? 'Friend').slice(0, 40).padEnd(2, ' ').trim() || 'Friend';
-  await tx`insert into users (id, email, email_verified, display_name, home_timezone) values (${userId}, ${id.email}, ${id.emailVerified}, ${name}, ${timezone})`;
+  await tx`insert into users (id, email, email_verified, display_name, home_timezone, birth_date) values (${userId}, ${id.email}, ${id.emailVerified}, ${name}, ${timezone}, ${birth})`;
   await tx`insert into auth_identities (provider, subject, user_id) values (${id.provider}, ${id.subject}, ${userId})`;
   return { id: userId, created: true };
 }
@@ -81,12 +87,13 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post('/v1/auth/email/signup', strict, async req => {
     const b = parse(SignUp, req.body);
+    const birth = checkBirthDate(b.birthDate);
     const hash = await argon2.hash(b.password, ARGON);
     return sql.begin(async tx => {
       const owner = await emailOwner(tx, b.email);
       if (owner) throw new HttpError(409, owner.provider === 'email' ? 'email_taken' : 'email_linked', { provider: owner.provider });
       const id = uuidv7();
-      await tx`insert into users (id, email, password_hash, display_name, home_timezone) values (${id}, ${b.email}, ${hash}, ${b.displayName}, ${b.timezone})`;
+      await tx`insert into users (id, email, password_hash, display_name, home_timezone, birth_date) values (${id}, ${b.email}, ${hash}, ${b.displayName}, ${b.timezone}, ${birth})`;
       await tx`insert into auth_identities (provider, subject, user_id) values ('email', ${b.email}, ${id})`;
       const link = await emailLink(tx, id, 'verify', 24 * 60);
       sendMail({ to: b.email, subject: 'Confirm your email for The Bridge', text: `Confirm your email:\n${link}\n\nThis link works for 24 hours.` }).catch(e => req.log.error({ err: e.message }, 'mail_failed'));
@@ -123,7 +130,7 @@ export async function authRoutes(app: FastifyInstance) {
       const identity = await verifyIdToken(provider, b.idToken, b.nonce);
       return sql.begin(async tx => {
         // isNew sends a first-time user to goal onboarding instead of an empty Today.
-        const { id, created } = await accountFor(tx, identity, b.displayName, b.timezone);
+        const { id, created } = await accountFor(tx, identity, b.displayName, b.timezone, b.birthDate);
         return { user: await loadUser(tx, id), isNew: created, ...(await issueSession(tx, id, undefined, b.deviceId ?? null)) };
       });
     });

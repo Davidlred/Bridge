@@ -5,6 +5,7 @@ import { sql, type Tx } from '../db.js';
 import { auth } from '../auth/tokens.js';
 import { HttpError, uuidv7 } from '../util.js';
 import { blockedWith, communityUnlocked, firstName, localToday, streakOf } from './progress.js';
+import { isMinor } from '../age.js';
 
 export const FREE_CAP = 15;
 const FREE_GOAL_LIMIT = 3;
@@ -202,7 +203,7 @@ export type AllianceOption = { id: string; name: string; about: string | null; p
  */
 export async function suggestAlliances(userId: string, goalId: string, limit = 3): Promise<AllianceOption[]> {
   const [g] = await sql`select label, statement, category from goals where id = ${goalId} and user_id = ${userId} and status = 'active'`;
-  if (!g) return [];
+  if (!g || await isMinor(sql, userId)) return [];      // under 18: only alliances they are invited to
   const today = await localToday(sql, userId);
   const blocked = await blockedWith(sql, userId);
   const rows = await sql`
@@ -247,6 +248,7 @@ export async function allianceRoutes(app: FastifyInstance) {
     const [g] = await sql`select category from goals where id = ${b.goalId} and user_id = ${req.userId} and status = 'active'`;
     if (!g) throw new HttpError(404, 'goal_missing');
     if (!(await communityUnlocked(sql, req.userId, b.goalId)).unlocked) throw new HttpError(403, 'community_locked');
+    if (b.listed && await isMinor(sql, req.userId)) throw new HttpError(403, 'minor_unlisted');
     const id = uuidv7();
     await sql.begin(async tx => {
       const today = await localToday(tx, req.userId);
@@ -267,6 +269,11 @@ export async function allianceRoutes(app: FastifyInstance) {
     const [a] = await sql`select owner_id from alliances where id = ${req.params.id} and archived_at is null`;
     if (!a) throw new HttpError(404, 'not_found');
     if (a.owner_id !== req.userId) throw new HttpError(403, 'not_lead');
+    // An alliance led by, or with, someone under 18 can't be made findable.
+    if (p.data.listed) {
+      const [m] = await sql`select exists(select 1 from alliance_members m join users u on u.id = m.user_id where m.alliance_id = ${req.params.id} and m.status <> 'left' and (u.birth_date is not null and u.birth_date > current_date - interval '18 years')) as any`;
+      if (m!.any) throw new HttpError(403, 'minor_unlisted');
+    }
     if (p.data.listed !== undefined) await sql`update alliances set listed = ${p.data.listed} where id = ${req.params.id}`;
     if (p.data.about !== undefined) await sql`update alliances set about = ${p.data.about || null} where id = ${req.params.id}`;
     return { alliance: await summary(req.params.id, req.userId) };
@@ -316,6 +323,9 @@ export async function allianceRoutes(app: FastifyInstance) {
     const b = z.object({ code: z.string().regex(/^[A-Za-z]{4}-\d{4}$/), goalId: z.string().uuid().optional() }).safeParse(req.body);
     if (!b.success) throw new HttpError(400, 'invalid_code_format');
     const p = await preview(b.data.code, req.userId);
+    // Under 18: not findable alliances, only the private ones they are invited to.
+    const [listed] = await sql`select listed from alliances where id = ${p.id}`;
+    if (listed?.listed && await isMinor(sql, req.userId)) throw new HttpError(403, 'minor_listed');
     const today = await localToday(sql, req.userId);
     await sql.begin(async tx => {
       await tx`select 1 from alliances where id = ${p.id} for update`;           // serialises joins, so the cap holds

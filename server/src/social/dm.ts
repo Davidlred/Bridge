@@ -24,8 +24,10 @@ export async function canMessage(a: string, b: string): Promise<boolean> {
     select exists(select 1 from alliance_members x join alliance_members y on y.alliance_id = x.alliance_id join alliances al on al.id = x.alliance_id
                   where x.user_id = ${a} and y.user_id = ${b} and x.status <> 'left' and y.status <> 'left' and al.archived_at is null) as shared,
            exists(select 1 from blocks where (blocker_id = ${a} and blocked_id = ${b}) or (blocker_id = ${b} and blocked_id = ${a})) as blocked,
-           exists(select 1 from users where id = ${b} and deleted_at is null) as alive`;
-  return r!.shared && !r!.blocked && r!.alive;
+           exists(select 1 from users where id = ${b} and deleted_at is null) as alive,
+           -- Under 18 and 18+ never message each other directly (alliance chat is moderated and stays).
+           (select count(distinct (u.birth_date is not null and u.birth_date > current_date - interval '18 years'))::int from users u where u.id in (${a}, ${b})) as groups`;
+  return r!.shared && !r!.blocked && r!.alive && r!.groups === 1;
 }
 
 async function ownDevice(userId: string, deviceId: string) {
@@ -73,6 +75,7 @@ export async function dmRoutes(app: FastifyInstance) {
       from alliance_members x join alliance_members y on y.alliance_id = x.alliance_id join alliances al on al.id = x.alliance_id join users u on u.id = y.user_id
       where x.user_id = ${req.userId} and y.user_id <> ${req.userId} and x.status <> 'left' and y.status <> 'left' and al.archived_at is null and u.deleted_at is null
         and not exists (select 1 from blocks b where (b.blocker_id = ${req.userId} and b.blocked_id = u.id) or (b.blocker_id = u.id and b.blocked_id = ${req.userId}))
+        and (u.birth_date is not null and u.birth_date > current_date - interval '18 years') = (select (u.birth_date is not null and u.birth_date > current_date - interval '18 years') from users u where u.id = ${req.userId})
       order by u.display_name`;
     return { contacts: rows.map(r => ({ userId: r.id, name: firstName(r.display_name), ready: r.ready })) };
   });

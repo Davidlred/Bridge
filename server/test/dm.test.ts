@@ -91,6 +91,19 @@ run('encrypted direct messages (relay)', () => {
     expect((await call(a, 'GET', '/v1/e2e/contacts')).json().contacts).toEqual([]);
   });
 
+  it('never lets someone under 18 and an adult message each other directly', async () => {
+    const { a, b } = await pair();
+    await register(a); await register(b);
+    const born = (years: number) => { const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - years); d.setUTCDate(d.getUTCDate() - 2); return d.toISOString().slice(0, 10); };
+    await sql`update users set birth_date = ${born(15)} where id = ${b.user.id}`;          // b is 15, a has no date (an adult)
+    expect((await call(a, 'GET', '/v1/e2e/contacts')).json().contacts).toEqual([]);
+    expect((await call(b, 'GET', '/v1/e2e/contacts')).json().contacts).toEqual([]);
+    expect((await call(a, 'GET', '/v1/e2e/users/' + b.user.id + '/devices')).statusCode).toBe(403);
+    expect((await call(a, 'POST', '/v1/e2e/messages', { to: b.user.id, fromDevice: a.device, clientId: uuidv7(), envelopes: [{ deviceId: b.device, type: 1, body: 'hi' }] })).json().error).toBe('cannot_message');
+    await sql`update users set birth_date = ${born(14)} where id = ${a.user.id}`;          // two teenagers can
+    expect((await call(a, 'GET', '/v1/e2e/contacts')).json().contacts).toHaveLength(1);
+  });
+
   it('removes keys and waiting messages when the account is deleted', async () => {
     const { a, b } = await pair();
     await register(a); await register(b);
