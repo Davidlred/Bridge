@@ -21,6 +21,8 @@ struct UserDTO: Codable, Equatable, Sendable {
     var coachStyle: String?
     var createdAt: Double?
     var photoUrl: String?
+    /// Under 18: the app hides what minors can't use (photo images, findable alliances, DMs with adults).
+    var minor: Bool?
 }
 /// `isNew`: the account was just created, so the user goes to goal onboarding.
 struct AuthResponse: Decodable, Sendable {
@@ -155,15 +157,17 @@ actor APIClient {
     private var timezone: String { TimeZone.current.identifier }
 
     // MARK: Auth
-    func signUp(name: String, email: String, password: String) async throws -> AuthResponse {
-        try await send("POST", "/v1/auth/email/signup", ["displayName": name, "email": email, "password": password, "timezone": timezone, "deviceId": DeviceID.value])
+    func signUp(name: String, email: String, password: String, birthDate: String) async throws -> AuthResponse {
+        try await send("POST", "/v1/auth/email/signup", ["displayName": name, "email": email, "password": password, "timezone": timezone, "deviceId": DeviceID.value, "birthDate": birthDate])
     }
     func logIn(email: String, password: String) async throws -> AuthResponse {
         try await send("POST", "/v1/auth/email/login", ["email": email, "password": password, "deviceId": DeviceID.value])
     }
     /// `nonce` is the raw value; Apple received its SHA-256 and the server checks both forms.
-    func social(_ provider: String, idToken: String, nonce: String?, name: String?) async throws -> AuthResponse {
+    /// `birthDate`: asked on sign-up; only used when this Apple account is new.
+    func social(_ provider: String, idToken: String, nonce: String?, name: String?, birthDate: String? = nil) async throws -> AuthResponse {
         var body: [String: Any] = ["idToken": idToken, "timezone": timezone, "deviceId": DeviceID.value]
+        if let birthDate { body["birthDate"] = birthDate }
         if let nonce { body["nonce"] = nonce }
         if let name, name.count >= 2 { body["displayName"] = name }
         return try await send("POST", "/v1/auth/\(provider)", body)

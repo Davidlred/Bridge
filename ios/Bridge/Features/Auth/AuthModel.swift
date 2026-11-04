@@ -4,6 +4,13 @@ import SwiftUI
 
 /// Pure input rules, shared by sign up, log in and the tests. Copy matches the prototype.
 enum AuthValidation {
+    static let minAge = 12
+    /// 12 and over (same rule as the server and Android).
+    static func birthDate(_ d: Date?, today: Date = .now) -> String? {
+        guard let d, d <= today else { return String(localized: "Enter your date of birth.") }
+        let years = Calendar(identifier: .gregorian).dateComponents([.year], from: d, to: today).year ?? 0
+        return years < minAge ? String(localized: "The Bridge is for people 12 and over.") : nil
+    }
     static func name(_ v: String) -> String? { v.trimmingCharacters(in: .whitespaces).count < 2 ? String(localized: "Enter your first name.") : nil }
     static func email(_ v: String) -> String? {
         v.trimmingCharacters(in: .whitespaces).wholeMatch(of: /[^\s@]+@[^\s@]+\.[^\s@]{2,}/) == nil ? String(localized: "Enter a valid email address.") : nil
@@ -19,6 +26,9 @@ final class AuthModel {
     var name: String = UserDefaults.standard.string(forKey: "draft.name") ?? "" { didSet { UserDefaults.standard.set(name, forKey: "draft.name"); nameError = nil; formError = nil } }
     var email: String = UserDefaults.standard.string(forKey: "draft.email") ?? "" { didSet { UserDefaults.standard.set(email, forKey: "draft.email"); emailError = nil; formError = nil } }
     var password = "" { didSet { passwordError = nil; formError = nil } }
+    /// Asked on sign-up: The Bridge is for 12 and over.
+    var birthDate: Date? { didSet { birthError = nil; formError = nil } }
+    var birthError: String?
     var nameError: String?
     var emailError: String?
     var passwordError: String?
@@ -39,11 +49,12 @@ final class AuthModel {
 
     func signUp() {
         nameError = AuthValidation.name(name); emailError = AuthValidation.email(email); passwordError = AuthValidation.newPassword(password)
-        guard nameError == nil, emailError == nil, passwordError == nil else { return }
+        birthError = AuthValidation.birthDate(birthDate)
+        guard nameError == nil, emailError == nil, passwordError == nil, birthError == nil, let birth = birthDate.map(Day.string) else { return }
         let first = name.trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init) ?? name
         let email = email.trimmingCharacters(in: .whitespaces), password = password
         submit(offline: String(localized: "You're offline. We'll need a connection to create your account.")) {
-            try await APIClient.shared.signUp(name: first, email: email, password: password)
+            try await APIClient.shared.signUp(name: first, email: email, password: password, birthDate: birth)
         }
     }
 
@@ -90,8 +101,9 @@ final class AuthModel {
             return
         }
         let nonce = appleNonce, given = credential.fullName?.givenName     // Apple sends the name on first sign-in only
+        let birth = birthDate.map(Day.string)                              // from Create account; a new Apple account needs it
         submit(offline: String(localized: "You're offline. Try again when you reconnect."), provider: "Apple") {
-            try await APIClient.shared.social("apple", idToken: token, nonce: nonce, name: given)
+            try await APIClient.shared.social("apple", idToken: token, nonce: nonce, name: given, birthDate: birth)
         }
     }
 
@@ -116,6 +128,8 @@ final class AuthModel {
                 switch code {
                 case "invalid_credentials": passwordError = String(localized: "Incorrect email or password.")
                 case "email_taken": emailError = String(localized: "An account with this email already exists. Log in instead.")
+                case "too_young": birthError = String(localized: "The Bridge is for people 12 and over.")
+                case "invalid_birth_date": birthError = String(localized: "Enter your date of birth.")
                 case "email_linked":
                     formError = linked == "apple" ? String(localized: "This email is linked to Apple sign-in. Continue with Apple?")
                         : linked == "google" ? String(localized: "This email belongs to an account created with Google on Android. Use a different email here.")

@@ -25,6 +25,17 @@ final class FoundationTests: XCTestCase {
         XCTAssertEqual(Set(kept.keys), ["tasks", "study", "mode"])
     }
 
+    /// 12 and over, same cases as the Android FoundationTest.
+    func testBirthDateIsTwelveAndOver() {
+        let cal = Calendar(identifier: .gregorian)
+        func d(_ y: Int, _ m: Int, _ day: Int) -> Date { cal.date(from: DateComponents(year: y, month: m, day: day, hour: 12))! }
+        let today = d(2026, 11, 4)
+        XCTAssertNotNil(AuthValidation.birthDate(nil, today: today))
+        XCTAssertEqual(AuthValidation.birthDate(d(2014, 11, 5), today: today), "The Bridge is for people 12 and over.")
+        XCTAssertNil(AuthValidation.birthDate(d(2014, 11, 4), today: today))
+        XCTAssertNotNil(AuthValidation.birthDate(d(2027, 1, 1), today: today))
+    }
+
     func testAuthValidationMatchesPrototypeRules() {
         XCTAssertNotNil(AuthValidation.name(" S "))
         XCTAssertNil(AuthValidation.name("Sharon"))

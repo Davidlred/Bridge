@@ -30,6 +30,30 @@ struct SplashView: View {
     }
 }
 
+/// Date of birth with the system date picker; "Not set" until picked. The Bridge is for 12 and over.
+struct BirthDateField: View {
+    @Binding var date: Date?
+    let error: String?
+    private var range: ClosedRange<Date> { Calendar.current.date(byAdding: .year, value: -100, to: .now)!...Date.now }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("DATE OF BIRTH").bridgeLabel(11)
+            HStack {
+                DatePicker("Date of birth", selection: Binding(get: { date ?? Calendar.current.date(byAdding: .year, value: -18, to: .now)! }, set: { date = $0 }),
+                           in: range, displayedComponents: .date)
+                    .labelsHidden().tint(Theme.ink)
+                if date == nil { Text("Not set").font(BFont.body(14)).foregroundStyle(Theme.mut2) }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).frame(minHeight: 52)
+            .background(Theme.s1, in: RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(error != nil ? Theme.bad : Theme.line, lineWidth: 1))
+            Text(error ?? String(localized: "The Bridge is for people 12 and over.")).font(BFont.body(12)).foregroundStyle(error != nil ? Theme.bad : Theme.mut)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct AuthFlow: View {
     enum Step: Hashable { case signUp, logIn }
     @Environment(AuthModel.self) private var auth
@@ -186,11 +210,15 @@ struct SignUpView: View {
         ScrollView {
             VStack(spacing: 22) {
                 AuthHeader(title: "Create your account", subtitle: "Takes about two minutes, including your plan.")
-                // iOS offers Sign in with Apple only; Google sign-in is on Android.
+                // First, for both ways of signing up: The Bridge is for 12 and over.
+                BirthDateField(date: $auth.birthDate, error: auth.birthError)
+                // iOS offers Sign in with Apple only; Google sign-in is on Android. Apple can't be stopped once started, so it
+                // waits until the date of birth is in.
                 SignInWithAppleButton(.continue, onRequest: auth.prepareApple, onCompletion: auth.finishApple)
                     .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
                     .frame(height: 52).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
-                    .disabled(auth.busy)
+                    .disabled(auth.busy || AuthValidation.birthDate(auth.birthDate) != nil)
+                    .opacity(AuthValidation.birthDate(auth.birthDate) == nil ? 1 : 0.4)
                 HStack(spacing: 12) {
                     Rectangle().fill(Theme.track).frame(height: 1)
                     Text("OR WITH EMAIL").bridgeLabel(11).fixedSize()

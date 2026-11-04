@@ -98,7 +98,11 @@ final class OnboardingModel {
 
     // MARK: Steps
     func toRoutine() { if goalReady { draft.step = .routine; Analytics.track(.onboardingStep, ["step": "routine"]) } }
-    func toPhoto() { if routineReady { draft.step = .photo; Analytics.track(.onboardingStep, ["step": "photo"]) } }
+    func toPhoto() {
+        guard routineReady else { return }
+        if session?.user?.minor == true { generate(); return }           // under 18: no AI images from a photo
+        draft.step = .photo; Analytics.track(.onboardingStep, ["step": "photo"])
+    }
     func back() {
         switch draft.step {
         case .routine: draft.step = .goal

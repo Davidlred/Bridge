@@ -100,7 +100,7 @@ struct CommunityScreen: View {
             playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
             nudge: nudge,
             openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } },
-            setListed: { a, on in Task { do { try await social.setListed(a, on) } catch { toaster.show(offlineOr(error), .warn) } } }
+            setListed: { a, on in Task { do { try await social.setListed(a, on) } catch APIError.server(_, "minor_unlisted", _, _) { toaster.show(String(localized: "Alliances with members under 18 stay private."), .warn) } catch { toaster.show(offlineOr(error), .warn) } } }
         ))
         .toolbar(.hidden, for: .navigationBar)
         .task {
@@ -191,6 +191,7 @@ struct CommunityScreen: View {
                 Analytics.track(.allianceCreated, ["mode": a.planMode])
                 toaster.show(model.shared ? String(localized: "Alliance created. Everyone who joins gets your goal, deadline and daily tasks.") : String(localized: "Alliance created. Invite up to 14 people."), .ok)
             } catch APIError.server(_, "name_not_allowed", _, _) { model.createError = String(localized: "Pick a different name.") }
+            catch APIError.server(_, "minor_unlisted", _, _) { model.createError = String(localized: "Alliances with members under 18 stay private.") }
             catch { model.createError = offlineOr(error) }
         }
     }
@@ -222,6 +223,7 @@ struct CommunityScreen: View {
                 case "alliance_full": String(localized: "This alliance is full.")
                 case "plan_ended": String(localized: "This shared plan has ended.")
                 case "goal_limit": String(localized: "You have 3 goals running. Archive one first, or upgrade for more goals.")
+                case "minor_listed": String(localized: "This alliance is open to anyone, so it's for members 18 and over. Ask a friend to invite you to theirs.")
                 default: String(localized: "Something went wrong. Try again.")
                 }
             } catch { model.joinError = offlineOr(error) }
