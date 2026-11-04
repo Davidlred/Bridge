@@ -13,6 +13,7 @@
     "migrate": "tsx --env-file=.env src/migrate.ts",
     "migrate:prod": "node dist/migrate.js",
     "check-ai": "tsx --env-file=.env src/checkAi.ts",
+    "bakeoff": "tsx --env-file=.env src/tools/imageBakeoff.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

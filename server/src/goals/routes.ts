@@ -15,7 +15,7 @@ const IMAGE_DAILY_LIMIT = 8;       // 2 images per goal, a few retries
 const REALITY_DAILY_LIMIT = 20;
 const STALE_MS = 5 * 60 * 1000;    // a "running" image older than this was lost (e.g. a deploy) and counts as failed
 
-type Kind = 'future' | 'reality';
+export type Kind = 'future' | 'reality';
 const KINDS: Kind[] = ['future', 'reality'];
 
 /** Counts one use of a daily AI allowance; throws 429 ai_quota when it is used up. */
@@ -50,7 +50,8 @@ export async function sceneFor(kind: Kind, goal: string, routine: string): Promi
   } catch { return null; }
 }
 
-function prompt(kind: Kind, goal: string, routine: string, withFace: boolean, scene: string | null = null): string {
+/** The image prompt, exported for the model bake-off (src/tools/imageBakeoff.ts). */
+export function imagePrompt(kind: Kind, goal: string, routine: string, withFace: boolean, scene: string | null = null): string {
   if (withFace) {
     const keep = 'Keep the person\'s face, identity, skin tone, hairstyle and any glasses exactly the same. Change everything else (background, clothing, pose and lighting) to fit the new scene.';
     if (scene) return `Transform this photo into a completely new scene. ${keep} New scene: ${scene} Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
@@ -78,7 +79,7 @@ async function download(url: string): Promise<Buffer> {
 async function generate(log: FastifyBaseLogger, userId: string, goalId: string, kind: Kind, goal: string, routine: string, withFace: boolean) {
   try {
     const scene = await sceneFor(kind, goal, routine);
-    const input: Record<string, unknown> = { prompt: prompt(kind, goal, routine, withFace, scene), aspect_ratio: '3:4', output_format: 'jpg' };
+    const input: Record<string, unknown> = { prompt: imagePrompt(kind, goal, routine, withFace, scene), aspect_ratio: '3:4', output_format: 'jpg' };
     let model = env.MODEL_IMAGE;
     if (withFace) {
       const photo = await storage.get(photoKey(userId));
