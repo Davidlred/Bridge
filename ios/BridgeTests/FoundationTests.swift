@@ -181,6 +181,8 @@ final class FoundationSnapshotTests: XCTestCase {
                      GoalChoice(id: UUID(uuidString: "018b0000-0000-7000-8000-0000000000a3")!, label: "Save £2k", statement: "Save £2,000 for a deposit by June.")]
         verify(ChooseGoalsView(goals: goals, initial: Set(goals.prefix(2).map(\.id)), max: 3, onSave: { _ in }, onUpgrade: {}).background(Theme.s1), named: "choose-goals")
     }
+    func testGoalDetails() { verify(GoalDetailsView(goal: goal).background(Theme.s1), named: "goal-details") }
+    func testDeleteGoal() { verify(DeleteGoalSheet(onDelete: {}, onCancel: {}).background(Theme.s1), named: "goal-delete") }
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }
     func testLinks() {
         verify(VStack(spacing: 8) {

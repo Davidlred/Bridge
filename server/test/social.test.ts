@@ -259,6 +259,21 @@ run('community, alliances and chat', () => {
       expect(p.tasks.every((t: { origin: string }) => t.origin === 'user')).toBe(true);
     });
 
+    it('deleting a goal leaves its alliances: the lead hands over, and an alliance with nobody left is archived', async () => {
+      const lead = await signUp('Lead'), m1 = await signUp('First');
+      const lg = await goalWithStreak(lead, 7);
+      const shared = (await call(lead, 'POST', '/v1/alliances', { name: 'Goal Gone', planMode: 'shared', goalId: lg.g })).json().alliance;
+      const solo = (await call(lead, 'POST', '/v1/alliances', { name: 'Just Me', planMode: 'own', goalId: lg.g })).json().alliance;
+      await call(m1, 'POST', '/v1/alliances/join', { code: shared.inviteCode });
+      const del = mut('goal', lg.g, 'delete');
+      expect((await push(lead, [del])).accepted).toEqual([del.id]);
+      expect((await pull(lead)).goals).toEqual([]);
+      expect((await call(m1, 'GET', `/v1/alliances/${shared.id}`)).json().alliance.role).toBe('owner');
+      const [s] = await sql`select archived_at, lead_goal_id from alliances where id = ${solo.id}`;
+      expect(s!.archived_at).not.toBeNull();
+      expect(s!.lead_goal_id).toBeNull();
+    });
+
     it('counts the collective streak only on days every active member did something', async () => {
       const a = await signUp('Ana'), b = await signUp('Bo');
       const ga = await goalWithStreak(a, 7);

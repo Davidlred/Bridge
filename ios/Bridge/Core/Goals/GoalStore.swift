@@ -189,6 +189,18 @@ final class GoalStore {
     /// Archived goals leave the daily plan; their images, journal and history are kept.
     func archive(_ id: UUID) { setStatus(id, "archived") }
 
+    /// Deletes the goal for good: its plan, tasks, ticks and images, here and on the server. Journal entries and coach
+    /// messages stay (no longer tied to a goal); the server takes the goal out of its alliances first.
+    func deleteGoal(_ id: UUID) {
+        guard let g = goalRow(id) else { return }
+        let taskIds = Set(g.tasks.map(\.id))
+        for c in (try? ctx.fetch(FetchDescriptor<CompletionEntity>())) ?? [] where taskIds.contains(c.taskId) { ctx.delete(c) }
+        for img in (try? ctx.fetch(FetchDescriptor<GoalImageEntity>(predicate: #Predicate { $0.goalId == id }))) ?? [] { ctx.delete(img) }
+        ctx.delete(g)                                                    // cascades to its tasks
+        enqueue("goal", id, "delete", [:])
+        commit()
+    }
+
     /// The user picks which goals stay active. Pauses are queued before resumes so the server's limit check passes.
     func chooseActive(_ keep: Set<UUID>) {
         let all = (try? ctx.fetch(FetchDescriptor<GoalEntity>(predicate: #Predicate { $0.status == "active" || $0.status == "paused" }))) ?? []

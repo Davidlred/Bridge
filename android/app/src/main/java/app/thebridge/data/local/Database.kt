@@ -228,6 +228,7 @@ interface GoalDao {
     @Query("SELECT * FROM goal_images") fun images(): Flow<List<GoalImageEntity>>
     @Query("SELECT * FROM goal_images WHERE goalId = :goalId") fun images(goalId: String): Flow<List<GoalImageEntity>>
     @Upsert suspend fun upsertImages(rows: List<GoalImageEntity>)
+    @Query("DELETE FROM goal_images WHERE goalId = :goalId") suspend fun deleteImages(goalId: String)
 }
 
 @Dao

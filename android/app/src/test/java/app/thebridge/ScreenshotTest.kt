@@ -48,6 +48,8 @@ import app.thebridge.feature.onboarding.RoutineStep
 import app.thebridge.feature.onboarding.Step
 import app.thebridge.feature.today.GoalCrossedContent
 import app.thebridge.feature.today.ChooseGoalsContent
+import app.thebridge.feature.today.GoalDetailsActions
+import app.thebridge.feature.today.GoalDetailsContent
 import app.thebridge.feature.today.GoalView
 import app.thebridge.feature.today.TodayActions
 import app.thebridge.feature.today.TodayScreen
@@ -194,6 +196,9 @@ class ScreenshotTest {
     @Test fun chooseGoals() = snap("choose-goals") {
         Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { ChooseGoalsContent(listOf(marathon.goal, spanish.goal, pausedGoal), setOf("g1", "g2"), 3, {}, {}) }
     }
+    private val noDetails = GoalDetailsActions({}, {}, {}, {}, {})
+    @Test fun goalDetails() = snap("goal-details") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { GoalDetailsContent(marathon, noDetails) } }
+    @Test fun goalDelete() = snap("goal-delete") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { GoalDetailsContent(marathon, noDetails, confirmDelete = true) } }
     @Test fun goalCrossed() =snap("goal-crossed") { GoalCrossedContent(overdue, {}, {}) }
     @Test fun realityCheck() =snap("reality") { TodayScreen(TodayUi(true, "Sharon", listOf(marathon), view = GoalView.Reality), TodayActions(), LocalTime.of(9, 41), day) }
 

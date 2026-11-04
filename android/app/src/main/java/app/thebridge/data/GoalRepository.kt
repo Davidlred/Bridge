@@ -207,6 +207,19 @@ class GoalRepository @Inject constructor(
     /** Archived goals leave the daily plan; their images, journal and history are kept. */
     suspend fun archiveGoal(id: String) = setStatus(id, "archived")
 
+    /**
+     * Deletes the goal for good: its plan, tasks, ticks and images, here and on the server. Journal entries and coach
+     * messages stay (no longer tied to a goal); the server takes the goal out of its alliances first.
+     */
+    suspend fun deleteGoal(id: String) {
+        db.goals().get(id) ?: return
+        write { enqueue ->
+            db.goals().delete(listOf(id))                     // cascades to its tasks and their ticks
+            db.goals().deleteImages(id)
+            enqueue("goal", id, "delete", JsonObject(emptyMap()))
+        }
+    }
+
     /** Goals paused because Plus ended (read-only, history kept). */
     fun pausedGoals(): Flow<List<GoalEntity>> = db.goals().paused()
 

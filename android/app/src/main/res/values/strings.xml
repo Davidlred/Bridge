@@ -358,6 +358,25 @@
     <string name="archive_body">Its tasks leave your daily plan. Images, journal entries and history are kept.</string>
     <string name="archive">Archive</string>
     <string name="toast_goal_updated">Goal updated.</string>
+    <string name="goal_details_a11y">Show goal details</string>
+    <string name="details_started">Started</string>
+    <string name="details_ends">Ends</string>
+    <string name="details_day">Day</string>
+    <string name="details_day_value">%1$d of %2$d</string>
+    <string name="details_progress">Progress</string>
+    <string name="details_streak">Streak</string>
+    <plurals name="details_streak_value">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="details_today">Today</string>
+    <string name="details_today_value">%1$d of %2$d done</string>
+    <string name="details_open">Open goal</string>
+    <string name="details_edit">Edit name and date</string>
+    <string name="delete_goal">Delete goal</string>
+    <string name="delete_goal_title">Delete this goal?</string>
+    <string name="delete_goal_body">Its plan, tasks, progress and images are removed for good, on all your devices. Journal entries stay. If it\'s part of an alliance, you leave it.</string>
+    <string name="toast_goal_deleted">Goal deleted.</string>
     <string name="toast_goal_archived">Goal archived. Its images and history are kept.</string>
     <string name="limit_title">Three goals at a time</string>
     <string name="limit_body">Each goal adds tasks to every day. Finish or archive one to make room for the next.</string>

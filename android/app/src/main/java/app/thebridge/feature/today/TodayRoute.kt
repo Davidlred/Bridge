@@ -58,7 +58,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },
         openJournal = onOpenJournal, onNote = vm::onRealityNote, useDate = { id, d -> vm.useSuggestedDate(id, d) }, recheck = vm::recheck,
-        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity, complete = vm::complete, archive = { sheet = "archive:$it" }, choosePaused = { sheet = "choose" }, planSteps = vm::planSteps,
+        retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity, complete = vm::complete, archive = { sheet = "archive:$it" }, choosePaused = { sheet = "choose" }, planSteps = vm::planSteps, goalDetails = { sheet = "details:${it.goal.id}" },
         openNotificationSettings = if (notificationsOn || ui.goals.isEmpty()) null else { {
             ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
         } },
@@ -85,7 +85,15 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         }
         s == "choose" -> ChooseGoalsSheet(ui.goals.map { it.goal } + ui.paused, ui.goals.map { it.goal.id }.toSet(), if (hasPlus) Int.MAX_VALUE else app.thebridge.data.GoalRepository.FREE_GOAL_LIMIT,
             onSave = { vm.chooseActive(it); sheet = null }, onUpgrade = if (hasPlus) null else { { sheet = "plus" } }, onDismiss = { sheet = null })
-        s.startsWith("archive:") -> ArchiveGoalSheet(onArchive = { vm.archive(s.removePrefix("archive:")); sheet = null }, onDismiss = { sheet = null })
+        s.startsWith("details:") -> {
+            val g = ui.goals.find { it.goal.id == s.removePrefix("details:") }
+            if (g == null) sheet = null
+            else GoalDetailsSheet(g, GoalDetailsActions(
+                open = { sheet = null; vm.openGoal(g.goal.id) }, edit = { sheet = "goal:${g.goal.id}" }, complete = { sheet = null; vm.complete(g.goal.id) },
+                archive = { sheet = "archive:${g.goal.id}" }, delete = { sheet = null; vm.delete(g.goal.id) },
+            ), onDismiss = { sheet = null })
+        }
+        s.startsWith("archive:") ->ArchiveGoalSheet(onArchive = { vm.archive(s.removePrefix("archive:")); sheet = null }, onDismiss = { sheet = null })
         else -> sheet = null
     }
 

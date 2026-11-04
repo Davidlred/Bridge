@@ -7,7 +7,7 @@ import { deleteGoalImages } from '../goals/routes.js';
 import { Feasibility } from '../ai/planSchema.js';
 import { decryptText, encryptText, journalKey } from '../crypto.js';
 import { uuidv7 } from '../util.js';
-import { applySharedPlans, leadTasksChanged } from '../social/alliances.js';
+import { applySharedPlans, leadTasksChanged, leave } from '../social/alliances.js';
 import { checkUnlocks } from '../social/game.js';
 
 export const FREE_GOAL_LIMIT = 3;
@@ -76,7 +76,11 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
   const [row] = await tx`select user_id, status, start_date::text, deadline::text from goals where id = ${m.entityId} for update`;
   if (row && row.user_id !== userId) reject('forbidden');
   if (m.op === 'delete') {
-    if (row) { await tx`delete from goals where id = ${m.entityId}`; await log(tx, userId, 'goal', m.entityId, 'delete'); await deleteGoalImages(userId, m.entityId); }
+    if (!row) return;
+    // Leave its alliances first: a lead hands over to the next member, or the alliance is archived.
+    const joined = await tx`select alliance_id from alliance_members where user_id = ${userId} and goal_id = ${m.entityId} and status <> 'left'`;
+    for (const j of joined) await leave(tx, j.alliance_id, userId);
+    await tx`delete from goals where id = ${m.entityId}`; await log(tx, userId, 'goal', m.entityId, 'delete'); await deleteGoalImages(userId, m.entityId);
     return;
   }
   if (m.op !== 'upsert') reject('invalid');

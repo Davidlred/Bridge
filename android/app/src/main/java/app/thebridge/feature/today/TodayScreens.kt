@@ -16,6 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -114,7 +115,7 @@ data class TodayActions(
     val openJournal: (String) -> Unit = {}, val onNote: (String, String) -> Unit = { _, _ -> }, val useDate: (String, LocalDate) -> Unit = { _, _ -> },
     val recheck: (String) -> Unit = {}, val retryImages: (GoalState) -> Unit = {}, val openNotificationSettings: (() -> Unit)? = null,
     val openCommunity: (String) -> Unit = {}, val complete: (String) -> Unit = {}, val archive: (String) -> Unit = {},
-    val choosePaused: () -> Unit = {}, val planSteps: (GoalState) -> Unit = {},
+    val choosePaused: () -> Unit = {}, val planSteps: (GoalState) -> Unit = {}, val goalDetails: (GoalState) -> Unit = {},
 )
 
 @Composable
@@ -192,18 +193,21 @@ private fun Overview(ui: TodayUi, actions: TodayActions) {
             Text(stringResource(R.string.your_goals), style = BType.display(19), color = c.ink, modifier = Modifier.semantics { heading() })
             Text(stringResource(R.string.your_goals_sub, ui.goals.size), style = BType.body(13), color = c.mut)
         }
-        ui.goals.forEach { GoalCard(it) { actions.openGoal(it.goal.id) } }
+        ui.goals.forEach { GoalCard(it, onDetails = { actions.goalDetails(it) }) { actions.openGoal(it.goal.id) } }
         AddGoalTile(actions.addGoal)
     }
 }
 
-/** One card per goal: radius 24, padding 18–20, colour rotates gc1/gc2/gc3. */
+/** One card per goal: radius 24, padding 18–20, colour rotates gc1/gc2/gc3. Long-press opens its details and actions. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun GoalCard(g: GoalState, onOpen: () -> Unit) {
+fun GoalCard(g: GoalState, onDetails: () -> Unit = {}, onOpen: () -> Unit) {
     val c = LocalBridgeColors.current
+    val view = LocalView.current
     val p = g.progress
     val bg = c.goalCards[g.goal.colorIndex.mod(3)]
-    Column(Modifier.fillMaxWidth().heightIn(min = 188.dp).clip(RoundedCornerShape(24.dp)).background(bg).clickable(role = Role.Button, onClick = onOpen).padding(18.dp),
+    Column(Modifier.fillMaxWidth().heightIn(min = 188.dp).clip(RoundedCornerShape(24.dp)).background(bg)
+        .combinedClickable(role = Role.Button, onLongClickLabel = stringResource(R.string.goal_details_a11y), onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); onDetails() }, onClick = onOpen).padding(18.dp),
         verticalArrangement = Arrangement.SpaceBetween) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(g.goal.label, style = BType.body(14, FontWeight.Medium), color = c.goalInk, modifier = Modifier.weight(1f))
@@ -739,6 +743,66 @@ fun ArchiveGoalSheet(onArchive: () -> Unit, onDismiss: () -> Unit) {
             Text(stringResource(R.string.archive_body), style = BType.body(15, lineHeight = 1.5f), color = c.ink2)
             PrimaryButton(stringResource(R.string.archive), onArchive, container = c.bad, content = c.ink)
             SecondaryButton(stringResource(R.string.cancel), onDismiss)
+        }
+    }
+}
+
+class GoalDetailsActions(val open: () -> Unit, val edit: () -> Unit, val complete: () -> Unit, val archive: () -> Unit, val delete: () -> Unit)
+
+/** Long-press on a goal card: what the goal is, where it stands, and everything you can do with it, including delete. */
+@Composable
+fun GoalDetailsSheet(g: GoalState, actions: GoalDetailsActions, onDismiss: () -> Unit) {
+    BridgeSheet(onDismiss) { GoalDetailsContent(g, actions) }
+}
+
+@Composable
+fun GoalDetailsContent(g: GoalState, actions: GoalDetailsActions, confirmDelete: Boolean = false) {
+    val c = LocalBridgeColors.current
+    val p = g.progress
+    var confirm by rememberSaveable { mutableStateOf(confirmDelete) }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SheetTitle(g.goal.label)
+            Text(g.goal.statement, style = BType.body(14, lineHeight = 1.45f), color = c.ink2)
+        }
+        Column(Modifier.fillMaxWidth().border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 4.dp)) {
+            val facts = listOf(
+                stringResource(R.string.details_started) to shortDate(LocalDate.parse(g.goal.startDate)),
+                stringResource(R.string.details_ends) to shortDate(LocalDate.parse(g.goal.deadline)),
+                stringResource(R.string.details_day) to stringResource(R.string.details_day_value, p.day.coerceAtMost(p.total), p.total),
+                stringResource(R.string.details_progress) to "%.1f%%".format(p.fraction * 100),
+                stringResource(R.string.details_streak) to pluralStringResource(R.plurals.details_streak_value, p.streak, p.streak),
+                stringResource(R.string.details_today) to if (p.tasksToday == 0) stringResource(R.string.goal_card_none) else stringResource(R.string.details_today_value, p.doneToday, p.tasksToday),
+            )
+            facts.forEachIndexed { i, (k, v) ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+                    Text(k, style = BType.body(14), color = c.mut, modifier = Modifier.weight(1f))
+                    Text(v, style = BType.body(14, FontWeight.Medium), color = c.ink)
+                }
+                if (i < facts.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+            }
+        }
+        if (confirm) Column(Modifier.fillMaxWidth().background(c.badTint, RoundedCornerShape(16.dp)).border(1.dp, c.bad, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.delete_goal_title), style = BType.display(16), color = c.ink, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.delete_goal_body), style = BType.body(13, lineHeight = 1.45f), color = c.ink2)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton(stringResource(R.string.cancel), { confirm = false }, Modifier.weight(1f))
+                PrimaryButton(stringResource(R.string.delete), actions.delete, Modifier.weight(1f), container = c.bad, content = c.ink)
+            }
+        } else Column(Modifier.fillMaxWidth().border(1.dp, c.line, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))) {
+            val rows = listOf(
+                Triple(stringResource(R.string.details_open), c.ink, actions.open),
+                Triple(stringResource(R.string.details_edit), c.ink, actions.edit),
+                Triple(stringResource(R.string.mark_complete), c.ink, actions.complete),
+                Triple(stringResource(R.string.archive_goal), c.ink, actions.archive),
+                Triple(stringResource(R.string.delete_goal), c.bad, { confirm = true }),
+            )
+            rows.forEachIndexed { i, (label, color, onClick) ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, style = BType.body(15, FontWeight.Medium), color = color)
+                }
+                if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+            }
         }
     }
 }

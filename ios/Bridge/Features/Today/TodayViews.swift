@@ -103,8 +103,8 @@ final class TodayModel {
 }
 
 enum TodaySheet: Identifiable, Equatable {
-    case task(UUID), add(UUID), goal(UUID), archive(UUID), choose, limit, plus
-    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .choose: "c"; case .limit: "l"; case .plus: "p" } }
+    case task(UUID), add(UUID), goal(UUID), archive(UUID), delete(UUID), choose, limit, plus
+    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .delete(let i): "d\(i)"; case .choose: "c"; case .limit: "l"; case .plus: "p" } }
 }
 
 struct TodayView: View {
@@ -170,6 +170,12 @@ struct TodayView: View {
     private func archive(_ id: UUID) {
         store.archive(id); sheet = nil; if model.openGoalId == id { model.open(nil) }
         toaster.show(String(localized: "Goal archived. Its images and history are kept."))
+    }
+
+    private func delete(_ id: UUID) {
+        if model.openGoalId == id { model.open(nil) }
+        store.deleteGoal(id); sheet = nil
+        toaster.show(String(localized: "Goal deleted."))
     }
 
     /// Plus lifts the three-goal limit (the server enforces it too).
@@ -239,7 +245,19 @@ struct TodayView: View {
                 Spacer()
                 Text("\(goals.count) of 3").font(BFont.body(13)).foregroundStyle(Theme.mut)
             }
-            ForEach(goals) { g in GoalCard(goal: g) { model.open(g.id) } }
+            ForEach(goals) { g in
+                GoalCard(goal: g) { model.open(g.id) }
+                    .contextMenu {
+                        Button { model.open(g.id) } label: { Label("Open goal", systemImage: "arrow.right") }
+                        Button { sheet = .goal(g.id) } label: { Label("Edit name and date", systemImage: "pencil") }
+                        Button { complete(g) } label: { Label("Mark goal complete", systemImage: "checkmark.circle") }
+                        Button { sheet = .archive(g.id) } label: { Label("Archive goal", systemImage: "archivebox") }
+                        Divider()
+                        Button(role: .destructive) { sheet = .delete(g.id) } label: { Label("Delete goal", systemImage: "trash") }
+                    } preview: {
+                        GoalDetailsView(goal: g).frame(width: 340).background(Theme.s1)
+                    }
+            }
             addGoalTile
         }
         .padding(.top, 20)
@@ -436,6 +454,8 @@ struct TodayView: View {
             }, onUpgrade: plus ? nil : { sheet = .plus })
         case .archive(let id):
             ArchiveGoalSheet(onArchive: { archive(id) }, onCancel: { sheet = nil })
+        case .delete(let id):
+            DeleteGoalSheet(onDelete: { delete(id) }, onCancel: { sheet = nil })
         }
     }
 }
@@ -889,6 +909,59 @@ struct ArchiveGoalSheet: View {
             Text("Archive this goal?").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             Text("Its tasks leave your daily plan. Images, journal entries and history are kept.").font(BFont.body(15)).foregroundStyle(Theme.ink2)
             Button("Archive", action: onArchive).font(BFont.body(15, .semibold)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, minHeight: 56).background(Theme.bad, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            Button("Cancel", action: onCancel).buttonStyle(SecondaryButtonStyle())
+            Spacer()
+        }
+        .padding(.horizontal, 20).padding(.top, 28)
+        .presentationDetents([.medium])
+    }
+}
+
+/// Long-press preview of a goal card: what the goal is and where it stands. The actions sit in the menu below it.
+struct GoalDetailsView: View {
+    let goal: GoalState
+    var body: some View {
+        let p = goal.progress
+        let date = { (s: String) in Day.parse(s)!.formatted(date: .abbreviated, time: .omitted) }
+        let facts: [(LocalizedStringKey, String)] = [
+            ("Started", date(goal.startDate)),
+            ("Ends", date(goal.deadline)),
+            ("Day", String(localized: "\(min(p.day, p.total)) of \(p.total)")),
+            ("Progress", p.fraction.formatted(.percent.precision(.fractionLength(1)))),
+            ("Streak", String(localized: "\(p.streak) days")),
+            ("Today", p.tasksToday == 0 ? String(localized: "No tasks") : String(localized: "\(p.doneToday) of \(p.tasksToday) done")),
+        ]
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(goal.label).font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Text(goal.statement).font(BFont.body(14)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(facts.enumerated()), id: \.offset) { i, f in
+                    HStack {
+                        Text(f.0).font(BFont.body(14)).foregroundStyle(Theme.mut)
+                        Spacer()
+                        Text(f.1).font(BFont.body(14, .medium)).foregroundStyle(Theme.ink)
+                    }
+                    .frame(minHeight: 44).accessibilityElement(children: .combine)
+                    if i < facts.count - 1 { Rectangle().fill(Theme.line).frame(height: 1) }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 4)
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
+        }
+        .padding(20)
+    }
+}
+
+struct DeleteGoalSheet: View {
+    var onDelete: () -> Void
+    var onCancel: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Delete this goal?").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text("Its plan, tasks, progress and images are removed for good, on all your devices. Journal entries stay. If it's part of an alliance, you leave it.").font(BFont.body(15)).foregroundStyle(Theme.ink2)
+            Button("Delete", action: onDelete).font(BFont.body(15, .semibold)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, minHeight: 56).background(Theme.bad, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             Button("Cancel", action: onCancel).buttonStyle(SecondaryButtonStyle())
             Spacer()
         }
