@@ -30,27 +30,42 @@ struct SplashView: View {
     }
 }
 
-/// Date of birth with the system date picker; "Not set" until picked. The Bridge is for 12 and over.
+/// Date of birth: "Add your date of birth" until one is picked on the wheel and confirmed with Done, so nobody keeps a
+/// sample date by accident. The Bridge is for 12 and over.
 struct BirthDateField: View {
     @Binding var date: Date?
     let error: String?
+    @State private var picking = false
+    @State private var draft = Calendar.current.date(byAdding: .year, value: -18, to: .now)!
     private var range: ClosedRange<Date> { Calendar.current.date(byAdding: .year, value: -100, to: .now)!...Date.now }
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("DATE OF BIRTH").bridgeLabel(11)
-            HStack {
-                DatePicker("Date of birth", selection: Binding(get: { date ?? Calendar.current.date(byAdding: .year, value: -18, to: .now)! }, set: { date = $0 }),
-                           in: range, displayedComponents: .date)
-                    .labelsHidden().tint(Theme.ink)
-                if date == nil { Text("Not set").font(BFont.body(14)).foregroundStyle(Theme.mut2) }
-                Spacer(minLength: 0)
+            Button { draft = date ?? draft; picking = true } label: {
+                HStack {
+                    Text(date.map { $0.formatted(date: .long, time: .omitted) } ?? String(localized: "Add your date of birth"))
+                        .font(BFont.body(16)).foregroundStyle(date == nil ? Theme.mut2 : Theme.ink)
+                    Spacer(minLength: 0)
+                    Image(systemName: "calendar").foregroundStyle(Theme.mut).accessibilityHidden(true)
+                }
+                .padding(.horizontal, 16).frame(minHeight: 52)
+                .background(Theme.s1, in: RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(error != nil ? Theme.bad : Theme.line, lineWidth: 1))
             }
-            .padding(.horizontal, 12).frame(minHeight: 52)
-            .background(Theme.s1, in: RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.input, style: .continuous).stroke(error != nil ? Theme.bad : Theme.line, lineWidth: 1))
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Date of birth")).accessibilityValue(Text(date.map { $0.formatted(date: .long, time: .omitted) } ?? String(localized: "Not set")))
             Text(error ?? String(localized: "The Bridge is for people 12 and over.")).font(BFont.body(12)).foregroundStyle(error != nil ? Theme.bad : Theme.mut)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .sheet(isPresented: $picking) {
+            VStack(spacing: 16) {
+                Text("Date of birth").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                DatePicker("Date of birth", selection: $draft, in: range, displayedComponents: .date).datePickerStyle(.wheel).labelsHidden()
+                Button("Done") { date = draft; picking = false }.buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(24)
+            .presentationDetents([.medium]).presentationDragIndicator(.visible).presentationBackground(Theme.bg)
+        }
     }
 }
 
@@ -226,7 +241,7 @@ struct SignUpView: View {
                 }
                 VStack(spacing: 14) {
                     BridgeField(label: "FIRST NAME", placeholder: "Sharon", text: $auth.name, error: auth.nameError, contentType: .givenName, capitalization: .words)
-                    BridgeField(label: "EMAIL", placeholder: "you@example.com", text: $auth.email, error: auth.emailError, contentType: .emailAddress, keyboard: .emailAddress)
+                    BridgeField(label: "EMAIL", placeholder: "you\u{200B}@example.com", text: $auth.email, error: auth.emailError, contentType: .emailAddress, keyboard: .emailAddress)
                     BridgeField(label: "PASSWORD", placeholder: "At least 8 characters", text: $auth.password, error: auth.passwordError, secure: true, contentType: .newPassword)
                 }
                 FormError(text: auth.formError)
@@ -251,7 +266,7 @@ struct LogInForm: View {
         VStack(spacing: 22) {
             AuthHeader(title: "Welcome back", subtitle: "Your bridge is where you left it.")
             VStack(alignment: .trailing, spacing: 14) {
-                BridgeField(label: "EMAIL", placeholder: "you@example.com", text: $auth.email, error: auth.emailError, contentType: .username, keyboard: .emailAddress)
+                BridgeField(label: "EMAIL", placeholder: "you\u{200B}@example.com", text: $auth.email, error: auth.emailError, contentType: .username, keyboard: .emailAddress)
                 BridgeField(label: "PASSWORD", placeholder: "Your password", text: $auth.password, error: auth.passwordError, secure: true, contentType: .password)
                 Button("Forgot password?", action: auth.forgot).font(BFont.body(14, .medium)).foregroundStyle(Theme.ink).frame(minHeight: 44)
             }
