@@ -46,3 +46,12 @@ describe('resource links', () => {
     expect(calls).toBe(1);
   });
 });
+
+describe('image model inputs', async () => {
+  const { imageInput } = await import('../src/ai/imageModels.js');
+  it('hands the photo to each model under its own name', () => {
+    expect(imageInput('google/nano-banana', 'p', 'data:x')).toEqual({ prompt: 'p', aspect_ratio: '3:4', output_format: 'jpg', image_input: ['data:x'] });
+    expect(imageInput('black-forest-labs/flux-kontext-pro', 'p', 'data:x')).toEqual({ prompt: 'p', aspect_ratio: '3:4', output_format: 'jpg', input_image: 'data:x' });
+    expect(imageInput('google/imagen-4', 'p', null)).toEqual({ prompt: 'p', aspect_ratio: '3:4' });
+  });
+});

@@ -19,7 +19,7 @@ const Env = z.object({
   MODEL_FAST: z.string().min(3),
   MODEL_IMAGE: z.string().min(3),
   // Image model that edits a reference photo (keeps the person's face) for Future Self / If nothing changes
-  MODEL_IMAGE_EDIT: z.string().min(3).default('black-forest-labs/flux-kontext-pro'),
+  MODEL_IMAGE_EDIT: z.string().min(3).default('google/nano-banana'),
   // Object storage (S3 API, e.g. Tigris on Fly). Without S3_BUCKET files go to STORAGE_DIR on local disk (development only).
   S3_BUCKET: z.string().optional(),
   S3_ENDPOINT: z.string().url().optional(),

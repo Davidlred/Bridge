@@ -2,6 +2,8 @@
  * `npm run check-ai`: checks the Replicate token and that every configured model accepts the inputs this server sends.
  * Reads model schemas only (free). `npm run check-ai -- --live` also runs one tiny prompt on MODEL_FAST (costs a fraction of a cent).
  */
+import { photoField } from './ai/imageModels.js';
+
 const BASE = 'https://api.replicate.com/v1';
 const token = process.env.REPLICATE_API_TOKEN ?? '';
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -13,7 +15,7 @@ const ROLES: [env: string, inputs: string[], maxTokens: number[]][] = [
   ['MODEL_COACH', ['prompt', 'system_prompt', 'max_tokens'], [1024]],
   ['MODEL_FAST', ['prompt', 'system_prompt', 'max_tokens'], [3]],
   ['MODEL_IMAGE', ['prompt', 'aspect_ratio'], []],
-  ['MODEL_IMAGE_EDIT', ['prompt', 'input_image'], []],
+  ['MODEL_IMAGE_EDIT', ['prompt', 'PHOTO'], []],        // PHOTO: the model's own photo input (src/ai/imageModels.ts)
 ];
 
 type Prop = { minimum?: number; maximum?: number; enum?: string[]; allOf?: { $ref: string }[] };
@@ -32,7 +34,7 @@ async function main() {
     if (!r.ok) { console.log(`✗ ${name}=${model}: not found on Replicate (${r.status})`); bad++; continue; }
     const m = await r.json() as { latest_version?: { openapi_schema?: { components?: { schemas?: { Input?: { properties?: Record<string, Prop> } } } } } };
     const props = m.latest_version?.openapi_schema?.components?.schemas?.Input?.properties ?? {};
-    const missing = inputs.filter(i => !(i in props));
+    const missing = inputs.map(i => (i === 'PHOTO' ? photoField(model) : i)).filter(i => !(i in props));
     // Some models set a floor (Opus 4.7 on Replicate: 1024) or a ceiling on max_tokens.
     const lo = props.max_tokens?.minimum ?? 0, hi = props.max_tokens?.maximum ?? Infinity;
     const outOfRange = maxTokens.filter(t => t < lo || t > hi);

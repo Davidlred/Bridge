@@ -9,6 +9,7 @@ import { AIUnavailable, runImage, runText } from '../ai/replicate.js';
 import { assessReality } from '../ai/goalPlanner.js';
 import { RealityRequest } from '../ai/planSchema.js';
 import { isMinor } from '../age.js';
+import { imageInput } from '../ai/imageModels.js';
 
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -31,7 +32,8 @@ export async function takeQuota(userId: string, kind: string, limit: number, n =
   }
 }
 
-// Prompts never ask the model to mock, exaggerate or sexualise the person. "If nothing changes" is honest, not cruel.
+// Prompts never ask the model to mock, exaggerate or sexualise the person. "If nothing changes" shows a stagnant year:
+// sobering and honest, so the user feels the cost of carrying on as they are, but never cruel.
 const STYLE = 'Photorealistic candid photograph, natural light, warm muted palette, shallow depth of field. No text, no logos, no watermarks.';
 /**
  * The image models need a concrete scene to change a photo (given only "a scene after achieving the goal", the photo
@@ -40,7 +42,7 @@ const STYLE = 'Photorealistic candid photograph, natural light, warm muted palet
  */
 const SCENE = `You write the scene for one photorealistic image in a goal app. Reply with one or two plain sentences describing only what the camera sees: the place, what the person is doing, their clothes, and the objects that make it obvious.
 "future": the person at the moment they have achieved the goal, doing the thing itself, with clear visible proof of the achievement (a finish line, a certificate, a working app on screen, a stage).
-"reality": an ordinary moment a year from now if their routine stays the same and the goal has not happened. Honest and neutral, slightly tired, not bleak, never mocking.
+"reality": the same person a year from now if they carry on exactly as they are: the goal never started, the routine unchanged, a day that repeats. Make the stagnation visible and specific to this goal: what they meant to use for it sits untouched (the running shoes still boxed by the door, the course book unopened under dust, the guitar in its case in the corner), and they are stuck in the habit their routine describes (scrolling on the sofa late at night, the same desk, the same takeaway). Sobering and honest, a little weary and flat; never mocking, never cruel, no exaggerated body changes. Use only what the goal and routine say: never invent other troubles (money worries, bills, mess, illness, loneliness).
 Never include nudity, sexual activity, drugs, self-harm, violence or anything private; if the routine mentions such things, leave them out. Do not describe the face or body shape. No quotes, no lists.`;
 
 export async function sceneFor(kind: Kind, goal: string, routine: string): Promise<string | null> {
@@ -58,13 +60,13 @@ export function imagePrompt(kind: Kind, goal: string, routine: string, withFace:
     if (scene) return `Transform this photo into a completely new scene. ${keep} New scene: ${scene} Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
     return kind === 'future'
       ? `Transform this photo into a completely new scene. ${keep} New scene: this person a few months from now, having achieved this goal: "${goal}", in the place where that happens, actively doing it, with clear visual proof of it in the frame, focused and quietly proud. ${STYLE}`
-      : `Transform this photo into a completely new scene. ${keep} New scene: this person in an ordinary moment a year from now, the goal "${goal}" still not reached; honest and neutral, slightly tired, not bleak. Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
+      : `Transform this photo into a completely new scene. ${keep} New scene: this person a year from now, stuck in the same routine with the goal "${goal}" never started; what they meant to use for it lies untouched nearby, the day looks like every other day. Sobering and honest, a little weary. Respectful: no mockery, no exaggerated body changes. ${STYLE}`;
   }
   if (scene) return `${scene} Seen from behind or at a distance so the face is not visible. ${STYLE}`;
   // No photo (or no consent): a scene that suggests the person without showing a face.
   return kind === 'future'
     ? `The moment this goal is achieved: "${goal}". Show the person doing or having just done the thing itself, with clear visual proof of the achievement in the scene (for example crossing the finish line, holding the certificate, on stage). Seen from behind or at a distance so their face is not visible. ${STYLE}`
-    : `An ordinary weekday a year from now for someone whose routine has not changed: "${routine.slice(0, 600)}". The goal "${goal}" has not happened. Show the person in that routine, seen from behind or at a distance so their face is not visible. Honest and neutral, not bleak. ${STYLE}`;
+    : `A year from now for someone who carried on exactly as they were: "${routine.slice(0, 600)}". The goal "${goal}" never started; what they meant to use for it lies untouched nearby, and the day looks like every other day. Show the person stuck in that routine, seen from behind or at a distance so their face is not visible. Sobering and honest, not mocking. ${STYLE}`;
 }
 
 async function download(url: string): Promise<Buffer> {
@@ -80,14 +82,14 @@ async function download(url: string): Promise<Buffer> {
 async function generate(log: FastifyBaseLogger, userId: string, goalId: string, kind: Kind, goal: string, routine: string, withFace: boolean) {
   try {
     const scene = await sceneFor(kind, goal, routine);
-    const input: Record<string, unknown> = { prompt: imagePrompt(kind, goal, routine, withFace, scene), aspect_ratio: '3:4', output_format: 'jpg' };
-    let model = env.MODEL_IMAGE;
+    let photo: string | null = null;
     if (withFace) {
-      const photo = await storage.get(photoKey(userId));
-      if (!photo) throw new AIUnavailable('photo_missing');
-      input.input_image = `data:image/jpeg;base64,${photo.toString('base64')}`;
-      model = env.MODEL_IMAGE_EDIT;
+      const bytes = await storage.get(photoKey(userId));
+      if (!bytes) throw new AIUnavailable('photo_missing');
+      photo = `data:image/jpeg;base64,${bytes.toString('base64')}`;
     }
+    const model = withFace ? env.MODEL_IMAGE_EDIT : env.MODEL_IMAGE;
+    const input = imageInput(model, imagePrompt(kind, goal, routine, withFace, scene), photo);
     const bytes = await download(await runImage(model, input));
     await storage.put(goalImageKey(userId, goalId, kind), bytes, 'image/jpeg');
     await sql`update goal_images set status = 'done', storage_key = ${goalImageKey(userId, goalId, kind)}, error = null, updated_at = now()

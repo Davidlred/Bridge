@@ -105,9 +105,10 @@ run('goals core', () => {
     const a = await images(withPhoto.accessToken, g1), b = await images(without.accessToken, g2);
     expect(a.map(x => [x.kind, x.status, x.withFace])).toEqual([['future', 'done', true], ['reality', 'done', true]]);
     expect(b.map(x => [x.kind, x.status, x.withFace])).toEqual([['future', 'done', false], ['reality', 'done', false]]);
-    const faceCalls = calls.filter(c => c.input.input_image), plain = calls.filter(c => !c.input.input_image);
+    // The photo goes to the photo model under its own input name (google/nano-banana: a list of images).
+    const faceCalls = calls.filter(c => c.input.image_input), plain = calls.filter(c => !c.input.image_input);
     expect(faceCalls).toHaveLength(2);
-    expect(faceCalls.every(c => c.model === 'black-forest-labs/flux-kontext-pro')).toBe(true);
+    expect(faceCalls.every(c => c.model === 'google/nano-banana' && String((c.input.image_input as string[])[0]).startsWith('data:image/jpeg'))).toBe(true);
     expect(plain.every(c => String(c.input.prompt).includes('face is not visible'))).toBe(true);
     // Images use the written scene; the user's routine never reaches the image model
     expect(calls.every(c => String(c.input.prompt).includes('finish line') && !String(c.input.prompt).includes('Up at 7:30'))).toBe(true);

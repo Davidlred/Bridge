@@ -3,7 +3,7 @@
  * to compare side by side. Uses the app's real prompts (goals/routes.ts) and, for the "with your photo" row, the photo of
  * the most recent account that made face images. Nothing is uploaded anywhere except to Replicate to generate.
  *
- *   npm run bakeoff -- [output folder] [--photo face.jpg] [--goal "text"] [--routine "text"]
+ *   npm run bakeoff -- [output folder] [--photo face.jpg] [--models a,b] [--goal "text"] [--routine "text"]
  *
  * Costs real Replicate credit (about $1 for the default set). Models run one after another (small accounts are throttled).
  */
@@ -59,8 +59,10 @@ async function main() {
   type Cell = { file?: string; error?: string; seconds?: number };
   const results: { m: Model; cells: Record<Kind, Cell> }[] = [];
   let spent = 0;
+  const only = arg('--models')?.split(',');
   for (const m of MODELS) {
     if (m.face && !photo) continue;
+    if (only && !only.includes(m.id)) continue;
     const cells = {} as Record<Kind, Cell>;
     for (const kind of ['future', 'reality'] as Kind[]) {
       const p = imagePrompt(kind, goal, routine, m.face, scenes[kind]);
