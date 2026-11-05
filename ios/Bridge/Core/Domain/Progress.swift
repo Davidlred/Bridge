@@ -176,4 +176,14 @@ enum TaskTime {
         }
         return nil
     }
+
+    /// The task was added today after its time, like a plan made at 4 pm with a 10:00 AM task. Today it is "any time";
+    /// the time applies from tomorrow. Times run on the local day (03:00 to 03:00), so 1:00 AM counts as late tonight.
+    static func passedBeforeAdded(id: UUID, timeOfDay: String?, now: Date = .now, calendar: Calendar = .current) -> Bool {
+        guard let t = parse(timeOfDay), let added = UUIDv7.date(of: id) else { return false }
+        guard LocalDay.today(now: added, calendar: calendar) == LocalDay.today(now: now, calendar: calendar) else { return false }
+        let c = calendar.dateComponents([.hour, .minute], from: added)
+        let onDay = { (h: Int, m: Int) in ((h * 60 + m - 180) % 1440 + 1440) % 1440 }
+        return onDay(t.hour, t.minute) < onDay(c.hour!, c.minute!)
+    }
 }

@@ -566,7 +566,7 @@ struct TaskRow: View {
                             HStack(spacing: 8) {
                                 if !task.isStep, let p = Theme.Priority(rawValue: task.priority) { PriorityPill(priority: p) }
                                 if let c = task.carriedFrom, let d = Day.parse(c) { Text("From \(d.formatted(.dateTime.weekday(.abbreviated)))").font(BFont.body(12)).foregroundStyle(Theme.mut) }
-                                if let t = task.timeOfDay { Text(t).font(BFont.body(12)).foregroundStyle(Theme.mut) }
+                                if let t = task.timeOfDay { Text(TaskTime.passedBeforeAdded(id: task.id, timeOfDay: t) ? String(localized: "Any time today") : t).font(BFont.body(12)).foregroundStyle(Theme.mut) }
                                 if !task.links.isEmpty { Image(systemName: "link").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.mut).accessibilityLabel("Has links") }
                             }
                         }

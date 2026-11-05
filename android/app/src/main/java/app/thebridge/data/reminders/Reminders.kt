@@ -52,6 +52,19 @@ object TaskTime {
         }
         return null
     }
+
+    /**
+     * The task was added today after its time, like a plan made at 4 pm with a 10:00 AM task. Today it is "any time";
+     * the time applies from tomorrow. Times run on the local day (03:00 to 03:00), so 1:00 AM counts as late tonight.
+     */
+    fun passedBeforeAdded(taskId: String, timeOfDay: String?, now: LocalDateTime = LocalDateTime.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean {
+        val time = parse(timeOfDay) ?: return false
+        val ms = app.thebridge.util.UuidV7.timestampMs(taskId) ?: return false
+        val added = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(ms), zone)
+        if (LocalDay.today(added) != LocalDay.today(now)) return false
+        fun onDay(t: LocalTime) = (t.hour * 60 + t.minute - 180).mod(1440)
+        return onDay(time) < onDay(added.toLocalTime())
+    }
 }
 
 /**

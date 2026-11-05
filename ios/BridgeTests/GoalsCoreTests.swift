@@ -77,6 +77,18 @@ final class GoalsCoreTests: XCTestCase {
         XCTAssertNil(TaskTime.parse("25:00"))
         XCTAssertNil(TaskTime.parse(nil))
     }
+    /// Same cases as the Android test: a plan made at 4 pm shows its 10:00 AM task as "any time" today only.
+    func testTaskAddedAfterItsTime() {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        let fourPm = cal.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 16))!
+        let planned = UUIDv7.next(now: fourPm), soon = fourPm.addingTimeInterval(300)
+        XCTAssertTrue(TaskTime.passedBeforeAdded(id: planned, timeOfDay: "10:00 AM", now: soon, calendar: cal))
+        XCTAssertFalse(TaskTime.passedBeforeAdded(id: planned, timeOfDay: "6:00 PM", now: soon, calendar: cal))
+        XCTAssertFalse(TaskTime.passedBeforeAdded(id: planned, timeOfDay: "10:00 AM", now: fourPm.addingTimeInterval(86_400), calendar: cal))
+        XCTAssertFalse(TaskTime.passedBeforeAdded(id: planned, timeOfDay: "1:00 AM", now: soon, calendar: cal))
+        XCTAssertFalse(TaskTime.passedBeforeAdded(id: planned, timeOfDay: "After run", now: soon, calendar: cal))
+        XCTAssertFalse(TaskTime.passedBeforeAdded(id: UUID(uuidString: "018B0000-0000-4000-8000-0000000000A1")!, timeOfDay: "10:00 AM", now: soon, calendar: cal))
+    }
     /// Each goal has its own coach conversation (same cases as the Android CoachThreadsTest).
     func testCoachFocusFollowsANewGoal() {
         let older = UUID(uuidString: "0190A000-0000-7000-8000-000000000001")!, newer = UUID(uuidString: "0190B000-0000-7000-8000-000000000002")!

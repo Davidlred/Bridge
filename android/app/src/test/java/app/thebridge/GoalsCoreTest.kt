@@ -112,4 +112,17 @@ class GoalsCoreTest {
         assertNull(TaskTime.parse("25:00"))
         assertNull(TaskTime.parse(null))
     }
+
+    @Test fun `a task added after its time is any time today, then on time from tomorrow`() {
+        val zone = java.time.ZoneOffset.UTC
+        val at = { d: java.time.LocalDateTime -> app.thebridge.util.UuidV7.next(d.toInstant(zone).toEpochMilli()) }
+        val fourPm = java.time.LocalDateTime.of(2026, 11, 5, 16, 0)
+        val planned = at(fourPm)
+        assertEquals(true, TaskTime.passedBeforeAdded(planned, "10:00 AM", fourPm.plusMinutes(5), zone))
+        assertEquals(false, TaskTime.passedBeforeAdded(planned, "6:00 PM", fourPm.plusMinutes(5), zone))
+        assertEquals(false, TaskTime.passedBeforeAdded(planned, "10:00 AM", fourPm.plusDays(1), zone))   // tomorrow: the time applies
+        assertEquals(false, TaskTime.passedBeforeAdded(planned, "1:00 AM", fourPm.plusMinutes(5), zone))   // 1 AM is late tonight, still ahead
+        assertEquals(false, TaskTime.passedBeforeAdded(planned, "After run", fourPm.plusMinutes(5), zone))
+        assertEquals(false, TaskTime.passedBeforeAdded("t1", "10:00 AM", fourPm, zone))                    // not a UUIDv7
+    }
 }

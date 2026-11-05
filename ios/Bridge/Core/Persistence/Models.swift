@@ -233,6 +233,14 @@ enum LocalDay {
 
 /// UUIDv7 (48-bit unix-ms timestamp + random): sortable by creation time.
 enum UUIDv7 {
+    /// When a UUIDv7 was made, or nil for any other id.
+    static func date(of id: UUID) -> Date? {
+        let u = id.uuid
+        guard u.6 >> 4 == 7 else { return nil }
+        let ms = [u.0, u.1, u.2, u.3, u.4, u.5].reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        return Date(timeIntervalSince1970: Double(ms) / 1000)
+    }
+
     static func next(now: Date = .now) -> UUID {
         var b = [UInt8](repeating: 0, count: 16)
         _ = SecRandomCopyBytes(kSecRandomDefault, 16, &b)

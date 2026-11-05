@@ -461,7 +461,7 @@ fun TaskRow(t: PlanTask, actions: TodayActions) {
             if (meta) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!t.isStep) PriorityPill(t.task.priority)
                 t.carriedFrom?.let { Text(stringResource(R.string.step_carried, it.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())), style = BType.body(12), color = c.mut) }
-                t.task.timeOfDay?.let { Text(it, style = BType.body(12), color = c.mut) }
+                t.task.timeOfDay?.let { Text(if (app.thebridge.data.reminders.TaskTime.passedBeforeAdded(t.task.id, it)) stringResource(R.string.task_any_time_today) else it, style = BType.body(12), color = c.mut) }
                 if (t.links.isNotEmpty()) Icon(painterResource(R.drawable.ic_link), stringResource(R.string.task_has_links), tint = c.mut, modifier = Modifier.size(16.dp))
             }
         }

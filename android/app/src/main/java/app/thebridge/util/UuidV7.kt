@@ -16,4 +16,7 @@ object UuidV7 {
         lsb = (lsb and 0x3FFFFFFFFFFFFFFFL) or Long.MIN_VALUE     // variant 10
         return UUID(msb, lsb).toString()
     }
+
+    /** When a UUIDv7 was made (unix ms), or null for any other id. */
+    fun timestampMs(id: String): Long? = runCatching { UUID.fromString(id).takeIf { it.version() == 7 }?.mostSignificantBits?.ushr(16) }.getOrNull()
 }
