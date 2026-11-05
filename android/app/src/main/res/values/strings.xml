@@ -567,6 +567,7 @@
     <string name="ally_members">MEMBERS</string>
     <string name="ally_members_count">%1$d of %2$d</string>
     <string name="ally_member_away">%1$s, away</string>
+    <string name="ally_member_finished">%1$s, finished their goal</string>
     <string name="ally_feed">SHARED FEED</string>
     <string name="ally_feed_empty">Completions from members show up here.</string>
     <string name="ally_feed_joined">joined the alliance</string>

@@ -256,7 +256,7 @@ class ScreenshotTest {
         PostDto("p2", "u2", name = "Priya", kind = "day_complete", createdAt = now - 4 * hour, reactions = ReactionCounts(8, 11, 2), reacted = listOf("keepGoing")),
         PostDto("p3", "me", mine = true, name = "Sharon", kind = "milestone", value = 25, createdAt = now - 26 * hour, reactions = ReactionCounts(5, 2, 7)),
     )
-    private val members = listOf("Ms Okafor", "Jide", "Funmi", "Sharon", "Lola", "Bayo").mapIndexed { i, n -> MemberDto("u$i", n, if (i == 0) "owner" else "member", away = i == 4, me = n == "Sharon") }
+    private val members = listOf("Ms Okafor", "Jide", "Funmi", "Sharon", "Lola", "Bayo").mapIndexed { i, n -> MemberDto("u$i", n, if (i == 0) "owner" else "member", away = i == 4, me = n == "Sharon", finished = i == 2) }
     private val calc = AllianceDto("a1", "Calc Prep 12B", "shared", "CALC-2026", 15, "2026-09-28", "member", "g1", 9, members, 6,
         SharedPlanDto("Ms", "Score 75% or higher on the Grade 12 math final.", "2026-12-04", DoneCount(1, 3), DoneCount(9, 18)),
         listOf(AllianceFeedDto("Jide", "completed", "Work 10 past-paper questions", now - 3 * hour), AllianceFeedDto("Lola", "joined", null, now - 30 * hour)))

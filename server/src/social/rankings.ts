@@ -41,7 +41,8 @@ async function compute(allianceId: string): Promise<Score> {
   const today = await localToday(sql, a!.owner_id);
   const weekStart = monday(today);
   const members = await sql`select m.user_id, m.goal_id, greatest(m.start_date, ${weekStart}::date)::text as from_day, coalesce(u.home_timezone, 'UTC') as tz
-                            from alliance_members m join users u on u.id = m.user_id where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null`;
+                            from alliance_members m join users u on u.id = m.user_id join goals g on g.id = m.goal_id
+                            where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null and g.status <> 'completed'`;   // finished goals have nothing left to score
   const n = members.length || 1;
   let scheduled = 0, completed = 0, onTime = 0, continuity = 0;
   const activeDays = new Set<string>();

@@ -87,7 +87,7 @@ struct PostDTO: Codable, Equatable, Sendable, Identifiable {
     var reactions = ReactionCounts(); var reacted: [String] = []
 }
 struct CommunityDTO: Codable, Equatable, Sendable { let unlocked: Bool; var streak = 0; var widened = false; var posts: [PostDTO] = [] }
-struct MemberDTO: Codable, Equatable, Sendable { let userId: String; let name: String; let role: String; var away = false; var me = false }
+struct MemberDTO: Codable, Equatable, Sendable { let userId: String; let name: String; let role: String; var away = false; var me = false; var finished: Bool? = nil }
 struct DoneCount: Codable, Equatable, Sendable { var done = 0; var total = 0 }
 struct SharedPlanDTO: Codable, Equatable, Sendable { let lead: String; let goal: String; let deadline: String; var me = DoneCount(); var group = DoneCount(); var isLead = false }
 struct AllianceFeedDTO: Codable, Equatable, Sendable { var name: String?; let what: String; var title: String?; var at: Double = 0 }

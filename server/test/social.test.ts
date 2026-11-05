@@ -291,6 +291,14 @@ run('community, alliances and chat', () => {
       const v = (await call(a, 'GET', `/v1/alliances/${al.id}`)).json().alliance;
       expect(v.streak).toBe(2);
       expect(v.members.map((m: { name: string; away: boolean }) => [m.name, m.away])).toEqual([['Ana', false], ['Bo', false]]);
+      // Bo completes their goal: still a member, shown as finished, and no longer counted in the streak
+      await push(b, [mut('goal', gb.g, 'upsert', { status: 'completed' })]);
+      const after = (await call(a, 'GET', `/v1/alliances/${al.id}`)).json().alliance;
+      expect(after.memberCount).toBe(2);
+      expect(after.members.map((m: { name: string; away: boolean; finished: boolean }) => [m.name, m.away, m.finished])).toEqual([['Ana', false, false], ['Bo', false, true]]);
+      expect(after.streak).toBe(7);
+      // Bo can still read and post in the alliance chat
+      expect((await call(b, 'GET', `/v1/alliances/${al.id}`)).statusCode).toBe(200);
     });
   });
 

@@ -425,13 +425,17 @@ private fun AllianceCard(a: AllianceDto, ui: CommunityUi, actions: CommunityActi
 @Composable
 private fun MemberStack(members: List<MemberDto>) {
     val c = LocalBridgeColors.current
-    val awayLabel = members.filter { it.away }.map { stringResource(R.string.ally_member_away, it.name) }
-    val a11y = (members.filterNot { it.away }.map { it.name } + awayLabel).joinToString(", ")
+    val away = stringResource(R.string.ally_member_away, "%s"); val finished = stringResource(R.string.ally_member_finished, "%s")
+    val a11y = members.joinToString(", ") { when { it.finished -> finished.format(it.name); it.away -> away.format(it.name); else -> it.name } }
     // Overlapping 34dp circles with a 2dp ring in the card colour
     Row(Modifier.semantics { contentDescription = a11y }, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
         members.take(10).forEach { m ->
             Box(Modifier.size(34.dp).background(c.s1, CircleShape).padding(2.dp)) {
                 Avatar(m.name, 30.dp, c.ink2, Modifier.alpha(if (m.away) .45f else 1f))
+                // Finished their goal: still here, with a small check
+                if (m.finished) Box(Modifier.align(Alignment.BottomStart).size(13.dp).background(c.ok, CircleShape).border(1.5.dp, c.s1, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_check), null, tint = c.s1, modifier = Modifier.size(8.dp))
+                }
             }
         }
     }

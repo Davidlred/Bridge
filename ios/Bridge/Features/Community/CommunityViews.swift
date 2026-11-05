@@ -577,10 +577,17 @@ private struct AllianceCard: View {
             HStack(spacing: -8) {
                 ForEach(Array(a.members.prefix(10).enumerated()), id: \.offset) { _, m in
                     Avatar(name: m.name, size: 30, ink: Theme.ink2).opacity(m.away ? 0.45 : 1).padding(2).background(Theme.s1, in: Circle())
+                        .overlay(alignment: .bottomLeading) {
+                            // Finished their goal: still here, with a small check
+                            if m.finished == true {
+                                Image(systemName: "checkmark").font(.system(size: 6, weight: .bold)).foregroundStyle(Theme.s1)
+                                    .frame(width: 13, height: 13).background(Theme.ok, in: Circle()).overlay(Circle().stroke(Theme.s1, lineWidth: 1.5))
+                            }
+                        }
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(a.members.map { $0.away ? String(localized: "\($0.name), away") : $0.name }.joined(separator: ", ")))
+            .accessibilityLabel(Text(a.members.map { $0.finished == true ? String(localized: "\($0.name), finished their goal") : $0.away ? String(localized: "\($0.name), away") : $0.name }.joined(separator: ", ")))
         }
         .padding(20).card(22)
     }

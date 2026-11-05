@@ -133,8 +133,11 @@ async function summary(allianceId: string, userId: string) {
                         from alliances a join goals g on g.id = a.lead_goal_id join users u on u.id = a.owner_id where a.id = ${allianceId}`;
   if (!a) throw new HttpError(404, 'not_found');
   const blocked = new Set(await blockedWith(sql, userId));
-  const members = await sql`select m.user_id, m.goal_id, m.role, m.start_date::text, m.joined_at, u.display_name
-                            from alliance_members m join users u on u.id = m.user_id where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null order by m.joined_at`;
+  // A member who completed their goal stays (chat, feed, cheering) but has no more daily tasks, so they are
+  // "finished": not away, and not counted in the collective streak or the group's progress.
+  const members = await sql`select m.user_id, m.goal_id, m.role, m.start_date::text, m.joined_at, u.display_name, g.status = 'completed' as finished
+                            from alliance_members m join users u on u.id = m.user_id join goals g on g.id = m.goal_id
+                            where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null order by m.joined_at`;
   const today = await localToday(sql, userId);
   const done = await sql`select t.goal_id, c.local_date::text as d, count(*)::int as n from task_completions c join tasks t on t.id = c.task_id
                          where t.goal_id in ${sql(members.map(m => m.goal_id as string))} and not c.suspect and c.local_date > ${today}::date - 60 group by 1, 2`;
@@ -143,7 +146,7 @@ async function summary(allianceId: string, userId: string) {
   // Away: no completion in the last 3 days (excluded from the collective streak and Game Night).
   const away = (goalId: string) => ![0, 1, 2].some(i => days.get(goalId)?.has(addDays(today, -i)));
   // Collective streak: days on which every active member who had joined by then completed at least one task.
-  const active = members.filter(m => !away(m.goal_id));
+  const active = members.filter(m => !m.finished && !away(m.goal_id));
   const all = new Set<string>();
   for (let i = 0; i < 60; i++) {
     const d = addDays(today, -i);
@@ -176,7 +179,7 @@ async function summary(allianceId: string, userId: string) {
     listed: a.listed as boolean, about: (a.about as string | null) ?? null,
     role: me?.role ?? null, goalId: me?.goal_id ?? null,
     streak: streakOf(all, today),
-    members: members.filter(m => !blocked.has(m.user_id)).map(m => ({ userId: m.user_id, name: firstName(m.display_name), role: m.role, away: away(m.goal_id), me: m.user_id === userId })),
+    members: members.filter(m => !blocked.has(m.user_id)).map(m => ({ userId: m.user_id, name: firstName(m.display_name), role: m.role, away: !m.finished && away(m.goal_id), finished: m.finished as boolean, me: m.user_id === userId })),
     memberCount: members.length,
     shared,
     // Own-plan task titles are personal, so the feed only names shared-plan tasks.

@@ -43,8 +43,9 @@ const openByAlliance = new Map<string, string>();
 
 /** Who has finished today's tasks for the alliance goal. Away members (no completion in 3 days) don't count. */
 export async function unlockStatus(allianceId: string) {
-  const members = await sql`select m.user_id, m.goal_id, u.display_name from alliance_members m join users u on u.id = m.user_id
-                            where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null order by m.joined_at`;
+  // Members who completed their goal have no tasks left, so Game Night doesn't wait on them.
+  const members = await sql`select m.user_id, m.goal_id, u.display_name from alliance_members m join users u on u.id = m.user_id join goals g on g.id = m.goal_id
+                            where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null and g.status <> 'completed' order by m.joined_at`;
   const rows = [] as { userId: string; name: string; done: boolean; left: number }[];
   for (const m of members) {
     const today = await localToday(sql, m.user_id);

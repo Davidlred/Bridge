@@ -96,7 +96,7 @@ final class FoundationSnapshotTests: XCTestCase {
     ] }
     private var calc: AllianceDTO {
         AllianceDTO(id: "a1", name: "Calc Prep 12B", planMode: "shared", inviteCode: "CALC-2026", startDate: "2026-09-28", role: "member", goalId: "g", streak: 9,
-                    members: ["Ms Okafor", "Jide", "Funmi", "Sharon", "Lola", "Bayo"].enumerated().map { MemberDTO(userId: "u\($0.offset)", name: $0.element, role: $0.offset == 0 ? "owner" : "member", away: $0.offset == 4) },
+                    members: ["Ms Okafor", "Jide", "Funmi", "Sharon", "Lola", "Bayo"].enumerated().map { MemberDTO(userId: "u\($0.offset)", name: $0.element, role: $0.offset == 0 ? "owner" : "member", away: $0.offset == 4, finished: $0.offset == 2) },
                     memberCount: 6, shared: SharedPlanDTO(lead: "Ms", goal: "Score 75% or higher on the Grade 12 math final.", deadline: "2026-12-04"),
                     feed: [AllianceFeedDTO(name: "Jide", what: "completed", title: "Work 10 past-paper questions", at: ms - 10_800_000), AllianceFeedDTO(name: "Lola", what: "joined", at: ms - 108_000_000)])
     }
