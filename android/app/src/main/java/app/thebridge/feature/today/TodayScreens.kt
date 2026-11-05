@@ -193,19 +193,19 @@ private fun Overview(ui: TodayUi, actions: TodayActions) {
             Text(stringResource(R.string.your_goals), style = BType.display(19), color = c.ink, modifier = Modifier.semantics { heading() })
             Text(stringResource(R.string.your_goals_sub, ui.goals.size), style = BType.body(13), color = c.mut)
         }
-        ui.goals.forEach { GoalCard(it, onDetails = { actions.goalDetails(it) }) { actions.openGoal(it.goal.id) } }
+        ui.goals.forEachIndexed { i, g -> GoalCard(g, position = i, onDetails = { actions.goalDetails(g) }) { actions.openGoal(g.goal.id) } }
         AddGoalTile(actions.addGoal)
     }
 }
 
-/** One card per goal: radius 24, padding 18–20, colour rotates gc1/gc2/gc3. Long-press opens its details and actions. */
+/** One card per goal: radius 24, padding 18–20. Colours alternate gc1/gc2/gc3 down the list, so neighbours never match. Long-press opens its details and actions. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun GoalCard(g: GoalState, onDetails: () -> Unit = {}, onOpen: () -> Unit) {
+fun GoalCard(g: GoalState, position: Int = 0, onDetails: () -> Unit = {}, onOpen: () -> Unit) {
     val c = LocalBridgeColors.current
     val view = LocalView.current
     val p = g.progress
-    val bg = c.goalCards[g.goal.colorIndex.mod(3)]
+    val bg = c.goalCards[position.mod(3)]
     Column(Modifier.fillMaxWidth().heightIn(min = 188.dp).clip(RoundedCornerShape(24.dp)).background(bg)
         .combinedClickable(role = Role.Button, onLongClickLabel = stringResource(R.string.goal_details_a11y), onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); onDetails() }, onClick = onOpen).padding(18.dp),
         verticalArrangement = Arrangement.SpaceBetween) {

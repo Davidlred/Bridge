@@ -245,8 +245,8 @@ struct TodayView: View {
                 Spacer()
                 Text("\(goals.count) of 3").font(BFont.body(13)).foregroundStyle(Theme.mut)
             }
-            ForEach(goals) { g in
-                GoalCard(goal: g) { model.open(g.id) }
+            ForEach(Array(goals.enumerated()), id: \.element.id) { i, g in
+                GoalCard(goal: g, position: i) { model.open(g.id) }
                     .contextMenu {
                         Button { model.open(g.id) } label: { Label("Open goal", systemImage: "arrow.right") }
                         Button { sheet = .goal(g.id) } label: { Label("Edit name and date", systemImage: "pencil") }
@@ -460,9 +460,10 @@ struct TodayView: View {
     }
 }
 
-/// One card per goal: radius 24, colour rotates gc1/gc2/gc3.
+/// One card per goal: radius 24. Colours alternate gc1/gc2/gc3 down the list, so neighbours never match.
 struct GoalCard: View {
     let goal: GoalState
+    var position = 0
     var onOpen: () -> Void
     var body: some View {
         let p = goal.progress
@@ -487,7 +488,7 @@ struct GoalCard: View {
                 }
             }
             .foregroundStyle(Theme.goalInk).padding(18).frame(maxWidth: .infinity, minHeight: 188, alignment: .leading)
-            .background(Theme.goalCards[goal.colorIndex % 3], in: RoundedRectangle(cornerRadius: Theme.Radius.goalCard, style: .continuous))
+            .background(Theme.goalCards[position % 3], in: RoundedRectangle(cornerRadius: Theme.Radius.goalCard, style: .continuous))
         }
         .buttonStyle(PressScale())
     }
