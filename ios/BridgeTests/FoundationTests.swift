@@ -181,6 +181,14 @@ final class FoundationSnapshotTests: XCTestCase {
                      GoalChoice(id: UUID(uuidString: "018b0000-0000-7000-8000-0000000000a3")!, label: "Save £2k", statement: "Save £2,000 for a deposit by June.")]
         verify(ChooseGoalsView(goals: goals, initial: Set(goals.prefix(2).map(\.id)), max: 3, onSave: { _ in }, onUpgrade: {}).background(Theme.s1), named: "choose-goals")
     }
+    /// The Coach tab's Arc: rest, bubbles up and mid-blink, large and at tab size, plus the still frame.
+    func testArcTab() {
+        let row = { (size: CGFloat) in HStack(spacing: 20) {
+            ForEach([0, 1.2, 3.4], id: \.self) { t in Image(uiImage: ArcTabGlyph.image(at: t, size: size)).foregroundStyle(Theme.ink) }
+            Image(uiImage: ArcTabGlyph.image(at: 0, still: true, size: size)).foregroundStyle(Theme.mut)
+        } }
+        verify(VStack(alignment: .leading, spacing: 20) { row(72); row(22) }.padding(24).frame(maxWidth: .infinity, alignment: .leading).background(Theme.s0), named: "arc-tab")
+    }
     func testGoalDetails() { verify(GoalDetailsView(goal: goal).background(Theme.s1), named: "goal-details") }
     func testDeleteGoal() { verify(DeleteGoalSheet(onDelete: {}, onCancel: {}).background(Theme.s1), named: "goal-delete") }
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }

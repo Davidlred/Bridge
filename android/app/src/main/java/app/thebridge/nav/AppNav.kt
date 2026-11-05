@@ -128,7 +128,7 @@ import java.time.ZoneId
 private data class TabItem(val graph: Any, val label: Int, val icon: Int)
 private val tabs = listOf(
     TabItem(TodayGraph, R.string.tab_today, R.drawable.ic_today),
-    TabItem(CoachGraph, R.string.tab_coach, R.drawable.ic_coach),
+    TabItem(CoachGraph, R.string.tab_coach, 0), // drawn as Arc (ArcTabIcon), see BottomBar
     TabItem(JournalGraph, R.string.tab_journal, R.drawable.ic_journal),
     TabItem(ProfileGraph, R.string.tab_profile, R.drawable.ic_profile),
 )
@@ -343,7 +343,9 @@ private fun BottomBar(nav: NavHostController, dest: androidx.navigation.NavDesti
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Box(Modifier.size(width = 56.dp, height = 30.dp).background(if (selected) c.pill else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) {
-                    Icon(painterResource(tab.icon), contentDescription = null, tint = if (selected) c.ink else c.mut, modifier = Modifier.size(22.dp))
+                    val tint = if (selected) c.ink else c.mut
+                    if (tab.graph == CoachGraph) app.thebridge.feature.coach.ArcTabIcon(tint, Modifier.size(22.dp))
+                    else Icon(painterResource(tab.icon), contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
                 }
                 Text(stringResource(tab.label), style = BType.body(11, FontWeight.Medium).copy(fontSize = 11.5.sp), color = if (selected) c.ink else c.mut, maxLines = 1)
             }

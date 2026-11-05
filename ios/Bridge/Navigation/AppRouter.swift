@@ -60,6 +60,9 @@ final class AppRouter {
 
 struct MainTabs: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var arc = ArcTabClock()
 
     var body: some View {
         @Bindable var router = router
@@ -67,12 +70,14 @@ struct MainTabs: View {
             NavigationStack(path: $router.today) { TodayView().routes() }
                 .tabItem { Label("Today", systemImage: "sun.max") }.tag(Tab.today)
             NavigationStack(path: $router.coach) { CoachView().routes() }
-                .tabItem { Label("Coach", systemImage: "bubble.left.and.text.bubble.right") }.tag(Tab.coach)
+                .tabItem { Label { Text("Coach") } icon: { Image(uiImage: reduceMotion ? ArcTabGlyph.still : arc.image) } }.tag(Tab.coach)
             NavigationStack(path: $router.journal) { JournalView().routes() }
                 .tabItem { Label("Journal", systemImage: "book.closed") }.tag(Tab.journal)
             NavigationStack(path: $router.profile) { ProfileView().routes() }
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }.tag(Tab.profile)
         }
+        // Arc bubbles only while the app is in front and motion is allowed.
+        .task(id: !reduceMotion && scenePhase == .active) { if !reduceMotion && scenePhase == .active { await arc.run() } }
     }
 }
 

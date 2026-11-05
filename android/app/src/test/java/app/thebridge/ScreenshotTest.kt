@@ -57,6 +57,7 @@ import app.thebridge.feature.today.TodayUi
 import app.thebridge.feature.shell.UpgradeScreen
 import app.thebridge.ui.components.UiText
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import app.thebridge.data.local.AllianceMessageEntity
 import app.thebridge.data.remote.AllianceDto
@@ -197,6 +198,16 @@ class ScreenshotTest {
         Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { ChooseGoalsContent(listOf(marathon.goal, spanish.goal, pausedGoal), setOf("g1", "g2"), 3, {}, {}) }
     }
     private val noDetails = GoalDetailsActions({}, {}, {}, {}, {})
+    /** The Coach tab's Arc: three moments of its loop (rest, bubbles up, mid-blink) large, then at tab size. */
+    @Test fun arcTab() = snap("arc-tab") {
+        val c = LocalBridgeColors.current
+        androidx.compose.foundation.layout.Column(Modifier.background(c.s0).padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp)) {
+            for (size in listOf(72, 22)) androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp)) {
+                for (t in listOf(0f, 1.2f, 3.4f)) app.thebridge.feature.coach.ArcTabIcon(c.ink, Modifier.size(size.dp), time = t)
+                app.thebridge.feature.coach.ArcTabIcon(c.mut, Modifier.size(size.dp), reduceMotion = true)
+            }
+        }
+    }
     @Test fun goalDetails() = snap("goal-details") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { GoalDetailsContent(marathon, noDetails) } }
     @Test fun goalDelete() = snap("goal-delete") { Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { GoalDetailsContent(marathon, noDetails, confirmDelete = true) } }
     @Test fun goalCrossed() =snap("goal-crossed") { GoalCrossedContent(overdue, {}, {}) }
