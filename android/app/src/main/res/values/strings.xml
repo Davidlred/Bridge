@@ -981,6 +981,7 @@
     <string name="students_attention">Needs attention</string>
     <string name="students_everyone">Everyone</string>
     <string name="students_by_task">By task</string>
+    <string name="students_away">Last ticked %1$s</string>
     <string name="students_away_never">Hasn\'t ticked anything yet</string>
     <string name="students_low_feel">Says it feels hard</string>
     <string name="students_behind">Under half done this week</string>
@@ -1013,10 +1014,6 @@
     <string name="student_not_sharing">%1$s isn\'t sharing their progress now.</string>
     <string name="locked_lead_shared">Lead a group on this plan</string>
     <string name="locked_lead_shared_sub">Teachers and coaches can start now: everyone who joins gets these tasks, and you see how each person is doing.</string>
-    <plurals name="students_away">
-        <item quantity="one">Nothing ticked in %d day</item>
-        <item quantity="other">Nothing ticked in %d days</item>
-    </plurals>
     <plurals name="student_streak_days">
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>

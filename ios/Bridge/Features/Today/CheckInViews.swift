@@ -143,7 +143,7 @@ struct ChoiceChip: View {
     var body: some View {
         Button(action: action) {
             text.font(BFont.body(13, .medium)).foregroundStyle(on ? Theme.ink : Theme.ink2).lineLimit(1)
-                .padding(.horizontal, 14).frame(minHeight: 36)
+                .padding(.horizontal, 14).padding(.vertical, 9)
                 .background(on ? Theme.segOn : .clear, in: Capsule())
                 .overlay(Capsule().strokeBorder(on ? Theme.ink2 : Theme.line, lineWidth: on ? 1.5 : 1))
                 .frame(minHeight: 44)

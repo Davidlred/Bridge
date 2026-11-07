@@ -341,9 +341,9 @@ private func isoDay(_ s: String) -> Date? {
     return f.date(from: s)
 }
 
-/// "Nothing ticked in 4 days", or "Hasn't ticked anything yet".
+/// "Last ticked Fri, Oct 9", or "Hasn't ticked anything yet".
 private func awayText(_ lastActive: String?, _ today: Date) -> String {
-    guard let last = lastActive.flatMap(isoDay), let now = isoDay(LocalDay.today(now: today)) else { return String(localized: "Hasn't ticked anything yet") }
-    let n = max(1, Int((now.timeIntervalSince(last) / 86_400).rounded()))
-    return String(localized: "Nothing ticked in \(n) days")
+    guard let last = lastActive.flatMap(isoDay) else { return String(localized: "Hasn't ticked anything yet") }
+    let day = last.formatted(Date.FormatStyle(timeZone: TimeZone(identifier: "UTC")!).weekday(.abbreviated).month(.abbreviated).day())
+    return String(localized: "Last ticked \(day)")
 }

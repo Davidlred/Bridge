@@ -179,14 +179,15 @@ private fun statusLine(s: StudentDto, today: LocalDate): String {
     val p = s.progress ?: return stringResource(R.string.students_not_sharing)
     if (s.finished) return stringResource(R.string.students_finished)
     return when (p.attention) {
-        "away" -> p.lastActive?.let { pluralStringResource(R.plurals.students_away, days(it, today), days(it, today)) } ?: stringResource(R.string.students_away_never)
+        "away" -> p.lastActive?.let { stringResource(R.string.students_away, lastTicked(it)) } ?: stringResource(R.string.students_away_never)
         "low_feel" -> stringResource(R.string.students_low_feel)
         "behind" -> stringResource(R.string.students_behind)
         else -> stringResource(R.string.students_today, p.today.done, p.today.total)
     }
 }
 
-private fun days(date: String, today: LocalDate) = runCatching { ChronoUnit.DAYS.between(LocalDate.parse(date), today).toInt() }.getOrDefault(0).coerceAtLeast(1)
+/** "Fri, Oct 9". */
+private fun lastTicked(date: String) = runCatching { LocalDate.parse(date).format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())) }.getOrDefault(date)
 
 @Composable
 private fun TaskRate(t: ClassTaskDto) {
@@ -278,7 +279,7 @@ fun StudentScreen(ui: Loadable<StudentDetailDto>, name: String, plan: String, st
                 }
                 d.attention?.let { a ->
                     val why = when (a) {
-                        "away" -> d.lastActive?.let { pluralStringResource(R.plurals.students_away, days(it, today), days(it, today)) } ?: stringResource(R.string.students_away_never)
+                        "away" -> d.lastActive?.let { stringResource(R.string.students_away, lastTicked(it)) } ?: stringResource(R.string.students_away_never)
                         "low_feel" -> stringResource(R.string.students_low_feel)
                         else -> stringResource(R.string.students_behind)
                     }
