@@ -78,6 +78,13 @@ struct StudentsContent: View {
         .background(Theme.bg)
     }
 
+    private func section<C: View>(_ title: LocalizedStringKey, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).bridgeLabel(11).accessibilityAddTraits(.isHeader)
+            content()
+        }
+    }
+
     private func classWeek(_ d: StudentsDTO) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("CLASS THIS WEEK").bridgeLabel(10)
