@@ -47,10 +47,16 @@ data class TaskEntity(
     @androidx.room.ColumnInfo(defaultValue = "NULL") val onDate: String? = null,
     /** Up to three links, JSON [{"title","url"}], checked by the server when the AI wrote them. */
     @androidx.room.ColumnInfo(defaultValue = "[]") val resources: String = "[]",
+    /** What a check-in asks for after ticking: reps | kg | min | km | pages. Null: how it felt and a note only. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val measure: String? = null,
 )
 
 @Entity(tableName = "completions", primaryKeys = ["taskId", "localDate"])
 data class CompletionEntity(val taskId: String, val localDate: String, val completedAt: Long = System.currentTimeMillis())
+
+/** After ticking a task: how it felt (1-5), an amount in the task's unit, a short note. On a shared plan the lead sees it. */
+@Entity(tableName = "checkins", primaryKeys = ["taskId", "localDate"])
+data class CheckinEntity(val taskId: String, val localDate: String, val feel: Int? = null, val amount: Double? = null, val note: String? = null, val updatedAt: Long = System.currentTimeMillis())
 
 /**
  * One reflection per goal per local day. [syncedVersion] is the server version this device last saw (sent as baseVersion).
@@ -227,6 +233,8 @@ interface GoalDao {
     @Query("SELECT c.* FROM completions c JOIN tasks t ON t.id = c.taskId JOIN goals g ON g.id = t.goalId WHERE g.status = 'active'")
     fun activeCompletions(): Flow<List<CompletionEntity>>
 
+    @Query("SELECT * FROM checkins WHERE localDate = :localDate") fun checkins(localDate: String): Flow<List<CheckinEntity>>
+
     @Query("SELECT * FROM goal_images") fun images(): Flow<List<GoalImageEntity>>
     @Query("SELECT * FROM goal_images WHERE goalId = :goalId") fun images(goalId: String): Flow<List<GoalImageEntity>>
     @Upsert suspend fun upsertImages(rows: List<GoalImageEntity>)
@@ -245,11 +253,14 @@ interface TaskDao {
     @Insert suspend fun enqueue(m: OutboxEntity)
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun complete(c: CompletionEntity)
     @Query("DELETE FROM completions WHERE taskId = :taskId AND localDate = :localDate") suspend fun uncomplete(taskId: String, localDate: String)
+    @Upsert suspend fun checkin(c: CheckinEntity)
+    @Query("DELETE FROM checkins WHERE taskId = :taskId AND localDate = :localDate") suspend fun removeCheckin(taskId: String, localDate: String)
+    @Query("SELECT * FROM checkins WHERE taskId = :taskId AND localDate = :localDate") suspend fun checkinFor(taskId: String, localDate: String): CheckinEntity?
 
     /** Row + outbox in one transaction, so a crash can never lose a change. */
     @Transaction
     suspend fun toggle(taskId: String, localDate: String, done: Boolean, outboxId: String) {
-        if (done) complete(CompletionEntity(taskId, localDate)) else uncomplete(taskId, localDate)
+        if (done) complete(CompletionEntity(taskId, localDate)) else { uncomplete(taskId, localDate); removeCheckin(taskId, localDate) }
         enqueue(OutboxEntity(outboxId, "completion", taskId, if (done) "complete" else "uncomplete", """{"localDate":"$localDate"}"""))
     }
 }
@@ -273,13 +284,15 @@ interface PullDao {
     @Query("SELECT id FROM tasks WHERE id IN (:ids)") suspend fun knownTasks(ids: List<String>): List<String>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun completions(rows: List<CompletionEntity>)
     @Query("DELETE FROM completions WHERE taskId = :taskId AND localDate = :localDate") suspend fun removeCompletion(taskId: String, localDate: String)
+    @Upsert suspend fun checkins(rows: List<CheckinEntity>)
+    @Query("DELETE FROM checkins WHERE taskId = :taskId AND localDate = :localDate") suspend fun removeCheckin(taskId: String, localDate: String)
 }
 
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
-        SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class],
-    version = 9, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
+        SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class, CheckinEntity::class],
+    version = 10, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao

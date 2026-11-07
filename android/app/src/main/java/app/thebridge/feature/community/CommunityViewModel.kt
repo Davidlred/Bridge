@@ -36,8 +36,10 @@ enum class CommunityTab { Feed, Alliance }
 
 /** Sheets over the Community screen. Form state lives here so it survives rotation. */
 sealed interface CommunitySheet {
-    data class Create(val name: String = "", val shared: Boolean = false, val error: UiText? = null, val busy: Boolean = false, val listed: Boolean = false, val about: String = "") : CommunitySheet
-    data class Join(val code: String = "", val error: UiText? = null, val busy: Boolean = false, val preview: InvitePreviewDto? = null) : CommunitySheet
+    data class Create(val name: String = "", val shared: Boolean = false, val error: UiText? = null, val busy: Boolean = false, val listed: Boolean = false, val about: String = "",
+                      /** Opened from a locked Community: only a shared plan can start before the 7-day streak. */
+                      val sharedOnly: Boolean = false) : CommunitySheet
+    data class Join(val code: String = "", val error: UiText? = null, val busy: Boolean = false, val preview: InvitePreviewDto? = null, val shareProgress: Boolean = true) : CommunitySheet
     data class PostMenu(val post: PostDto) : CommunitySheet
     data class Leave(val alliance: AllianceDto) : CommunitySheet
 }
@@ -163,6 +165,16 @@ class CommunityViewModel @Inject constructor(
 
     fun openCreate() { if (!gated()) local.update { it.copy(sheet = CommunitySheet.Create()) } }
     fun openJoin() { if (!gated()) local.update { it.copy(sheet = CommunitySheet.Join()) } }
+    fun openLeadShared() = local.update { it.copy(sheet = CommunitySheet.Create(shared = true, sharedOnly = true)) }
+    fun onShareProgress(v: Boolean) = editSheet<CommunitySheet.Join> { it.copy(shareProgress = v) }
+
+    /** A member turns sharing their progress with the lead on or off. */
+    fun setSharing(a: AllianceDto, on: Boolean) = viewModelScope.launch {
+        try {
+            social.setSharing(a.id, on)
+            toaster.show(UiText.Res(if (on) R.string.toast_sharing_on else R.string.toast_sharing_off, listOf(a.shared?.lead.orEmpty())), ToastKind.Ok)
+        } catch (e: Exception) { toaster.show(offlineOr(e), ToastKind.Warn) }
+    }
 
     private inline fun <reified T : CommunitySheet> editSheet(f: (T) -> T) = local.update { l -> (l.sheet as? T)?.let { l.copy(sheet = f(it)) } ?: l }
 
@@ -187,6 +199,7 @@ class CommunityViewModel @Inject constructor(
             try {
                 val a = social.create(s.name, if (s.shared) "shared" else "own", goalId, s.listed, s.about.ifBlank { null })
                 local.update { it.copy(sheet = null, tab = CommunityTab.Alliance, selectedId = a.id) }
+                refresh()                                                  // an alliance opens Community for this goal
                 analytics.track(app.thebridge.data.Event.AllianceCreated, "mode" to a.planMode)
                 toaster.show(UiText.Res(if (s.shared) R.string.toast_created_shared else R.string.toast_created), ToastKind.Ok)
             } catch (e: Exception) {
@@ -213,7 +226,7 @@ class CommunityViewModel @Inject constructor(
                     // Shared plans show what joining adds; own-plan alliances join with this goal at once.
                     if (p.planMode == "shared") { editSheet<CommunitySheet.Join> { it.copy(busy = false, preview = p) }; return@launch }
                 }
-                val a = social.join(code, goalId.takeIf { s.preview == null })
+                val a = social.join(code, goalId.takeIf { s.preview == null }, s.shareProgress)
                 analytics.track(app.thebridge.data.Event.AllianceJoined, "mode" to a.planMode, "late_days" to ((s.preview?.pace?.groupDay ?: 1) - 1))
                 local.update { it.copy(sheet = null, tab = CommunityTab.Alliance, selectedId = a.id) }
                 toaster.show(if (a.isShared) UiText.Res(R.string.toast_joined_shared, listOf(a.name, s.preview?.label ?: a.name)) else UiText.Res(R.string.toast_joined, listOf(a.name)), ToastKind.Ok)

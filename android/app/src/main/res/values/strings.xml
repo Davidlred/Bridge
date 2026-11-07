@@ -930,4 +930,95 @@
     <string name="call_calling">Calling…</string>
     <string name="call_opens_dialer">Your phone app opens with the number ready.</string>
     <string name="call_now">Call now</string>
+    <!-- Check-ins after ticking a task -->
+    <string name="checkin_title">How did it go?</string>
+    <string name="checkin_feel">How it felt</string>
+    <string name="feel_1">Very hard</string>
+    <string name="feel_2">Hard</string>
+    <string name="feel_3">Okay</string>
+    <string name="feel_4">Good</string>
+    <string name="feel_5">Great</string>
+    <string name="measure_reps">Reps</string>
+    <string name="measure_kg">Weight (kg)</string>
+    <string name="measure_min">Minutes</string>
+    <string name="measure_km">Distance (km)</string>
+    <string name="measure_pages">Pages</string>
+    <string name="measure_none">Nothing</string>
+    <string name="unit_reps">%1$s reps</string>
+    <string name="unit_kg">%1$s kg</string>
+    <string name="unit_min">%1$s min</string>
+    <string name="unit_km">%1$s km</string>
+    <string name="unit_pages">%1$s pages</string>
+    <string name="checkin_amount_hint">0</string>
+    <string name="checkin_note">Note</string>
+    <string name="checkin_note_hint">Anything to add? Optional</string>
+    <string name="checkin_seen_by">%1$s sees this check-in.</string>
+    <string name="checkin_private">Only you see this.</string>
+    <string name="checkin_private_shared">Only you see this. Sharing with %1$s is off.</string>
+    <string name="checkin_save">Save check-in</string>
+    <string name="checkin_skip">Skip</string>
+    <string name="checkin_open">Check in</string>
+    <string name="checkin_edit">Edit check-in</string>
+    <string name="toast_checked_in">Checked in</string>
+    <string name="task_measure">Log after ticking</string>
+    <string name="task_measure_sub">Asked when this task is ticked, with how it felt and a note.</string>
+    <string name="feel_a11y">How it felt: %1$s</string>
+
+    <!-- Sharing progress with the lead of a shared plan -->
+    <string name="share_progress_title">Share my progress with %1$s</string>
+    <string name="join_share_body">%1$s will see your week on this plan, task by task, and your check-ins. Never your other goals, journal or chats. You can turn this off later.</string>
+    <string name="ally_share_on">%1$s sees your week on this plan and your check-ins.</string>
+    <string name="ally_share_off">Off: %1$s doesn\'t see your week or your check-ins.</string>
+    <string name="toast_sharing_on">%1$s can see your progress</string>
+    <string name="toast_sharing_off">%1$s no longer sees your progress</string>
+
+    <!-- Students view, for the lead of a shared plan -->
+    <string name="ally_students">Students</string>
+    <string name="students_title">Students</string>
+    <string name="students_sub">%1$d of %2$d share their progress · last 7 days</string>
+    <string name="students_class_week">Class this week</string>
+    <string name="students_class_done">%1$d of %2$d tasks done</string>
+    <string name="students_attention">Needs attention</string>
+    <string name="students_everyone">Everyone</string>
+    <string name="students_by_task">By task</string>
+    <string name="students_away_never">Hasn\'t ticked anything yet</string>
+    <string name="students_low_feel">Says it feels hard</string>
+    <string name="students_behind">Under half done this week</string>
+    <string name="students_today">%1$d of %2$d done today</string>
+    <string name="students_finished">Finished the plan</string>
+    <string name="students_not_sharing">Not sharing progress</string>
+    <string name="students_pct">%1$d%%</string>
+    <string name="students_task_done">%1$d%% done</string>
+    <string name="students_task_feel">Feels %1$s</string>
+    <string name="students_empty_title">No students yet</string>
+    <string name="students_empty_body">Share the invite code %1$s. Students who join show up here.</string>
+    <string name="students_error">Couldn\'t load your students.</string>
+    <string name="students_offline">You\'re offline. Students load when you\'re back online.</string>
+    <string name="students_row_a11y">%1$s, %2$s, %3$s this week</string>
+    <string name="student_joined">Joined %1$s</string>
+    <string name="student_streak">Streak</string>
+    <string name="student_week">This week</string>
+    <string name="student_feel">Feels</string>
+    <string name="student_week_grid">Last 7 days</string>
+    <string name="student_checkins">Check-ins</string>
+    <string name="student_checkins_empty">No check-ins this week.</string>
+    <string name="student_nudge">Send a nudge</string>
+    <string name="student_nudged">Nudged today</string>
+    <string name="student_nudge_sub">They get a notification: keep going on %1$s. It never names a task.</string>
+    <string name="toast_student_nudged">%1$s got your nudge</string>
+    <string name="student_day_done">%1$s done</string>
+    <string name="student_day_missed">%1$s missed</string>
+    <string name="student_day_open">%1$s not yet</string>
+    <string name="student_day_before">%1$s before joining</string>
+    <string name="student_not_sharing">%1$s isn\'t sharing their progress now.</string>
+    <string name="locked_lead_shared">Lead a group on this plan</string>
+    <string name="locked_lead_shared_sub">Teachers and coaches can start now: everyone who joins gets these tasks, and you see how each person is doing.</string>
+    <plurals name="students_away">
+        <item quantity="one">Nothing ticked in %d day</item>
+        <item quantity="other">Nothing ticked in %d days</item>
+    </plurals>
+    <plurals name="student_streak_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
 </resources>

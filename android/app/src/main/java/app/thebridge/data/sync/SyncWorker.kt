@@ -109,7 +109,7 @@ class RemoteSyncApi @Inject constructor(
         val goals = dao.knownGoals(page.tasks.map { it.goalId }.distinct()).toSet()
         dao.tasks(page.tasks.filter { it.goalId in goals }.map {
             TaskEntity(it.id, it.goalId, it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, it.notes, it.origin, it.sharedTaskId, it.position, it.deletedAt, it.updatedAt,
-                it.onDate, api.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.thebridge.data.remote.LinkDto.serializer()), it.resources))
+                it.onDate, api.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.thebridge.data.remote.LinkDto.serializer()), it.resources), it.measure)
         })
         page.removed.completions.forEach { dao.removeCompletion(it.taskId, it.localDate) }
         db.journal().delete(page.removedJournal)
@@ -132,5 +132,8 @@ class RemoteSyncApi @Inject constructor(
         }
         val tasks = dao.knownTasks(page.completions.map { it.taskId }.distinct()).toSet()
         dao.completions(page.completions.filter { it.taskId in tasks }.map { CompletionEntity(it.taskId, it.localDate, it.completedAt) })
+        page.removed.checkins.forEach { dao.removeCheckin(it.taskId, it.localDate) }
+        val checked = dao.knownTasks(page.checkins.map { it.taskId }.distinct()).toSet()
+        dao.checkins(page.checkins.filter { it.taskId in checked }.map { app.thebridge.data.local.CheckinEntity(it.taskId, it.localDate, it.feel, it.amount, it.note, it.updatedAt) })
     }
 }

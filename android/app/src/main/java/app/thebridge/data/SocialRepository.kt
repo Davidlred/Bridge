@@ -147,8 +147,14 @@ class SocialRepository @Inject constructor(
     suspend fun preview(code: String): InvitePreviewDto = api.previewAlliance(code.trim().uppercase())
 
     /** Joining a shared plan adds its goal and tasks; they arrive with the next sync. */
-    suspend fun join(code: String, goalId: String?): AllianceDto =
-        api.joinAlliance(code.trim().uppercase(), goalId).also { upsertAlliance(it); SyncWorker.kick(ctx) }
+    suspend fun join(code: String, goalId: String?, shareProgress: Boolean = true): AllianceDto =
+        api.joinAlliance(code.trim().uppercase(), goalId, shareProgress).also { upsertAlliance(it); SyncWorker.kick(ctx) }
+
+    // --- Students view (lead of a shared plan) and a member's sharing choice ---
+    suspend fun students(allianceId: String) = api.students(allianceId)
+    suspend fun student(allianceId: String, userId: String) = api.student(allianceId, userId)
+    suspend fun nudgeStudent(allianceId: String, userId: String) = api.nudgeStudent(allianceId, userId)
+    suspend fun setSharing(allianceId: String, on: Boolean) { api.setSharing(allianceId, on); refreshAlliances() }
 
     suspend fun leave(id: String) {
         api.leaveAlliance(id)

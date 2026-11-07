@@ -25,7 +25,8 @@ import app.thebridge.ui.theme.LocalBridgeColors
 
 /** Community inside a goal: wires [CommunityScreen] and its sheets to the ViewModel. */
 @Composable
-fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (String) -> Unit = {}, onBoard: (String) -> Unit = {}, onDms: () -> Unit = {}, vm: CommunityViewModel = hiltViewModel()) {
+fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (String) -> Unit = {}, onBoard: (String) -> Unit = {}, onDms: () -> Unit = {},
+                   onStudents: (app.thebridge.data.remote.AllianceDto) -> Unit = {}, vm: CommunityViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val shareText = @Composable { a: app.thebridge.data.remote.AllianceDto -> stringResource(R.string.ally_invite_share, a.name, "https://thebridge.app/join/${a.inviteCode}", a.inviteCode) }
@@ -44,12 +45,12 @@ fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (St
         react = { p, r -> vm.react(p, r) }, postMenu = vm::openPostMenu, create = vm::openCreate, join = vm::openJoin, select = vm::select,
         invite = { inviteFor = it }, sampleInvite = vm::sampleInvite, openChat = { onOpenChat(it.id) }, options = vm::askLeave, applyNow = { vm.applyNow(it) },
         openDms = onDms, alliancePlus = { paywall = true }, playGame = { onPlay(it.id) }, nudge = { vm.nudge(it) }, openBoard = { onBoard(it.id) },
-        setListed = { a, on -> vm.setListed(a, on) },
+        setListed = { a, on -> vm.setListed(a, on) }, students = onStudents, setSharing = { a, on -> vm.setSharing(a, on) }, leadShared = vm::openLeadShared,
     ))
     if (paywall) app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.AlliancePlus, onDismiss = { paywall = false; vm.refresh() })
     when (val s = ui.sheet) {
         is CommunitySheet.Create -> CreateAllianceSheet(s, ui.goal, vm::onName, vm::onShared, vm::create, vm::closeSheet, vm::onListed, vm::onAbout)
-        is CommunitySheet.Join -> JoinAllianceSheet(s, vm::onCode, vm::join, vm::backToCode, vm::closeSheet)
+        is CommunitySheet.Join -> JoinAllianceSheet(s, vm::onCode, vm::join, vm::backToCode, vm::closeSheet, vm::onShareProgress)
         is CommunitySheet.PostMenu -> PostMenuSheet(s.post, onReport = { vm.report(s.post, it) }, onBlock = { vm.block(s.post) }, onDismiss = vm::closeSheet)
         is CommunitySheet.Leave -> LeaveAllianceSheet(s.alliance, onLeave = { vm.leave(s.alliance) }, onDismiss = vm::closeSheet)
         null -> Unit

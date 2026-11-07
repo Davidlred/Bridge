@@ -533,12 +533,14 @@ private fun RealityView(ui: TodayUi, g: GoalState, actions: TodayActions) {
 // ---------------- Sheets ----------------
 
 @Composable
-fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: String, time: String) -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: String, time: String, measure: String?) -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+              checkin: app.thebridge.data.local.CheckinEntity? = null, onCheckIn: (() -> Unit)? = null) {
     val c = LocalBridgeColors.current
     var title by rememberSaveable { mutableStateOf(t?.task?.title.orEmpty()) }
     var notes by rememberSaveable { mutableStateOf(t?.task?.notes.orEmpty()) }
     var priority by rememberSaveable { mutableStateOf(t?.task?.priority ?: "Medium") }
     var time by rememberSaveable { mutableStateOf(t?.task?.timeOfDay.orEmpty()) }
+    var measure by rememberSaveable { mutableStateOf(t?.task?.measure) }
     var error by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf(false) }
     val readOnly = t?.readOnly == true
@@ -560,14 +562,16 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
                 }
                 BridgeField(stringResource(R.string.field_when), time, { time = it.take(24) }, stringResource(R.string.field_when_hint), Modifier.weight(1f))
             }
+            if (!readOnly) MeasurePicker(measure) { measure = it }
             t?.task?.rationale?.let {
                 Text(it, style = BType.body(13, lineHeight = 1.5f), color = c.mut)
             }
+            if (t != null && t.done && checkin != null) CheckinSummary(checkin, t.task.measure)
             if (t != null && t.links.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.task_links), style = BType.label(11f, 0.12f), color = c.mut)
                 t.links.forEach { LinkRow(it) }
             }
-            val save = { if (title.trim().length < 2) error = true else onSave(title, notes, priority, time) }
+            val save = { if (title.trim().length < 2) error = true else onSave(title, notes, priority, time, measure) }
             when {
                 t == null -> PrimaryButton(stringResource(R.string.add_to_today), save)
                 confirm -> Column(Modifier.fillMaxWidth().background(c.badTint, RoundedCornerShape(16.dp)).border(1.dp, c.bad, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -580,6 +584,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
                 }
                 else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!readOnly) PrimaryButton(stringResource(R.string.save_changes), save)
+                    if (t.done && t.checkable && onCheckIn != null) SecondaryButton(stringResource(if (checkin != null) R.string.checkin_edit else R.string.checkin_open), onCheckIn)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SecondaryButton(stringResource(if (t.done) R.string.mark_not_done else R.string.mark_done), { onToggle(!t.done) }, Modifier.weight(1f))
                         if (!readOnly) Box(Modifier.weight(1f).heightIn(min = 48.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button) { confirm = true }, contentAlignment = Alignment.Center) {

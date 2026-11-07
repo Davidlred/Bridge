@@ -80,6 +80,10 @@ data class CommunityActions(
     val openChat: (AllianceDto) -> Unit = {}, val options: (AllianceDto) -> Unit = {}, val applyNow: (AllianceDto) -> Unit = {},
     val openDms: () -> Unit = {}, val alliancePlus: () -> Unit = {}, val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
     val setListed: (AllianceDto, Boolean) -> Unit = { _, _ -> },
+    /** Lead of a shared plan: each member's progress. Member: share it with the lead or not. */
+    val students: (AllianceDto) -> Unit = {}, val setSharing: (AllianceDto, Boolean) -> Unit = { _, _ -> },
+    /** Locked Community: start a shared plan for a class or group now. */
+    val leadShared: () -> Unit = {},
 )
 
 @Composable
@@ -105,7 +109,7 @@ fun CommunityScreen(ui: CommunityUi, actions: CommunityActions, today: LocalDate
             if (!ui.locked) ShareChip(ui.share, actions.cycleShare)
         }
         when {
-            ui.locked -> Locked(ui.streak, actions.startPreview)
+            ui.locked -> Locked(ui.streak, actions.startPreview, actions.leadShared)
             else -> {
                 if (ui.previewing) PreviewBanner(actions.endPreview)
                 Segments(ui.tab, actions.showTab)
@@ -132,7 +136,7 @@ private fun ShareChip(share: ShareLevel, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Locked(streak: Int, onPreview: () -> Unit) {
+private fun Locked(streak: Int, onPreview: () -> Unit, onLead: () -> Unit) {
     val c = LocalBridgeColors.current
     Box(Modifier.fillMaxWidth().heightIn(min = 520.dp)) {
         // Blurred stand-ins for the feed behind the lock card
@@ -152,6 +156,16 @@ private fun Locked(streak: Int, onPreview: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                 Icon(painterResource(R.drawable.ic_visibility), null, tint = c.ink, modifier = Modifier.size(18.dp))
                 Text(stringResource(R.string.community_preview), style = BType.body(14, FontWeight.Medium), color = c.ink)
+            }
+            // Teachers and coaches don't wait for a streak: a shared plan can start on day one.
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onLead).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(painterResource(R.drawable.ic_assignment), null, tint = c.ink, modifier = Modifier.size(18.dp))
+                    Text(stringResource(R.string.locked_lead_shared), style = BType.body(14, FontWeight.SemiBold), color = c.ink, modifier = Modifier.weight(1f))
+                    Icon(painterResource(R.drawable.ic_chevron_right), null, tint = c.mut, modifier = Modifier.size(18.dp))
+                }
+                Text(stringResource(R.string.locked_lead_shared_sub), style = BType.body(12, lineHeight = 1.45f), color = c.mut)
             }
         }
     }
@@ -467,8 +481,18 @@ private fun SharedPanel(a: AllianceDto, sh: app.thebridge.data.remote.SharedPlan
         if (late) ProgressLine(stringResource(R.string.ally_group), stringResource(R.string.ally_day_of, groupDay, groupTotal), groupDay.toFloat() / groupTotal, c.ink2)
         Text(when { sh.isLead -> stringResource(R.string.ally_note_lead); late -> stringResource(R.string.ally_note_late, groupDay - myDay); else -> stringResource(R.string.ally_note_member, sh.lead) },
             style = BType.body(12, lineHeight = 1.45f).copy(fontSize = 12.5.sp), color = c.mut)
-        if (sh.isLead && a.memberCount > 1) Text(stringResource(R.string.ally_apply_now), style = BType.body(13, FontWeight.SemiBold), color = c.ink,
-            modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { actions.applyNow(a) }.padding(horizontal = 14.dp, vertical = 12.dp))
+        if (sh.isLead) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { actions.students(a) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(painterResource(R.drawable.ic_groups), null, tint = c.ink, modifier = Modifier.size(17.dp))
+                Text(stringResource(R.string.ally_students), style = BType.body(13, FontWeight.SemiBold), color = c.ink)
+            }
+            if (a.memberCount > 1) Text(stringResource(R.string.ally_apply_now), style = BType.body(13, FontWeight.SemiBold), color = c.ink,
+                modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable(role = Role.Button) { actions.applyNow(a) }.padding(horizontal = 14.dp, vertical = 12.dp))
+        }
+        // A member decides whether the lead sees their week and check-ins.
+        if (!sh.isLead && a.id != "sample") SwitchRow(sh.sharesProgress, stringResource(R.string.share_progress_title, sh.lead),
+            stringResource(if (sh.sharesProgress) R.string.ally_share_on else R.string.ally_share_off, sh.lead)) { actions.setSharing(a, it) }
     }
 }
 

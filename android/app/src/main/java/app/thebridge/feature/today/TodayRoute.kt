@@ -54,8 +54,14 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
     // Back inside a goal goes to that goal's Today view, then to the list of goals; only from there does it leave the app.
     androidx.activity.compose.BackHandler(enabled = ui.view != GoalView.Today && ui.open != null) { vm.showView(GoalView.Today) }
     androidx.activity.compose.BackHandler(enabled = ui.view == GoalView.Today && ui.openGoalId != null && ui.goals.size > 1) { vm.openGoal(null) }
+    // Ticking a task with something to log asks for a check-in straight away.
+    val tick = { id: String, done: Boolean ->
+        val ask = done && ui.goals.flatMap { it.tasks }.find { it.task.id == id }?.checkable == true
+        vm.toggle(id, done, checkInNext = ask)
+        sheet = if (ask) "checkin:$id" else sheet?.takeUnless { it.startsWith("task:") }
+    }
     TodayScreen(ui, TodayActions(
-        openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> vm.toggle(id, done) }, addGoal = addGoal,
+        openGoal = vm::openGoal, showView = vm::showView, toggle = { id, done -> tick(id, done) }, addGoal = addGoal,
         openTask = { sheet = "task:${it.task.id}" }, newTask = { sheet = "add" }, editGoal = { sheet = "goal:${it.goal.id}" },
         openJournal = onOpenJournal, onNote = vm::onRealityNote, useDate = { id, d -> vm.useSuggestedDate(id, d) }, recheck = vm::recheck,
         retryImages = { vm.retryImages(it) }, openCommunity = onOpenCommunity, complete = vm::complete, archive = { sheet = "archive:$it" }, choosePaused = { sheet = "choose" }, planSteps = vm::planSteps, goalDetails = { sheet = "details:${it.goal.id}" },
@@ -70,12 +76,19 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         s == null -> Unit
         s == "limit" -> LimitSheet(onManage = { sheet = null; vm.openGoal(null) }, onUpgrade = { sheet = "plus" }, onDismiss = { sheet = null })
         s == "plus" -> app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.Plus, onDismiss = { sheet = null })
-        s == "add" && open != null -> TaskSheet(null, onSave = { t, n, p, w -> vm.addTask(open.goal.id, t, n, p, w); sheet = null }, onToggle = {}, onDelete = {}, onDismiss = { sheet = null })
+        s == "add" && open != null -> TaskSheet(null, onSave = { t, n, p, w, m -> vm.addTask(open.goal.id, t, n, p, w, m); sheet = null }, onToggle = {}, onDelete = {}, onDismiss = { sheet = null })
         s.startsWith("task:") -> {
             val t = ui.goals.flatMap { it.tasks }.find { it.task.id == s.removePrefix("task:") }
             if (t == null) sheet = null
-            else TaskSheet(t, onSave = { title, n, p, w -> vm.updateTask(t.task.id, title, n, p, w); sheet = null }, onToggle = { vm.toggle(t.task.id, it); sheet = null },
-                onDelete = { vm.deleteTask(t.task.id); sheet = null }, onDismiss = { sheet = null })
+            else TaskSheet(t, onSave = { title, n, p, w, m -> vm.updateTask(t.task.id, title, n, p, w, m); sheet = null }, onToggle = { tick(t.task.id, it) },
+                onDelete = { vm.deleteTask(t.task.id); sheet = null }, onDismiss = { sheet = null },
+                checkin = ui.checkins[t.task.id], onCheckIn = { sheet = "checkin:${t.task.id}" })
+        }
+        s.startsWith("checkin:") -> {
+            val t = ui.goals.flatMap { it.tasks }.find { it.task.id == s.removePrefix("checkin:") }
+            if (t == null) sheet = null
+            else CheckInSheet(t, ui.checkins[t.task.id], ui.leads[t.task.goalId],
+                onSave = { feel, amount, note -> vm.checkIn(t.task.id, feel, amount, note); sheet = null }, onSkip = { vm.skipCheckIn(); sheet = null })
         }
         s.startsWith("goal:") -> {
             val g = ui.goals.find { it.goal.id == s.removePrefix("goal:") }

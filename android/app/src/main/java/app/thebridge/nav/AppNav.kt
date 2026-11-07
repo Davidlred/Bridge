@@ -106,6 +106,10 @@ import java.time.ZoneId
 @Serializable data class Community(val goalId: String, val code: String? = null)
 @Serializable data class AllianceRoute(val goalId: String, val allianceId: String)
 @Serializable data class AllianceChat(val allianceId: String)
+/** Lead of a shared plan: everyone on it. [code] is the invite code, shown while nobody has joined. */
+@Serializable data class Students(val allianceId: String, val code: String)
+/** One member's week. [plan] is the alliance name, used in the nudge note. */
+@Serializable data class Student(val allianceId: String, val userId: String, val name: String, val plan: String)
 @Serializable data class GameNight(val allianceId: String)
 @Serializable data class Rankings(val allianceId: String)
 @Serializable data class InvitePreview(val code: String)
@@ -270,13 +274,16 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
                 composable<Community> {
-                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id -> nav.navigate(GameNight(id)) }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) })
+                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id -> nav.navigate(GameNight(id)) }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) },
+                        onStudents = { a -> nav.navigate(Students(a.id, a.inviteCode)) })
                 }
                 composable<Messages> { app.thebridge.feature.dm.InboxRoute(onBack = { nav.popBackStack() }, onOpen = { id -> nav.navigate(DmThread(id)) }) }
                 composable<DmThread> { app.thebridge.feature.dm.ThreadRoute(onBack = { nav.popBackStack() }) }
                 composable<Rankings> { app.thebridge.feature.community.RankingsRoute(onBack = { nav.popBackStack() }) }
                 composable<AllianceRoute> { }
                 composable<AllianceChat> { AllianceChatRoute(onBack = { nav.popBackStack() }) }
+                composable<Students> { app.thebridge.feature.community.StudentsRoute(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
+                composable<Student> { app.thebridge.feature.community.StudentRoute(onBack = { nav.popBackStack() }) }
                 composable<GameNight> { app.thebridge.feature.game.GameRoute(onExit = { nav.popBackStack() }) }
                 composable<InvitePreview>(deepLinks = listOf(navDeepLink<InvitePreview>(basePath = "https://thebridge.app/join"))) {
                     val code = it.toRoute<InvitePreview>().code.uppercase()

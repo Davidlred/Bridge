@@ -3,6 +3,7 @@ package app.thebridge.data
 import android.content.Context
 import androidx.room.withTransaction
 import app.thebridge.data.local.BridgeDb
+import app.thebridge.data.local.CheckinEntity
 import app.thebridge.data.local.CompletionEntity
 import app.thebridge.data.local.GoalEntity
 import app.thebridge.data.local.GoalImageEntity
@@ -20,6 +21,7 @@ import app.thebridge.util.UuidV7
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -36,6 +38,8 @@ data class PlanTask(val task: TaskEntity, val done: Boolean, val links: List<Lin
     val isAi: Boolean get() = task.origin == "ai"
     val readOnly: Boolean get() = task.origin == "shared"
     val isStep: Boolean get() = task.onDate != null
+    /** Ticking it asks for a check-in: the task has a unit to log, or it's on a shared plan. */
+    val checkable: Boolean get() = task.measure != null || task.origin == "shared"
 }
 
 data class GoalState(
@@ -179,6 +183,7 @@ class GoalRepository @Inject constructor(
             put("goalId", t.goalId); put("origin", t.origin); put("rationale", t.rationale); put("minutes", t.minutes)
             if (t.onDate != null) put("onDate", t.onDate)
             if (t.resources != "[]") put("resources", json.parseToJsonElement(t.resources))
+            if (t.measure != null) put("measure", t.measure)
         }
         put("title", t.title); put("priority", t.priority); put("timeOfDay", t.timeOfDay); put("notes", t.notes); put("position", t.position)
     }
@@ -248,8 +253,8 @@ class GoalRepository @Inject constructor(
         }
     }
 
-    suspend fun addTask(goalId: String, title: String, notes: String?, priority: String, timeOfDay: String?) {
-        val row = TaskEntity(UuidV7.next(), goalId, title.trim(), priority, timeOfDay?.trim()?.ifEmpty { null }, notes = notes?.trim()?.ifEmpty { null }, position = db.tasks().nextPosition(goalId))
+    suspend fun addTask(goalId: String, title: String, notes: String?, priority: String, timeOfDay: String?, measure: String? = null) {
+        val row = TaskEntity(UuidV7.next(), goalId, title.trim(), priority, timeOfDay?.trim()?.ifEmpty { null }, notes = notes?.trim()?.ifEmpty { null }, position = db.tasks().nextPosition(goalId), measure = measure)
         write { enqueue -> db.tasks().upsert(row); enqueue("task", row.id, "upsert", taskPatch(row, create = true)) }
     }
 
@@ -267,10 +272,10 @@ class GoalRepository @Inject constructor(
         write { enqueue -> enqueue("settings", userId, "upsert", buildJsonObject { put(key, value) }) }
     }
 
-    suspend fun updateTask(id: String, title: String, notes: String?, priority: String, timeOfDay: String?) {
+    suspend fun updateTask(id: String, title: String, notes: String?, priority: String, timeOfDay: String?, measure: String? = null, setMeasure: Boolean = false) {
         val t = db.tasks().get(id) ?: return
         if (t.origin == "shared") return                       // shared-plan tasks are read-only for members
-        val next = t.copy(title = title.trim(), notes = notes?.trim()?.ifEmpty { null }, priority = priority, timeOfDay = timeOfDay?.trim()?.ifEmpty { null }, updatedAt = System.currentTimeMillis())
+        val next = t.copy(title = title.trim(), notes = notes?.trim()?.ifEmpty { null }, priority = priority, timeOfDay = timeOfDay?.trim()?.ifEmpty { null }, measure = if (setMeasure) measure else t.measure, updatedAt = System.currentTimeMillis())
         write { enqueue ->
             db.tasks().upsert(next)
             enqueue("task", id, "upsert", buildJsonObject {
@@ -278,6 +283,7 @@ class GoalRepository @Inject constructor(
                 if (next.notes != t.notes) put("notes", next.notes)
                 if (next.priority != t.priority) put("priority", next.priority)
                 if (next.timeOfDay != t.timeOfDay) put("timeOfDay", next.timeOfDay)
+                if (next.measure != t.measure) put("measure", next.measure)
             })
         }
     }
@@ -288,11 +294,29 @@ class GoalRepository @Inject constructor(
         write { enqueue -> db.tasks().upsert(t.copy(deletedAt = System.currentTimeMillis())); enqueue("task", id, "delete", JsonObject(emptyMap())) }
     }
 
-    /** Ticks a task for the current local day (which closes at 03:00). */
+    /** Today's check-ins, by task id. */
+    fun checkinsToday(): Flow<Map<String, CheckinEntity>> = db.goals().checkins(LocalDay.today()).map { l -> l.associateBy { it.taskId } }
+
+    /** Saves today's check-in on a ticked task. Every part may be empty; an empty check-in is removed. */
+    suspend fun checkIn(taskId: String, feel: Int?, amount: Double?, note: String?) {
+        val day = LocalDay.today()
+        val clean = note?.trim()?.take(200)?.ifEmpty { null }
+        write { enqueue ->
+            if (feel == null && amount == null && clean == null) {
+                db.tasks().removeCheckin(taskId, day)
+                enqueue("checkin", taskId, "delete", buildJsonObject { put("localDate", day) })
+            } else {
+                db.tasks().checkin(CheckinEntity(taskId, day, feel, amount, clean))
+                enqueue("checkin", taskId, "upsert", buildJsonObject { put("localDate", day); put("feel", feel); put("amount", amount); put("note", clean) })
+            }
+        }
+    }
+
+    /** Ticks a task for the current local day (which closes at 03:00). Unticking drops that day's check-in. */
     suspend fun setDone(taskId: String, done: Boolean) {
         val day = LocalDay.today()
         write { enqueue ->
-            if (done) db.tasks().complete(CompletionEntity(taskId, day)) else db.tasks().uncomplete(taskId, day)
+            if (done) db.tasks().complete(CompletionEntity(taskId, day)) else { db.tasks().uncomplete(taskId, day); db.tasks().removeCheckin(taskId, day) }
             enqueue("completion", taskId, if (done) "complete" else "uncomplete", buildJsonObject { put("localDate", JsonPrimitive(day)) })
         }
     }

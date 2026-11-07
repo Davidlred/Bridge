@@ -73,7 +73,8 @@ fun CreateAllianceContent(s: CommunitySheet.Create, goal: GoalState?, onName: (S
         SheetTitle(stringResource(R.string.create_title))
         BridgeField(stringResource(R.string.create_name), s.name, onName, stringResource(R.string.create_name_hint), error = s.error?.resolve(),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { onCreate() }))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // From a locked Community only a shared plan can be started, so there is nothing to choose.
+        if (!s.sharedOnly) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.create_plan), style = BType.label(11f, 0.12f), color = c.mut)
             PlanOption(!s.shared, stringResource(R.string.create_own), stringResource(R.string.create_own_sub)) { onShared(false) }
             PlanOption(s.shared, stringResource(R.string.create_shared), stringResource(R.string.create_shared_sub)) { onShared(true) }
@@ -96,14 +97,18 @@ fun CreateAllianceContent(s: CommunitySheet.Create, goal: GoalState?, onName: (S
 
 /** "Let people find this alliance": Arc can suggest it to people with a goal like it, and they join without a code. */
 @Composable
-fun ListingSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+fun ListingSwitch(on: Boolean, onChange: (Boolean) -> Unit) =
+    SwitchRow(on, stringResource(R.string.ally_listed), stringResource(R.string.ally_listed_sub), onChange)
+
+@Composable
+fun SwitchRow(on: Boolean, title: String, sub: String, onChange: (Boolean) -> Unit) {
     val c = LocalBridgeColors.current
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp))
         .toggleable(on, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(stringResource(R.string.ally_listed), style = BType.body(15, FontWeight.Medium), color = c.ink)
-            Text(stringResource(R.string.ally_listed_sub), style = BType.body(12, lineHeight = 1.4f), color = c.mut)
+            Text(title, style = BType.body(15, FontWeight.Medium), color = c.ink)
+            Text(sub, style = BType.body(12, lineHeight = 1.4f), color = c.mut)
         }
         Box(Modifier.size(width = 44.dp, height = 24.dp).background(if (on) c.okFill else c.track, CircleShape).padding(2.dp), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
             Box(Modifier.size(20.dp).background(c.s1, CircleShape))
@@ -127,23 +132,23 @@ private fun PlanOption(on: Boolean, title: String, sub: String, onClick: () -> U
 
 /** Code entry, then (for a shared plan) the invite preview with the pace note. */
 @Composable
-fun JoinAllianceSheet(s: CommunitySheet.Join, onCode: (String) -> Unit, onJoin: () -> Unit, onBack: () -> Unit, onDismiss: () -> Unit) {
-    BridgeSheet(onDismiss) { JoinAllianceContent(s, onCode, onJoin, onBack) }
+fun JoinAllianceSheet(s: CommunitySheet.Join, onCode: (String) -> Unit, onJoin: () -> Unit, onBack: () -> Unit, onDismiss: () -> Unit, onShare: (Boolean) -> Unit = {}) {
+    BridgeSheet(onDismiss) { JoinAllianceContent(s, onCode, onJoin, onBack, onShare) }
 }
 
 @Composable
-fun JoinAllianceContent(s: CommunitySheet.Join, onCode: (String) -> Unit, onJoin: () -> Unit, onBack: () -> Unit) {
+fun JoinAllianceContent(s: CommunitySheet.Join, onCode: (String) -> Unit, onJoin: () -> Unit, onBack: () -> Unit, onShare: (Boolean) -> Unit = {}) {
     val p = s.preview
     if (p == null) Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SheetTitle(stringResource(R.string.join_title))
         BridgeField(stringResource(R.string.join_code), s.code, onCode, stringResource(R.string.join_code_hint), error = s.error?.resolve(),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Go), keyboardActions = KeyboardActions(onGo = { onJoin() }))
         PrimaryButton(stringResource(R.string.join_cta), onJoin, loading = s.busy)
-    } else InvitePreview(p, s.error, s.busy, onJoin, onBack)
+    } else InvitePreview(p, s.error, s.busy, s.shareProgress, onShare, onJoin, onBack)
 }
 
 @Composable
-private fun InvitePreview(p: InvitePreviewDto, error: UiText?, busy: Boolean, onJoin: () -> Unit, onBack: () -> Unit) {
+private fun InvitePreview(p: InvitePreviewDto, error: UiText?, busy: Boolean, share: Boolean, onShare: (Boolean) -> Unit, onJoin: () -> Unit, onBack: () -> Unit) {
     val c = LocalBridgeColors.current
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -175,6 +180,8 @@ private fun InvitePreview(p: InvitePreviewDto, error: UiText?, busy: Boolean, on
                     style = BType.body(13, lineHeight = 1.45f), color = c.accInk)
             }
         }
+        // Said before joining: the lead follows each member's progress on this plan.
+        SwitchRow(share, stringResource(R.string.share_progress_title, p.lead), stringResource(R.string.join_share_body, p.lead), onShare)
         if (error != null) Text(error.resolve(), style = BType.body(13), color = c.bad, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         PrimaryButton(stringResource(R.string.join_confirm_shared), onJoin, loading = busy)
         SecondaryButton(stringResource(R.string.join_different), onBack)

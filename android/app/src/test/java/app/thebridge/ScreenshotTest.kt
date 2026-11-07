@@ -321,6 +321,51 @@ class ScreenshotTest {
                 listOf(PreviewTaskDto("Work 10 past-paper questions", "High", "After school"), PreviewTaskDto("Review one section of the formula sheet", "Medium", "7:30 PM")), PaceDto(16, 68, 53))), {}, {}, {})
         }
     }
+    // --- Students view and check-ins (shared plans led by a teacher or coach) ---
+    private val week = (7 downTo 1).map { day.minusDays(it - 1L).toString() }
+    private val classView = app.thebridge.data.remote.StudentsDto("Strength 101", 5, 4, app.thebridge.data.remote.WeekCount(41, 63), listOf(
+        app.thebridge.data.remote.StudentDto("u1", "Bayo", true, false, "2026-10-01", app.thebridge.data.remote.StudentProgressDto(0, "2026-10-09", app.thebridge.data.remote.WeekCount(4, 21), DoneCount(0, 3), null, "away")),
+        app.thebridge.data.remote.StudentDto("u2", "Kemi", true, false, "2026-10-01", app.thebridge.data.remote.StudentProgressDto(3, "2026-10-13", app.thebridge.data.remote.WeekCount(12, 21), DoneCount(2, 3), 1.8, "low_feel")),
+        app.thebridge.data.remote.StudentDto("u3", "Tunde", true, false, "2026-10-01", app.thebridge.data.remote.StudentProgressDto(9, "2026-10-13", app.thebridge.data.remote.WeekCount(20, 21), DoneCount(3, 3), 4.2)),
+        app.thebridge.data.remote.StudentDto("u4", "Ada", true, true, "2026-09-01", app.thebridge.data.remote.StudentProgressDto(30, "2026-10-12", app.thebridge.data.remote.WeekCount(5, 5), DoneCount(0, 0), 4.0)),
+        app.thebridge.data.remote.StudentDto("u5", "Lola", false, false, "2026-10-05"),
+    ), listOf(
+        app.thebridge.data.remote.ClassTaskDto("t1", "Squats, 3 sets of 10", "reps", 9, 21, 2.1),
+        app.thebridge.data.remote.ClassTaskDto("t2", "Plank, 60 seconds", null, 15, 21, 3.4),
+        app.thebridge.data.remote.ClassTaskDto("t3", "Walk 20 minutes", "min", 17, 21),
+    ))
+    private val kemi = app.thebridge.data.remote.StudentDetailDto("u2", "Kemi", "2026-10-01", false, week, 3, "2026-10-13", app.thebridge.data.remote.WeekCount(12, 21), 1.8, "low_feel", false, listOf(
+        app.thebridge.data.remote.StudentTaskDto("t1", "Squats, 3 sets of 10", "reps", week.mapIndexed { i, d ->
+            app.thebridge.data.remote.StudentDayDto(d, if (i in listOf(1, 3)) "missed" else "done", feel = when (i) { 6 -> 1; 5 -> 2; else -> null }, amount = if (i >= 5) 8.0 else null,
+                note = if (i == 6) "Knee hurts on the way down. Can I do wall sits instead?" else null)
+        }),
+        app.thebridge.data.remote.StudentTaskDto("t2", "Plank, 60 seconds", null, week.mapIndexed { i, d -> app.thebridge.data.remote.StudentDayDto(d, if (i % 2 == 0) "done" else "missed", feel = if (i == 4) 3 else null) }),
+        app.thebridge.data.remote.StudentTaskDto("t3", "Walk 20 minutes", "min", week.mapIndexed { i, d -> app.thebridge.data.remote.StudentDayDto(d, if (i == 6) "open" else "done") }),
+    ))
+    @Test fun students() = snap("students") { app.thebridge.feature.community.StudentsScreen(app.thebridge.feature.community.Loadable(classView, loading = false), "STRE-4821", app.thebridge.feature.community.StudentsActions(), day) }
+    @Test fun studentsEmpty() = snap("students-empty") {
+        app.thebridge.feature.community.StudentsScreen(app.thebridge.feature.community.Loadable(classView.copy(members = 0, sharing = 0, students = emptyList()), loading = false), "STRE-4821", app.thebridge.feature.community.StudentsActions(), day)
+    }
+    @Test fun studentsOffline() = snap("students-offline") {
+        app.thebridge.feature.community.StudentsScreen(app.thebridge.feature.community.Loadable(null, loading = false, offline = true), "STRE-4821", app.thebridge.feature.community.StudentsActions(), day)
+    }
+    @Test fun student() = snap("student") {
+        app.thebridge.feature.community.StudentScreen(app.thebridge.feature.community.Loadable(kemi, loading = false), "Kemi", "Strength 101", stopped = false, nudging = false, app.thebridge.feature.community.StudentActions(), day)
+    }
+    private val squats = PlanTask(TaskEntity("t1", "g1", "Squats, 3 sets of 10", "High", origin = "shared", measure = "reps"), done = true)
+    @Test fun checkIn() = snap("checkin") {
+        Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) {
+            app.thebridge.feature.today.CheckInContent(squats, app.thebridge.data.local.CheckinEntity("t1", "2026-10-13", 2, 8.0, "Knee hurts on the way down."),
+                app.thebridge.feature.today.LeadInfo("Coach Ada", sees = true, isMe = false), { _, _, _ -> }, {})
+        }
+    }
+    @Test fun taskMeasure() = snap("task-measure") {
+        Box(Modifier.background(LocalBridgeColors.current.s1).padding(24.dp)) { app.thebridge.feature.today.MeasurePicker("reps") {} }
+    }
+    @Test fun allianceLead() = snap("alliance-lead") {
+        val lead = calc.copy(role = "owner", shared = calc.shared!!.copy(lead = "Ms", isLead = true))
+        CommunityScreen(open.copy(tab = CommunityTab.Alliance, alliances = listOf(lead)), CommunityActions(), day, now)
+    }
     @Test fun allianceJoinError() = snap("alliance-join-error") { Box(Modifier.padding(24.dp)) { JoinAllianceContent(CommunitySheet.Join("DAWN-48", error = UiText.Res(R.string.join_bad_format)), {}, {}, {}) } }
     @Test fun allianceChat() = snap("alliance-chat") {
         AllianceChatScreen(AllianceChatUi(calc, listOf(

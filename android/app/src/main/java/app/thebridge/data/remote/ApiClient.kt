@@ -62,12 +62,13 @@ class StreamInterrupted : Exception()
 @Serializable data class MutationDto(val id: String, val entity: String, val entityId: String, val op: String, val patch: JsonElement, val clientTs: Long)
 @Serializable data class PushResponse(val accepted: List<String> = emptyList(), val rejected: Map<String, String> = emptyMap())
 @Serializable data class GoalDto(val id: String, val label: String, val statement: String, val startDate: String, val deadline: String, val status: String, val sourceAllianceId: String? = null, val colorIndex: Int = 0, val updatedAt: Long = 0, val routine: String? = null, val realityNote: String? = null, val feasibility: Feasibility? = null, val category: String? = null)
-@Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0, val onDate: String? = null, val resources: List<LinkDto> = emptyList())
+@Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0, val onDate: String? = null, val resources: List<LinkDto> = emptyList(), val measure: String? = null)
+@Serializable data class CheckinDto(val taskId: String, val localDate: String, val feel: Int? = null, val amount: Double? = null, val note: String? = null, val updatedAt: Long = 0)
 @Serializable data class CompletionDto(val taskId: String, val localDate: String, val completedAt: Long = 0)
 @Serializable data class CompletionKey(val taskId: String, val localDate: String)
-@Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList())
+@Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList(), val checkins: List<CompletionKey> = emptyList())
 @Serializable data class JournalDto(val id: String, val goalId: String? = null, val localDate: String, val mood: Int? = null, val body: String = "", val version: Int = 1, val conflictOf: String? = null, val updatedAt: Long = 0)
-@Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList(), val chat: List<ChatDto> = emptyList(), val removedChat: List<String> = emptyList())
+@Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val checkins: List<CheckinDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList(), val chat: List<ChatDto> = emptyList(), val removedChat: List<String> = emptyList())
 @Serializable data class ChatDto(val id: String, val conversation: String, val goalId: String? = null, val role: String, val text: String, val suggestion: SuggestionDto? = null, val alliance: AllianceSuggestionDto? = null, val action: app.thebridge.data.phone.CoachActionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
 @Serializable data class SuggestionDto(val title: String, val rationale: String = "", val priority: String = "Medium", val timeOfDay: String? = null)
 /** A findable alliance the coach recommended; [code] opens its join preview. */
@@ -79,7 +80,9 @@ class StreamInterrupted : Exception()
 @Serializable data class CommunityDto(val unlocked: Boolean, val streak: Int = 0, val needed: Int = 7, val widened: Boolean = false, val posts: List<PostDto> = emptyList())
 @Serializable data class MemberDto(val userId: String, val name: String, val role: String, val away: Boolean = false, val me: Boolean = false, val finished: Boolean = false)
 @Serializable data class DoneCount(val done: Int = 0, val total: Int = 0)
-@Serializable data class SharedPlanDto(val lead: String, val goal: String, val deadline: String, val me: DoneCount = DoneCount(), val group: DoneCount = DoneCount(), val isLead: Boolean = false)
+@Serializable data class SharedPlanDto(val lead: String, val goal: String, val deadline: String, val me: DoneCount = DoneCount(), val group: DoneCount = DoneCount(), val isLead: Boolean = false,
+    /** A member's ticks and check-ins on this plan are visible to the lead. */
+    val sharesProgress: Boolean = false)
 @Serializable data class AllianceFeedDto(val name: String? = null, val what: String, val title: String? = null, val at: Long = 0)
 @Serializable data class AllianceDto(
     val id: String, val name: String, val planMode: String, val inviteCode: String, val cap: Int = 15, val startDate: String, val role: String? = null, val goalId: String? = null,
@@ -93,6 +96,21 @@ class StreamInterrupted : Exception()
     val id: String, val name: String, val planMode: String, val lead: String, val members: Int, val cap: Int, val spotsLeft: Int,
     val goal: String? = null, val label: String? = null, val deadline: String? = null, val tasks: List<PreviewTaskDto> = emptyList(), val pace: PaceDto? = null,
 )
+// --- Students view: the lead of a shared plan follows each member who shares their progress ---
+@Serializable data class WeekCount(val done: Int = 0, val due: Int = 0) { val rate: Float get() = if (due == 0) 0f else done.toFloat() / due }
+/** [attention]: away (nothing ticked in 3 days) | low_feel (check-ins say it's hard) | behind (under half done this week). */
+@Serializable data class StudentProgressDto(val streak: Int = 0, val lastActive: String? = null, val week: WeekCount = WeekCount(), val today: DoneCount = DoneCount(),
+    val feel: Double? = null, val attention: String? = null, val nudgedToday: Boolean = false)
+@Serializable data class StudentDto(val userId: String, val name: String, val sharing: Boolean = false, val finished: Boolean = false, val startDate: String = "", val progress: StudentProgressDto? = null)
+@Serializable data class ClassTaskDto(val id: String, val title: String, val measure: String? = null, val done: Int = 0, val due: Int = 0, val feel: Double? = null)
+@Serializable data class StudentsDto(val name: String, val members: Int = 0, val sharing: Int = 0, val week: WeekCount = WeekCount(), val students: List<StudentDto> = emptyList(), val tasks: List<ClassTaskDto> = emptyList())
+/** [state]: done | missed | open (today, not yet) | before (they hadn't joined). */
+@Serializable data class StudentDayDto(val date: String, val state: String, val feel: Int? = null, val amount: Double? = null, val note: String? = null)
+@Serializable data class StudentTaskDto(val id: String? = null, val title: String, val measure: String? = null, val days: List<StudentDayDto> = emptyList())
+@Serializable data class StudentDetailDto(val userId: String, val name: String, val startDate: String = "", val finished: Boolean = false, val days: List<String> = emptyList(),
+    val streak: Int = 0, val lastActive: String? = null, val week: WeekCount = WeekCount(), val feel: Double? = null, val attention: String? = null,
+    val nudgedToday: Boolean = false, val tasks: List<StudentTaskDto> = emptyList())
+
 @Serializable data class AllianceMessageDto(val id: String, val clientId: String? = null, val userId: String? = null, val name: String? = null, val mine: Boolean = false, val body: String, val createdAt: Long = 0)
 @Serializable private data class AllianceResponse(val alliance: AllianceDto)
 @Serializable private data class AlliancesResponse(val alliances: List<AllianceDto>)
@@ -276,8 +294,12 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun setAllianceListed(id: String, listed: Boolean): AllianceDto =
         json.decodeFromString<AllianceResponse>(call("PATCH", "/v1/alliances/$id", buildJsonObject { put("listed", listed) }, authed = true)).alliance
     suspend fun previewAlliance(code: String): InvitePreviewDto = json.decodeFromString<PreviewResponse>(call("GET", "/v1/alliances/preview/$code", null, authed = true)).preview
-    suspend fun joinAlliance(code: String, goalId: String?): AllianceDto =
-        json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances/join", buildJsonObject { put("code", code); if (goalId != null) put("goalId", goalId) }, authed = true)).alliance
+    suspend fun joinAlliance(code: String, goalId: String?, shareProgress: Boolean = true): AllianceDto =
+        json.decodeFromString<AllianceResponse>(call("POST", "/v1/alliances/join", buildJsonObject { put("code", code); if (goalId != null) put("goalId", goalId); put("shareProgress", shareProgress) }, authed = true)).alliance
+    suspend fun students(allianceId: String): StudentsDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/students", null, authed = true))
+    suspend fun student(allianceId: String, userId: String): StudentDetailDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/students/$userId", null, authed = true))
+    suspend fun nudgeStudent(allianceId: String, userId: String) { call("POST", "/v1/alliances/$allianceId/students/$userId/nudge", null, authed = true) }
+    suspend fun setSharing(allianceId: String, on: Boolean) { call("PUT", "/v1/alliances/$allianceId/sharing", buildJsonObject { put("on", on) }, authed = true) }
     suspend fun leaveAlliance(id: String) { call("POST", "/v1/alliances/$id/leave", null, authed = true) }
     suspend fun applyPlanNow(id: String) { call("POST", "/v1/alliances/$id/apply-now", null, authed = true) }
     suspend fun allianceMessages(id: String): List<AllianceMessageDto> = json.decodeFromString<MessagesResponse>(call("GET", "/v1/alliances/$id/messages", null, authed = true)).messages

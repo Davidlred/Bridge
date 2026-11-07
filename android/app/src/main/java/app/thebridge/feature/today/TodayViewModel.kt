@@ -49,6 +49,10 @@ data class TodayUi(
     val paused: List<GoalEntity> = emptyList(),
     /** The goal whose next steps are being planned. */
     val stepsBusy: String? = null,
+    /** Today's check-ins by task id. */
+    val checkins: Map<String, app.thebridge.data.local.CheckinEntity> = emptyMap(),
+    /** Shared-plan goals by goal id: who leads the plan and whether they see this user's check-ins. */
+    val leads: Map<String, LeadInfo> = emptyMap(),
 ) {
     val streak: Int get() = goals.maxOfOrNull { it.progress.streak } ?: 0
     val open: GoalState? get() = goals.find { it.goal.id == openGoalId } ?: goals.singleOrNull()
@@ -82,6 +86,13 @@ class TodayViewModel @Inject constructor(
     val state: StateFlow<TodayUi> = combine(repo.activeGoals(), session.user.map { it?.displayName.orEmpty() }, open,
         combine(view, celebrate, reality, stepsBusy) { v, cel, r, sb -> ViewBits(v, cel, r, sb) }, repo.pausedGoals()) { goals, name, openId, b, paused ->
         TodayUi(true, name, goals, openId?.takeIf { id -> goals.any { it.goal.id == id } }, b.view, b.celebrate, b.reality.first, b.reality.second, paused, b.stepsBusy)
+    }.let { base ->
+        combine(base, repo.checkinsToday(), social.alliances()) { ui, checkins, alliances ->
+            ui.copy(checkins = checkins, leads = alliances.mapNotNull { a ->
+                val sh = a.shared ?: return@mapNotNull null
+                a.goalId?.let { it to LeadInfo(sh.lead, sh.sharesProgress, sh.isLead) }
+            }.toMap())
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUi())
 
     private val imagesRefreshedAt = mutableMapOf<String, Long>()
@@ -107,14 +118,22 @@ class TodayViewModel @Inject constructor(
         }
     }
 
-    fun toggle(taskId: String, done: Boolean) = viewModelScope.launch {
+    /** [checkInNext]: the check-in sheet opens first; the day's celebration waits until it closes. */
+    fun toggle(taskId: String, done: Boolean, checkInNext: Boolean = false) = viewModelScope.launch {
         repo.setDone(taskId, done)
         if (done) {
             analytics.track(app.thebridge.data.Event.TaskCompleted)
             launch { repo.goalOf(taskId)?.let { social.announce(it) } }      // share progress, if the user allows it
-            checkCelebrate()
+            if (!checkInNext) checkCelebrate()
         }
     }
+
+    fun checkIn(taskId: String, feel: Int?, amount: Double?, note: String?) = viewModelScope.launch {
+        repo.checkIn(taskId, feel, amount, note)
+        if (feel != null || amount != null || note != null) toaster.show(UiText.Res(R.string.toast_checked_in), ToastKind.Ok)
+        checkCelebrate()
+    }
+    fun skipCheckIn() = viewModelScope.launch { checkCelebrate() }
 
     /** All of a goal's tasks done for the first time today: celebrate once per goal per day. */
     private suspend fun checkCelebrate() {
@@ -130,11 +149,11 @@ class TodayViewModel @Inject constructor(
     }
     fun closeCelebrate() { celebrate.value = null }
 
-    fun addTask(goalId: String, title: String, notes: String, priority: String, time: String) = viewModelScope.launch {
-        repo.addTask(goalId, title, notes, priority, time); toaster.show(UiText.Res(R.string.toast_task_added), ToastKind.Ok)
+    fun addTask(goalId: String, title: String, notes: String, priority: String, time: String, measure: String? = null) = viewModelScope.launch {
+        repo.addTask(goalId, title, notes, priority, time, measure); toaster.show(UiText.Res(R.string.toast_task_added), ToastKind.Ok)
     }
-    fun updateTask(id: String, title: String, notes: String, priority: String, time: String) = viewModelScope.launch {
-        repo.updateTask(id, title, notes, priority, time); toaster.show(UiText.Res(R.string.toast_task_updated), ToastKind.Ok)
+    fun updateTask(id: String, title: String, notes: String, priority: String, time: String, measure: String? = null) = viewModelScope.launch {
+        repo.updateTask(id, title, notes, priority, time, measure, setMeasure = true); toaster.show(UiText.Res(R.string.toast_task_updated), ToastKind.Ok)
     }
     fun deleteTask(id: String) = viewModelScope.launch { repo.deleteTask(id); toaster.show(UiText.Res(R.string.toast_task_deleted)) }
 
