@@ -16,10 +16,17 @@ struct PlanTask: Identifiable, Equatable {
     /// A step's day (nil for a daily habit), and that day when it has passed and the step carried over.
     var onDate: String? = nil
     var carriedFrom: String? = nil
+    /// The unit a check-in asks for after ticking (reps, kg, min, km, pages).
+    var measure: String? = nil
     var isAI: Bool { origin == "ai" }
+    /// Ticking it asks for a check-in: it has a unit to log, or it's on a shared plan.
+    var checkable: Bool { measure != nil || origin == "shared" }
     var readOnly: Bool { origin == "shared" }
     var isStep: Bool { onDate != nil }
 }
+
+/// A check-in's values: how it felt (1-5), how many, a note.
+struct Checkin: Equatable { var feel: Int?; var amount: Double?; var note: String? }
 
 /// A goal paused when Plus ended: read-only, history kept, until the user picks it as one of their active goals.
 struct GoalChoice: Identifiable, Equatable { let id: UUID; let label: String; let statement: String }
@@ -91,7 +98,7 @@ final class GoalStore {
             let tasks = live.filter { Progress.showsToday(stepDay: $0.onDate, doneDays: doneOn[$0.id] ?? [], today: today) }
                 .sorted { ($0.onDate == nil ? 1 : 0, $0.onDate ?? "", Self.priorityOrder[$0.priority] ?? 1, $0.position) < ($1.onDate == nil ? 1 : 0, $1.onDate ?? "", Self.priorityOrder[$1.priority] ?? 1, $1.position) }
                 .map { PlanTask(id: $0.id, title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, notes: $0.notes, rationale: $0.rationale, origin: $0.origin, done: doneOn[$0.id]?.contains(today) == true,
-                                links: $0.links, onDate: $0.onDate, carriedFrom: $0.onDate.flatMap { $0 < today ? $0 : nil }) }
+                                links: $0.links, onDate: $0.onDate, carriedFrom: $0.onDate.flatMap { $0 < today ? $0 : nil }, measure: $0.measure) }
             let byDay = steps.sorted { ($0.onDate ?? "") < ($1.onDate ?? "") }
             return GoalState(
                 id: g.id, label: g.label, statement: g.statement, startDate: g.startDate, deadline: g.deadline, colorIndex: g.colorIndex,
@@ -219,12 +226,20 @@ final class GoalStore {
         commit()
     }
 
-    func addTask(goalId: UUID, title: String, notes: String, priority: String, time: String) {
+    func addTask(goalId: UUID, title: String, notes: String, priority: String, time: String, measure: String? = nil) {
         guard let g = goalRow(goalId) else { return }
         let row = TaskEntity(id: UUIDv7.next(), title: title.trimmingCharacters(in: .whitespaces), priority: priority, origin: "user", position: (g.tasks.map(\.position).max() ?? -1) + 1)
-        row.notes = notes.isEmpty ? nil : notes; row.timeOfDay = time.isEmpty ? nil : time; row.goal = g
+        row.notes = notes.isEmpty ? nil : notes; row.timeOfDay = time.isEmpty ? nil : time; row.measure = measure; row.goal = g
         ctx.insert(row)
-        enqueue("task", row.id, "upsert", ["goalId": goalId.uuidString.lowercased(), "title": row.title, "priority": priority, "timeOfDay": row.timeOfDay ?? NSNull(), "notes": row.notes ?? NSNull(), "origin": "user", "position": row.position])
+        enqueue("task", row.id, "upsert", ["goalId": goalId.uuidString.lowercased(), "title": row.title, "priority": priority, "timeOfDay": row.timeOfDay ?? NSNull(), "notes": row.notes ?? NSNull(), "origin": "user", "position": row.position,
+                                            "measure": measure ?? NSNull()])
+        commit()
+    }
+
+    func updateTask(_ id: UUID, title: String, notes: String, priority: String, time: String, measure: String?) {
+        guard let t = taskRow(id), t.origin != "shared" else { return }
+        if measure != t.measure { t.measure = measure; t.updatedAt = .now; enqueue("task", id, "upsert", ["measure": measure ?? NSNull()]) }
+        updateTask(id, title: title, notes: notes, priority: priority, time: time)
         commit()
     }
 
@@ -306,13 +321,42 @@ final class GoalStore {
         Task { await SyncEngine.shared.mutated() }
     }
 
+    /// Unticking drops that day's check-in too (the server does the same).
     func setDone(_ id: UUID, _ done: Bool) {
         let day = LocalDay.today()
         let key = CompletionEntity.key(id, day)
         let existing = try? ctx.fetch(FetchDescriptor<CompletionEntity>(predicate: #Predicate { $0.key == key })).first
         if done, existing == nil { ctx.insert(CompletionEntity(taskId: id, localDate: day)) }
         if !done, let existing { ctx.delete(existing) }
+        if !done, let c = checkinRow(id, day) { ctx.delete(c) }
         enqueue("completion", id, done ? "complete" : "uncomplete", ["localDate": day])
+        commit()
+    }
+
+    // MARK: Check-ins
+
+    private func checkinRow(_ taskId: UUID, _ day: String) -> CheckinEntity? {
+        let key = CompletionEntity.key(taskId, day)
+        return try? ctx.fetch(FetchDescriptor<CheckinEntity>(predicate: #Predicate { $0.key == key })).first
+    }
+
+    /// Today's check-in on a task, as values.
+    func checkin(_ taskId: UUID) -> Checkin? {
+        checkinRow(taskId, LocalDay.today()).map { Checkin(feel: $0.feel, amount: $0.amount, note: $0.note) }
+    }
+
+    /// Saves today's check-in on a ticked task. Every part may be empty; an empty check-in is removed.
+    func checkIn(_ taskId: UUID, _ c: Checkin) {
+        let day = LocalDay.today()
+        let note = c.note.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200)) }.flatMap { $0.isEmpty ? nil : $0 }
+        if c.feel == nil && c.amount == nil && note == nil {
+            if let row = checkinRow(taskId, day) { ctx.delete(row) }
+            enqueue("checkin", taskId, "delete", ["localDate": day])
+        } else {
+            let row = checkinRow(taskId, day) ?? { let fresh = CheckinEntity(taskId: taskId, localDate: day); ctx.insert(fresh); return fresh }()
+            row.feel = c.feel; row.amount = c.amount; row.note = note; row.updatedAt = .now
+            enqueue("checkin", taskId, "upsert", ["localDate": day, "feel": c.feel ?? NSNull(), "amount": c.amount ?? NSNull(), "note": note ?? NSNull()])
+        }
         commit()
     }
 

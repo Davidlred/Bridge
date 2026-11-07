@@ -30,7 +30,7 @@ enum ChangeApplier {
             row.goal = parent; row.title = t.title; row.priority = t.priority; row.timeOfDay = t.timeOfDay; row.minutes = t.minutes
             row.rationale = t.rationale; row.notes = t.notes; row.origin = t.origin; row.sharedTaskId = t.sharedTaskId; row.position = t.position
             row.deletedAt = date(t.deletedAt); row.updatedAt = date(t.updatedAt) ?? .now
-            row.onDate = t.onDate; row.resourcesJSON = try? JSONEncoder().encode(t.resources ?? [])
+            row.onDate = t.onDate; row.resourcesJSON = try? JSONEncoder().encode(t.resources ?? []); row.measure = t.measure
         }
         for c in page.removed.completions {
             if let row = try completion(c.taskId, c.localDate, ctx) { ctx.delete(row) }
@@ -66,6 +66,18 @@ enum ChangeApplier {
         for c in page.completions where try completion(c.taskId, c.localDate, ctx) == nil {
             ctx.insert(CompletionEntity(taskId: c.taskId, localDate: c.localDate, completedAt: date(c.completedAt) ?? .now))
         }
+        for c in page.removed.checkins ?? [] {
+            if let row = try checkin(c.taskId, c.localDate, ctx) { ctx.delete(row) }
+        }
+        for c in page.checkins ?? [] {
+            let row = try checkin(c.taskId, c.localDate, ctx) ?? { let fresh = CheckinEntity(taskId: c.taskId, localDate: c.localDate); ctx.insert(fresh); return fresh }()
+            row.feel = c.feel; row.amount = c.amount; row.note = c.note; row.updatedAt = date(c.updatedAt) ?? .now
+        }
+    }
+
+    private static func checkin(_ taskId: UUID, _ localDate: String, _ ctx: ModelContext) throws -> CheckinEntity? {
+        let key = CompletionEntity.key(taskId, localDate)
+        return try ctx.fetch(FetchDescriptor<CheckinEntity>(predicate: #Predicate { $0.key == key })).first
     }
 
     private static func goal(_ id: UUID, _ ctx: ModelContext) throws -> GoalEntity? {

@@ -32,6 +32,10 @@ struct CommunityActions {
     var openChat: (AllianceDTO) -> Void = { _ in }, leave: (AllianceDTO) -> Void = { _ in }, applyNow: (AllianceDTO) -> Void = { _ in }
     var openDms: () -> Void = {}, alliancePlus: () -> Void = {}, playGame: (AllianceDTO) -> Void = { _ in }, nudge: (AllianceDTO) -> Void = { _ in }, openBoard: (AllianceDTO) -> Void = { _ in }
     var setListed: (AllianceDTO, Bool) -> Void = { _, _ in }
+    /// Lead of a shared plan: each member's progress. Member: share it with the lead or not.
+    var students: (AllianceDTO) -> Void = { _ in }, setSharing: (AllianceDTO, Bool) -> Void = { _, _ in }
+    /// Locked Community: start a shared plan for a class or group now.
+    var leadShared: () -> Void = {}
 }
 
 /// Sheet and form state for the Community screen.
@@ -50,6 +54,8 @@ final class CommunityModel {
     // Create
     var name = ""
     var shared = false
+    /// Opened from a locked Community: only a shared plan can start before the 7-day streak.
+    var sharedOnly = false
     var listed = false
     var about = ""
     var createError: String?
@@ -58,11 +64,12 @@ final class CommunityModel {
     var code = ""
     var joinError: String?
     var preview: InvitePreviewDTO?
+    var shareProgress = true
     // Game card and rating
     var games: [String: GameStatusDTO] = [:]
     var ratings: [String: RatingDTO] = [:]
 
-    func reset(_ s: Sheet) { name = ""; shared = false; listed = false; about = ""; createError = nil; code = ""; joinError = nil; preview = nil; busy = false; sheet = s }
+    func reset(_ s: Sheet) { name = ""; shared = false; sharedOnly = false; listed = false; about = ""; createError = nil; code = ""; joinError = nil; preview = nil; shareProgress = true; busy = false; sheet = s }
 }
 
 /// Community inside a goal: Feed and Alliance. Wires `CommunityContent` to the stores.
@@ -100,7 +107,10 @@ struct CommunityScreen: View {
             playGame: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.gameNight(allianceId: id)) } },
             nudge: nudge,
             openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } },
-            setListed: { a, on in Task { do { try await social.setListed(a, on) } catch APIError.server(_, "minor_unlisted", _, _) { toaster.show(String(localized: "Alliances with members under 18 stay private."), .warn) } catch { toaster.show(offlineOr(error), .warn) } } }
+            setListed: { a, on in Task { do { try await social.setListed(a, on) } catch APIError.server(_, "minor_unlisted", _, _) { toaster.show(String(localized: "Alliances with members under 18 stay private."), .warn) } catch { toaster.show(offlineOr(error), .warn) } } },
+            students: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.students(allianceId: id, code: a.inviteCode)) } },
+            setSharing: setSharing,
+            leadShared: { model.reset(.create); model.shared = true; model.sharedOnly = true }
         ))
         .toolbar(.hidden, for: .navigationBar)
         .task {
@@ -188,6 +198,7 @@ struct CommunityScreen: View {
             do {
                 let a = try await social.create(name: model.name, shared: model.shared, goalId: goalId, listed: model.listed, about: model.about)
                 model.sheet = nil; model.tab = .alliance; model.selectedId = a.id
+                await refresh()                                                  // an alliance opens Community for this goal
                 Analytics.track(.allianceCreated, ["mode": a.planMode])
                 toaster.show(model.shared ? String(localized: "Alliance created. Everyone who joins gets your goal, deadline and daily tasks.") : String(localized: "Alliance created. Invite up to 14 people."), .ok)
             } catch APIError.server(_, "name_not_allowed", _, _) { model.createError = String(localized: "Pick a different name.") }
@@ -211,7 +222,7 @@ struct CommunityScreen: View {
                     if p.planMode == "shared" { model.preview = p; return }
                 }
                 let label = model.preview?.label
-                let a = try await social.join(code: code, goalId: confirming ? nil : goalId)
+                let a = try await social.join(code: code, goalId: confirming ? nil : goalId, shareProgress: model.shareProgress)
                 model.sheet = nil; model.tab = .alliance; model.selectedId = a.id
                 Analytics.track(.allianceJoined, ["mode": a.planMode, "late_days": (model.preview?.pace?.groupDay ?? 1) - 1])
                 toaster.show(a.isShared ? String(localized: "Joined \(a.name). \(label ?? a.name) is now one of your goals.") : String(localized: "You joined \(a.name)."), .ok)
@@ -232,6 +243,14 @@ struct CommunityScreen: View {
 
     private func leave(_ a: AllianceDTO) {
         Task { do { try await social.leave(a); model.selectedId = nil; toaster.show(String(localized: "You left \(a.name)."), .ok) } catch { toaster.show(offlineOr(error), .warn) } }
+    }
+    /// A member turns sharing their progress with the lead on or off.
+    private func setSharing(_ a: AllianceDTO, _ on: Bool) {
+        let lead = a.shared?.lead ?? ""
+        Task {
+            do { try await social.setSharing(a, on); toaster.show(on ? String(localized: "\(lead) can see your progress") : String(localized: "\(lead) no longer sees your progress"), .ok) }
+            catch { toaster.show(offlineOr(error), .warn) }
+        }
     }
     private func applyNow(_ a: AllianceDTO) {
         Task { do { try await social.applyNow(a); toaster.show(String(localized: "Updated for everyone. Tasks already ticked today stay as they were."), .ok) } catch { toaster.show(offlineOr(error), .warn) } }
@@ -306,6 +325,20 @@ struct CommunityContent: View {
                         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
                 }
                 .padding(.top, 4)
+                // Teachers and coaches don't wait for a streak: a shared plan can start on day one.
+                Button(action: actions.leadShared) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "list.clipboard").accessibilityHidden(true)
+                            Text("Lead a group on this plan").font(BFont.body(14, .semibold)).frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.mut).accessibilityHidden(true)
+                        }
+                        .foregroundStyle(Theme.ink)
+                        Text("Teachers and coaches can start now: everyone who joins gets these tasks, and you see how each person is doing.").font(BFont.body(12)).foregroundStyle(Theme.mut).multilineTextAlignment(.leading)
+                    }
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+                }
             }
             .padding(24).background(Theme.s1, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.accLine, lineWidth: 1))
@@ -628,8 +661,23 @@ private struct SharedPanel: View {
                 else { Text("Plan set by \(sh.lead). Only they can change the tasks.") }
             }
             .font(BFont.body(12.5)).foregroundStyle(Theme.mut)
-            if sh.isLead && a.memberCount > 1 {
-                Button("Apply today's changes now") { actions.applyNow(a) }.buttonStyle(SecondaryButtonStyle())
+            if sh.isLead {
+                HStack(spacing: 8) {
+                    Button { actions.students(a) } label: {
+                        Label("Students", systemImage: "person.3.fill").font(BFont.body(13, .semibold)).foregroundStyle(Theme.ink).padding(.horizontal, 14).frame(minHeight: 44)
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+                    }
+                    if a.memberCount > 1 {
+                        Button { actions.applyNow(a) } label: {
+                            Text("Apply today's changes now").font(BFont.body(13, .semibold)).foregroundStyle(Theme.ink).padding(.horizontal, 14).frame(minHeight: 44)
+                                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+                        }
+                    }
+                }
+            } else if a.id != "sample" {
+                // A member decides whether the lead sees their week and check-ins.
+                SwitchRow(on: Binding(get: { sh.sharesProgress == true }, set: { actions.setSharing(a, $0) }), title: String(localized: "Share my progress with \(sh.lead)"),
+                          sub: sh.sharesProgress == true ? String(localized: "\(sh.lead) sees your week on this plan and your check-ins.") : String(localized: "Off: \(sh.lead) doesn't see your week or your check-ins."))
             }
         }
         .padding(14).background(Theme.bg, in: RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
@@ -671,6 +719,23 @@ private struct FeedRow: View {
 
 // MARK: - Sheets
 
+/// A titled switch in a bordered row.
+struct SwitchRow: View {
+    @Binding var on: Bool
+    let title: String
+    let sub: String
+    var body: some View {
+        Toggle(isOn: $on) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                Text(sub).font(BFont.body(12)).foregroundStyle(Theme.mut)
+            }
+        }
+        .tint(Theme.okFill).padding(.horizontal, 14).padding(.vertical, 10)
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
+    }
+}
+
 /// "Let people find this alliance": Arc can suggest it to people with a goal like it, and they join without a code.
 struct ListingToggle: View {
     @Binding var on: Bool
@@ -696,11 +761,12 @@ struct CreateAllianceSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Create an alliance").font(BFont.display(20)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 BridgeField(label: "NAME", placeholder: "e.g. Early Risers", text: $model.name, error: model.createError, capitalization: .words)
-                VStack(alignment: .leading, spacing: 8) {
+                // From a locked Community only a shared plan can be started, so there is nothing to choose.
+                if !model.sharedOnly { VStack(alignment: .leading, spacing: 8) {
                     Text("PLAN").bridgeLabel(11)
                     option(!model.shared, "Everyone keeps their own plan", "Members work toward the same kind of goal with their own tasks and deadlines.") { model.shared = false }
                     option(model.shared, "One shared plan", "Everyone who joins gets your goal, deadline and daily tasks. Good for a teacher and a class, a coach and a team, or a study group.") { model.shared = true }
-                }
+                } }
                 if model.shared, let goal {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("MEMBERS WILL GET · \(goal.label.uppercased())").bridgeLabel(10, color: Theme.accInk)
@@ -790,6 +856,9 @@ struct JoinAllianceSheet: View {
             } icon: { Image(systemName: "clock") }
             .foregroundStyle(Theme.accInk).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.accTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+        // Said before joining: the lead follows each member's progress on this plan.
+        SwitchRow(on: $model.shareProgress, title: String(localized: "Share my progress with \(p.lead)"),
+                  sub: String(localized: "\(p.lead) will see your week on this plan, task by task, and your check-ins. Never your other goals, journal or chats. You can turn this off later."))
         if let e = model.joinError { Text(e).font(BFont.body(13)).foregroundStyle(Theme.bad) }
         Button(action: onJoin) { if model.busy { ProgressView().tint(Theme.onAcc) } else { Text("Join and add this goal") } }.buttonStyle(PrimaryButtonStyle()).disabled(model.busy)
         Button("Use a different code") { model.preview = nil; model.code = ""; model.joinError = nil }.buttonStyle(SecondaryButtonStyle())

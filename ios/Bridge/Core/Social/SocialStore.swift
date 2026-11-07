@@ -14,6 +14,9 @@ enum ShareLevel: String, CaseIterable, Sendable {
     }
 }
 
+/// Who leads a shared-plan goal, and whether they see this user's check-ins.
+struct LeadInfo: Equatable, Sendable { let name: String; let sees: Bool; let isMe: Bool }
+
 enum Reaction: String, CaseIterable, Sendable { case respect, keepGoing, inspired
     var label: String { switch self { case .respect: String(localized: "Respect"); case .keepGoing: String(localized: "Keep going"); case .inspired: String(localized: "Inspired") } }
 }
@@ -147,8 +150,8 @@ final class SocialStore {
     func preview(code: String) async throws -> InvitePreviewDTO { try await api.previewAlliance(code: code.uppercased()) }
 
     /// Joining a shared plan adds its goal and tasks; they arrive with the next sync.
-    func join(code: String, goalId: UUID?) async throws -> AllianceDTO {
-        let a = try await api.joinAlliance(code: code.uppercased(), goalId: goalId)
+    func join(code: String, goalId: UUID?, shareProgress: Bool = true) async throws -> AllianceDTO {
+        let a = try await api.joinAlliance(code: code.uppercased(), goalId: goalId, shareProgress: shareProgress)
         upsert(a); realtime.resubscribe()
         await SyncEngine.shared.mutated()
         return a
@@ -159,6 +162,18 @@ final class SocialStore {
         await SyncEngine.shared.mutated()                          // a shared goal becomes a personal one
     }
     func applyNow(_ a: AllianceDTO) async throws { try await api.applyPlanNow(a.id) }
+
+    // MARK: Students view (lead of a shared plan) and a member's sharing choice
+    func students(_ allianceId: String) async throws -> StudentsDTO { try await api.students(allianceId) }
+    func student(_ allianceId: String, userId: String) async throws -> StudentDetailDTO { try await api.student(allianceId, userId: userId) }
+    func nudgeStudent(_ allianceId: String, userId: String) async throws { try await api.nudgeStudent(allianceId, userId: userId) }
+    func setSharing(_ a: AllianceDTO, _ on: Bool) async throws { try await api.setSharing(a.id, on: on); try await refreshAlliances() }
+
+    /// Shared-plan goals by goal id: who leads the plan and whether they see this user's check-ins.
+    func lead(of goalId: UUID) -> LeadInfo? {
+        guard let a = alliances.first(where: { $0.goalId == goalId.uuidString.lowercased() && $0.shared != nil }), let sh = a.shared else { return nil }
+        return LeadInfo(name: sh.lead, sees: sh.sharesProgress == true, isMe: sh.isLead)
+    }
 
     // MARK: Alliance chat
     func lines(_ allianceId: String) -> [ChatLine] {

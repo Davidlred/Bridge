@@ -40,12 +40,17 @@ final class TodayModel {
         store?.saveImages(id, dtos)
     }
 
-    func toggle(_ task: PlanTask, in goal: GoalState) {
+    /// `checkInNext`: the check-in sheet opens first; the day's celebration waits until it closes.
+    func toggle(_ task: PlanTask, in goal: GoalState, checkInNext: Bool = false) {
         let done = !task.done
         store?.setDone(task.id, done)
         if done { Analytics.track(.taskCompleted) }
         if done { Task { await social?.announce(goalId: goal.id, store: store) } }      // share progress, if the user allows it
-        guard done, let g = store?.goals.first(where: { $0.id == goal.id }), g.progress.allDone else { return }
+        if done && !checkInNext { celebrateIfDone(goal.id) }
+    }
+
+    func celebrateIfDone(_ goalId: UUID) {
+        guard let g = store?.goals.first(where: { $0.id == goalId }), g.progress.allDone else { return }
         // All of a goal's tasks done for the first time today: celebrate once per goal per day.
         let key = "celebrated.\(g.id.uuidString).\(LocalDay.today())"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
@@ -103,8 +108,8 @@ final class TodayModel {
 }
 
 enum TodaySheet: Identifiable, Equatable {
-    case task(UUID), add(UUID), goal(UUID), archive(UUID), delete(UUID), choose, limit, plus
-    var id: String { switch self { case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .delete(let i): "d\(i)"; case .choose: "c"; case .limit: "l"; case .plus: "p" } }
+    case task(UUID), add(UUID), goal(UUID), archive(UUID), delete(UUID), choose, limit, plus, checkin(UUID)
+    var id: String { switch self { case .checkin(let i): "k\(i)"; case .task(let i): "t\(i)"; case .add(let i): "a\(i)"; case .goal(let i): "g\(i)"; case .archive(let i): "x\(i)"; case .delete(let i): "d\(i)"; case .choose: "c"; case .limit: "l"; case .plus: "p" } }
 }
 
 struct TodayView: View {
@@ -387,7 +392,7 @@ struct TodayView: View {
                 .padding(.vertical, 28).padding(.horizontal, 20).frame(maxWidth: .infinity)
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
             }
-            VStack(spacing: 8) { ForEach(g.tasks) { t in TaskRow(task: t, onToggle: { model.toggle(t, in: g) }, onOpen: { sheet = .task(t.id) }) } }
+            VStack(spacing: 8) { ForEach(g.tasks) { t in TaskRow(task: t, onToggle: { tick(t, g) }, onOpen: { sheet = .task(t.id) }) } }
             Button { sheet = .add(g.id) } label: {
                 Label("Add task", systemImage: "plus").font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).frame(maxWidth: .infinity, minHeight: 52)
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
@@ -412,23 +417,37 @@ struct TodayView: View {
         }
     }
 
+    /// Ticking a task with something to log asks for a check-in straight away.
+    private func tick(_ t: PlanTask, _ g: GoalState) {
+        let ask = !t.done && t.checkable
+        model.toggle(t, in: g, checkInNext: ask)
+        sheet = ask ? .checkin(t.id) : nil
+    }
+
     @ViewBuilder private func sheetView(_ s: TodaySheet) -> some View {
         switch s {
+        case .checkin(let id):
+            if let t = store.goals.flatMap(\.tasks).first(where: { $0.id == id }), let g = store.goals.first(where: { $0.tasks.contains { $0.id == id } }) {
+                CheckInSheet(task: t, existing: store.checkin(id), lead: social.lead(of: g.id)) { c in
+                    store.checkIn(id, c); sheet = nil; model.celebrateIfDone(g.id)
+                    if c.feel != nil || c.amount != nil || !(c.note ?? "").isEmpty { toaster.show(String(localized: "Checked in"), .ok) }
+                } onSkip: { sheet = nil; model.celebrateIfDone(g.id) }
+            }
         case .limit:
             LimitSheet(onManage: { sheet = nil; model.open(nil) }, onDismiss: { sheet = nil }, onUpgrade: { sheet = .plus })
         case .plus:
             PaywallSheet(product: .plus) { sheet = nil }
         case .add(let goalId):
-            TaskSheet(task: nil) { title, notes, priority, time in
-                store.addTask(goalId: goalId, title: title, notes: notes, priority: priority, time: time); sheet = nil
+            TaskSheet(task: nil) { title, notes, priority, time, measure in
+                store.addTask(goalId: goalId, title: title, notes: notes, priority: priority, time: time, measure: measure); sheet = nil
                 toaster.show(String(localized: "Added to today's plan."), .ok)
             } onToggle: { _ in } onDelete: {}
         case .task(let id):
             if let t = store.goals.flatMap(\.tasks).first(where: { $0.id == id }), let g = store.goals.first(where: { $0.tasks.contains(t) }) {
-                TaskSheet(task: t) { title, notes, priority, time in
-                    store.updateTask(id, title: title, notes: notes, priority: priority, time: time); sheet = nil
+                TaskSheet(task: t, checkin: store.checkin(id), onCheckIn: { sheet = .checkin(id) }) { title, notes, priority, time, measure in
+                    store.updateTask(id, title: title, notes: notes, priority: priority, time: time, measure: measure); sheet = nil
                     toaster.show(String(localized: "Task updated."), .ok)
-                } onToggle: { _ in model.toggle(t, in: g); sheet = nil } onDelete: {
+                } onToggle: { _ in tick(t, g) } onDelete: {
                     store.deleteTask(id); sheet = nil; toaster.show(String(localized: "Task deleted."))
                 }
             }
@@ -662,13 +681,16 @@ struct RealityView: View {
 
 struct TaskSheet: View {
     let task: PlanTask?
-    var onSave: (String, String, String, String) -> Void
+    var checkin: Checkin? = nil
+    var onCheckIn: (() -> Void)? = nil
+    var onSave: (String, String, String, String, String?) -> Void
     var onToggle: (Bool) -> Void
     var onDelete: () -> Void
     @State private var title = ""
     @State private var notes = ""
     @State private var priority = "Medium"
     @State private var time = ""
+    @State private var measure: String?
     @State private var error = false
     @State private var confirm = false
 
@@ -694,16 +716,18 @@ struct TaskSheet: View {
                     .frame(maxWidth: .infinity)
                     BridgeField(label: "WHEN", placeholder: "Any time", text: Binding(get: { time }, set: { time = String($0.prefix(24)) })).frame(maxWidth: 140)
                 }
+                if task?.readOnly != true { MeasurePicker(value: $measure) }
                 if let r = task?.rationale {
                     Text(r).font(BFont.body(13)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, alignment: .leading)
                 }
+                if let task, task.done, let checkin { CheckinSummary(checkin: checkin, measure: task.measure) }
                 if let links = task?.links, !links.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("LINKS").bridgeLabel(11)
                         ForEach(links, id: \.self) { ResourceLinkRow(link: $0) }
                     }
                 }
-                let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time) } }
+                let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time, measure) } }
                 if task == nil {
                     Button("Add to today", action: save).buttonStyle(PrimaryButtonStyle())
                 } else if confirm {
@@ -719,6 +743,7 @@ struct TaskSheet: View {
                 } else if let task {
                     VStack(spacing: 8) {
                         if !task.readOnly { Button("Save changes", action: save).buttonStyle(PrimaryButtonStyle()) }
+                        if task.done && task.checkable, let onCheckIn { Button(checkin != nil ? "Edit check-in" : "Check in", action: onCheckIn).buttonStyle(SecondaryButtonStyle()) }
                         HStack(spacing: 8) {
                             Button(task.done ? "Mark not done" : "Mark done") { onToggle(!task.done) }.buttonStyle(SecondaryButtonStyle())
                             if !task.readOnly {
@@ -731,7 +756,7 @@ struct TaskSheet: View {
             }
             .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
         }
-        .onAppear { title = task?.title ?? ""; notes = task?.notes ?? ""; priority = task?.priority ?? "Medium"; time = task?.timeOfDay ?? "" }
+        .onAppear { title = task?.title ?? ""; notes = task?.notes ?? ""; priority = task?.priority ?? "Medium"; time = task?.timeOfDay ?? ""; measure = task?.measure }
     }
 }
 

@@ -66,12 +66,14 @@ struct PushResult: Decodable, Sendable { let accepted: Set<UUID>; let rejected: 
 }
 struct Changes: Decodable, Sendable {
     struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility?; let category: String? }
-    struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double?; let onDate: String?; let resources: [LinkDTO]? }
+    struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double?; let onDate: String?; let resources: [LinkDTO]?; var measure: String? = nil }
     struct Completion: Decodable, Sendable { let taskId: UUID; let localDate: String; let completedAt: Double? }
-    struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion] }
+    struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion]; var checkins: [Completion]? = nil }
+    struct Checkin: Decodable, Sendable { let taskId: UUID; let localDate: String; let feel: Int?; let amount: Double?; let note: String?; let updatedAt: Double? }
     struct Journal: Decodable, Sendable { let id: UUID; let goalId: UUID?; let localDate: String; let mood: Int?; let body: String; let version: Int; let conflictOf: UUID? }
     let cursor: Int; let hasMore: Bool
     let goals: [Goal]; let tasks: [Task]; let completions: [Completion]; let removed: Removed
+    var checkins: [Checkin]? = nil
     let journal: [Journal]?; let removedJournal: [UUID]?
     struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let goalId: UUID?; let role: String; let text: String; let suggestion: Suggestion?; let alliance: AllianceSuggestion?; var action: CoachAction? = nil; let status: String; let suggestionState: String?; let createdAt: Double }
     let chat: [Chat]?; let removedChat: [UUID]?
@@ -89,7 +91,11 @@ struct PostDTO: Codable, Equatable, Sendable, Identifiable {
 struct CommunityDTO: Codable, Equatable, Sendable { let unlocked: Bool; var streak = 0; var widened = false; var posts: [PostDTO] = [] }
 struct MemberDTO: Codable, Equatable, Sendable { let userId: String; let name: String; let role: String; var away = false; var me = false; var finished: Bool? = nil }
 struct DoneCount: Codable, Equatable, Sendable { var done = 0; var total = 0 }
-struct SharedPlanDTO: Codable, Equatable, Sendable { let lead: String; let goal: String; let deadline: String; var me = DoneCount(); var group = DoneCount(); var isLead = false }
+struct SharedPlanDTO: Codable, Equatable, Sendable {
+    let lead: String; let goal: String; let deadline: String; var me = DoneCount(); var group = DoneCount(); var isLead = false
+    /// A member's ticks and check-ins on this plan are visible to the lead. Optional: older servers leave it out.
+    var sharesProgress: Bool? = nil
+}
 struct AllianceFeedDTO: Codable, Equatable, Sendable { var name: String?; let what: String; var title: String?; var at: Double = 0 }
 struct AllianceDTO: Codable, Equatable, Sendable, Identifiable {
     let id: String; let name: String; let planMode: String; let inviteCode: String; var cap = 15; let startDate: String; var role: String?; var goalId: String?
@@ -107,6 +113,29 @@ struct InvitePreviewDTO: Codable, Equatable, Sendable {
 }
 struct AllianceMessageDTO: Codable, Equatable, Sendable { let id: String; var clientId: String?; var userId: String?; var name: String?; var mine = false; let body: String; var createdAt: Double = 0 }
 private struct AllianceEnvelope: Decodable { let alliance: AllianceDTO }
+
+// MARK: Students view: the lead of a shared plan follows each member who shares their progress.
+struct WeekCount: Codable, Equatable, Sendable {
+    var done = 0; var due = 0
+    var rate: Double { due == 0 ? 0 : Double(done) / Double(due) }
+}
+/// `attention`: away (nothing ticked in 3 days) | low_feel (check-ins say it's hard) | behind (under half done this week).
+struct StudentProgressDTO: Codable, Equatable, Sendable {
+    let streak: Int; let lastActive: String?; let week: WeekCount; let today: DoneCount; let feel: Double?; let attention: String?; let nudgedToday: Bool
+}
+struct StudentDTO: Codable, Equatable, Sendable, Identifiable {
+    let userId: String; let name: String; let sharing: Bool; let finished: Bool; let startDate: String; let progress: StudentProgressDTO?
+    var id: String { userId }
+}
+struct ClassTaskDTO: Codable, Equatable, Sendable, Identifiable { let id: String; let title: String; let measure: String?; let done: Int; let due: Int; let feel: Double? }
+struct StudentsDTO: Codable, Equatable, Sendable { let name: String; let members: Int; let sharing: Int; let week: WeekCount; let students: [StudentDTO]; let tasks: [ClassTaskDTO] }
+/// `state`: done | missed | open (today, not yet) | before (they hadn't joined).
+struct StudentDayDTO: Codable, Equatable, Sendable { let date: String; let state: String; let feel: Int?; let amount: Double?; let note: String? }
+struct StudentTaskDTO: Codable, Equatable, Sendable { let id: String?; let title: String; let measure: String?; let days: [StudentDayDTO] }
+struct StudentDetailDTO: Codable, Equatable, Sendable {
+    let userId: String; let name: String; let startDate: String; let finished: Bool; let days: [String]; let streak: Int; let lastActive: String?
+    let week: WeekCount; let feel: Double?; let attention: String?; var nudgedToday: Bool; let tasks: [StudentTaskDTO]
+}
 
 // MARK: Encrypted DMs. The server relays public keys and ciphertext only.
 struct DmContactDTO: Codable, Equatable, Sendable { let userId: String; let name: String; var ready = false }
@@ -299,13 +328,21 @@ actor APIClient {
         struct R: Decodable { let preview: InvitePreviewDTO }
         return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/alliances/preview/\(code)", nil, authed: true)).preview
     }
-    func joinAlliance(code: String, goalId: UUID?) async throws -> AllianceDTO {
-        var body: [String: Any] = ["code": code]
+    func joinAlliance(code: String, goalId: UUID?, shareProgress: Bool = true) async throws -> AllianceDTO {
+        var body: [String: Any] = ["code": code, "shareProgress": shareProgress]
         if let goalId { body["goalId"] = goalId.uuidString.lowercased() }
         return try JSONDecoder().decode(AllianceEnvelope.self, from: try await raw("POST", "/v1/alliances/join", body, authed: true)).alliance
     }
     func leaveAlliance(_ id: String) async throws { _ = try await raw("POST", "/v1/alliances/\(id)/leave", nil, authed: true) }
     func applyPlanNow(_ id: String) async throws { _ = try await raw("POST", "/v1/alliances/\(id)/apply-now", nil, authed: true) }
+    func students(_ allianceId: String) async throws -> StudentsDTO {
+        try JSONDecoder().decode(StudentsDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/students", nil, authed: true))
+    }
+    func student(_ allianceId: String, userId: String) async throws -> StudentDetailDTO {
+        try JSONDecoder().decode(StudentDetailDTO.self, from: try await raw("GET", "/v1/alliances/\(allianceId)/students/\(userId)", nil, authed: true))
+    }
+    func nudgeStudent(_ allianceId: String, userId: String) async throws { _ = try await raw("POST", "/v1/alliances/\(allianceId)/students/\(userId)/nudge", nil, authed: true) }
+    func setSharing(_ allianceId: String, on: Bool) async throws { _ = try await raw("PUT", "/v1/alliances/\(allianceId)/sharing", ["on": on], authed: true) }
     func allianceMessages(_ id: String) async throws -> [AllianceMessageDTO] {
         struct R: Decodable { let messages: [AllianceMessageDTO] }
         return try JSONDecoder().decode(R.self, from: try await raw("GET", "/v1/alliances/\(id)/messages", nil, authed: true)).messages

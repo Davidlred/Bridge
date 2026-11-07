@@ -43,6 +43,8 @@ import SwiftData
     var onDate: String?
     /// Up to three links, JSON [{"title","url"}], checked by the server when the AI wrote them.
     var resourcesJSON: Data?
+    /// What a check-in asks for after ticking: reps | kg | min | km | pages. Nil: how it felt and a note only.
+    var measure: String?
 
     var isReadOnlyShared: Bool { origin == "shared" }
     var links: [LinkDTO] { resourcesJSON.flatMap { try? JSONDecoder().decode([LinkDTO].self, from: $0) } ?? [] }
@@ -63,6 +65,21 @@ import SwiftData
         self.key = Self.key(taskId, localDate); self.taskId = taskId; self.localDate = localDate; self.completedAt = completedAt
     }
     static func key(_ taskId: UUID, _ localDate: String) -> String { "\(taskId.uuidString)|\(localDate)" }
+}
+
+/// After ticking a task: how it felt (1-5), an amount in the task's unit, a short note. On a shared plan the lead sees it.
+@Model final class CheckinEntity {
+    /// "<taskId>|<localDate>", like completions.
+    @Attribute(.unique) var key: String
+    var taskId: UUID
+    var localDate: String
+    var feel: Int?
+    var amount: Double?
+    var note: String?
+    var updatedAt: Date
+    init(taskId: UUID, localDate: String) {
+        self.key = CompletionEntity.key(taskId, localDate); self.taskId = taskId; self.localDate = localDate; self.updatedAt = .now
+    }
 }
 
 /// One reflection per goal per local day. `syncedVersion` is the server version this device last saw (sent as baseVersion).
@@ -202,7 +219,7 @@ import SwiftData
 
 enum Persistence {
     static let models: [any PersistentModel.Type] = [GoalEntity.self, TaskEntity.self, CompletionEntity.self, JournalEntity.self, OutboxEntity.self, GoalImageEntity.self, ChatMessageEntity.self, SocialCacheEntity.self, AllianceMessageEntity.self,
-                                                        OlmAccountRow.self, OlmSessionRow.self, DmMessageRow.self, DmPeerRow.self]
+                                                        OlmAccountRow.self, OlmSessionRow.self, DmMessageRow.self, DmPeerRow.self, CheckinEntity.self]
     static let container: ModelContainer = {
         do { return try ModelContainer(for: Schema(models)) } catch { fatalError("Could not open the local database: \(error)") }
     }()
@@ -210,7 +227,7 @@ enum Persistence {
     /// Log out / delete account / a different user signing in: start from an empty database.
     static func wipe() throws {
         let ctx = ModelContext(container)
-        try ctx.delete(model: OutboxEntity.self); try ctx.delete(model: CompletionEntity.self); try ctx.delete(model: JournalEntity.self)
+        try ctx.delete(model: OutboxEntity.self); try ctx.delete(model: CompletionEntity.self); try ctx.delete(model: CheckinEntity.self); try ctx.delete(model: JournalEntity.self)
         try ctx.delete(model: TaskEntity.self); try ctx.delete(model: GoalEntity.self); try ctx.delete(model: GoalImageEntity.self); try ctx.delete(model: ChatMessageEntity.self)
         try ctx.delete(model: SocialCacheEntity.self); try ctx.delete(model: AllianceMessageEntity.self)
         try ctx.delete(model: OlmAccountRow.self); try ctx.delete(model: OlmSessionRow.self); try ctx.delete(model: DmMessageRow.self); try ctx.delete(model: DmPeerRow.self)

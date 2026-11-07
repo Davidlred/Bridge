@@ -232,4 +232,51 @@ final class FoundationSnapshotTests: XCTestCase {
                                      deadline: "2026-12-04", tasks: [PreviewTaskDTO(title: "Work 10 past-paper questions", priority: "High", timeOfDay: "After school")], pace: PaceDTO(groupDay: 16, groupTotal: 68, yourTotal: 53))
         verify(JoinAllianceSheet(model: m, onJoin: {}).background(Theme.bg), named: "alliance-join-preview")
     }
+
+    // MARK: Students view and check-ins (shared plans led by a teacher or coach)
+    private var week: [String] { (0..<7).map { LocalDay.today(now: now.addingTimeInterval(Double($0 - 6) * 86_400)) } }
+    private var classView: StudentsDTO {
+        func p(_ streak: Int, _ last: String?, _ done: Int, _ due: Int, _ today: DoneCount, _ feel: Double?, _ attention: String?) -> StudentProgressDTO {
+            StudentProgressDTO(streak: streak, lastActive: last, week: WeekCount(done: done, due: due), today: today, feel: feel, attention: attention, nudgedToday: false)
+        }
+        return StudentsDTO(name: "Strength 101", members: 5, sharing: 4, week: WeekCount(done: 41, due: 63), students: [
+            StudentDTO(userId: "u1", name: "Bayo", sharing: true, finished: false, startDate: "2026-10-01", progress: p(0, "2026-10-09", 4, 21, DoneCount(done: 0, total: 3), nil, "away")),
+            StudentDTO(userId: "u2", name: "Kemi", sharing: true, finished: false, startDate: "2026-10-01", progress: p(3, "2026-10-13", 12, 21, DoneCount(done: 2, total: 3), 1.8, "low_feel")),
+            StudentDTO(userId: "u3", name: "Tunde", sharing: true, finished: false, startDate: "2026-10-01", progress: p(9, "2026-10-13", 20, 21, DoneCount(done: 3, total: 3), 4.2, nil)),
+            StudentDTO(userId: "u4", name: "Ada", sharing: true, finished: true, startDate: "2026-09-01", progress: p(30, "2026-10-12", 5, 5, DoneCount(), 4.0, nil)),
+            StudentDTO(userId: "u5", name: "Lola", sharing: false, finished: false, startDate: "2026-10-05", progress: nil),
+        ], tasks: [
+            ClassTaskDTO(id: "t1", title: "Squats, 3 sets of 10", measure: "reps", done: 9, due: 21, feel: 2.1),
+            ClassTaskDTO(id: "t2", title: "Plank, 60 seconds", measure: nil, done: 15, due: 21, feel: 3.4),
+            ClassTaskDTO(id: "t3", title: "Walk 20 minutes", measure: "min", done: 17, due: 21, feel: nil),
+        ])
+    }
+    private var kemi: StudentDetailDTO {
+        let squats = week.enumerated().map { i, d in StudentDayDTO(date: d, state: [1, 3].contains(i) ? "missed" : "done", feel: i == 6 ? 1 : i == 5 ? 2 : nil, amount: i >= 5 ? 8 : nil,
+                                                                    note: i == 6 ? "Knee hurts on the way down. Can I do wall sits instead?" : nil) }
+        let plank = week.enumerated().map { i, d in StudentDayDTO(date: d, state: i % 2 == 0 ? "done" : "missed", feel: i == 4 ? 3 : nil, amount: nil, note: nil) }
+        let walk = week.enumerated().map { i, d in StudentDayDTO(date: d, state: i == 6 ? "open" : "done", feel: nil, amount: nil, note: nil) }
+        return StudentDetailDTO(userId: "u2", name: "Kemi", startDate: "2026-10-01", finished: false, days: week, streak: 3, lastActive: "2026-10-13", week: WeekCount(done: 12, due: 21),
+                                feel: 1.8, attention: "low_feel", nudgedToday: false, tasks: [
+                                    StudentTaskDTO(id: "t1", title: "Squats, 3 sets of 10", measure: "reps", days: squats),
+                                    StudentTaskDTO(id: "t2", title: "Plank, 60 seconds", measure: nil, days: plank),
+                                    StudentTaskDTO(id: "t3", title: "Walk 20 minutes", measure: "min", days: walk)])
+    }
+    func testStudents() { verify(StudentsContent(state: Loadable(data: classView, loading: false), code: "STRE-4821", today: now), named: "students") }
+    func testStudentsEmpty() {
+        let empty = StudentsDTO(name: "Strength 101", members: 0, sharing: 0, week: WeekCount(), students: [], tasks: [])
+        verify(StudentsContent(state: Loadable(data: empty, loading: false), code: "STRE-4821", today: now), named: "students-empty")
+    }
+    func testStudentsOffline() { verify(StudentsContent(state: Loadable<StudentsDTO>(data: nil, loading: false, offline: true), code: "STRE-4821", today: now), named: "students-offline") }
+    func testStudent() { verify(StudentContent(state: Loadable(data: kemi, loading: false), name: "Kemi", plan: "Strength 101", today: now), named: "student") }
+    func testCheckIn() {
+        let squats = PlanTask(id: UUID(), title: "Squats, 3 sets of 10", priority: "High", timeOfDay: nil, notes: nil, rationale: nil, origin: "shared", done: true, measure: "reps")
+        verify(CheckInSheet(task: squats, existing: Checkin(feel: 2, amount: 8, note: "Knee hurts on the way down."), lead: LeadInfo(name: "Coach Ada", sees: true, isMe: false), onSave: { _ in }, onSkip: {})
+            .background(Theme.s1), named: "checkin")
+    }
+    func testTaskMeasure() { verify(MeasurePicker(value: .constant("reps")).padding(24).background(Theme.s1), named: "task-measure") }
+    func testAllianceLead() {
+        var lead = calc; lead.role = "owner"; lead.shared?.isLead = true
+        verify(community(CommunityUI(goal: goal, community: CommunityDTO(unlocked: true, streak: 9), loading: false, tab: .alliance, alliances: [lead])), named: "alliance-lead")
+    }
 }

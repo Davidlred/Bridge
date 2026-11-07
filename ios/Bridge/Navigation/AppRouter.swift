@@ -9,6 +9,10 @@ enum Route: Hashable, Codable {
     case community(goalId: UUID, code: String? = nil)
     case alliance(goalId: UUID, allianceId: UUID)
     case allianceChat(UUID)
+    /// Lead of a shared plan: everyone on it. `code` is the invite code, shown while nobody has joined.
+    case students(allianceId: UUID, code: String)
+    /// One member's week. `plan` is the alliance name, used in the nudge note.
+    case student(allianceId: UUID, userId: UUID, name: String, plan: String)
     case gameNight(allianceId: UUID)
     case rankings(goalCategory: String)
     case allianceRankings(UUID)
@@ -93,6 +97,8 @@ private extension View {
             case .journalEntry(let goalId, _): JournalFromToday(goalId: goalId)
             case .community(let goalId, let code): CommunityScreen(goalId: goalId, code: code)
             case .allianceChat(let id): AllianceChatScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
+            case .students(let id, let code): StudentsScreen(allianceId: id.uuidString.lowercased(), code: code)
+            case .student(let id, let userId, let name, let plan): StudentScreen(allianceId: id.uuidString.lowercased(), userId: userId.uuidString.lowercased(), name: name, plan: plan)
             case .invitePreview(let code): InviteRedirect(code: code)
             case .gameNight(let id): GameNightScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .allianceRankings(let id): RankingsScreen(allianceId: id.uuidString.lowercased())
