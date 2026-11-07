@@ -26,13 +26,18 @@ export async function goalStreak(db: Db, userId: string, goalId: string): Promis
 
 export const COMMUNITY_STREAK = 7;
 
-/** Opens Community for a goal at a 7-day streak. It stays open if the streak later breaks. */
+/**
+ * Opens Community for a goal at a 7-day streak, or once the goal is in an alliance (someone leading a shared plan from
+ * day one, or joining one). It stays open after that.
+ */
 export async function communityUnlocked(db: Db, userId: string, goalId: string): Promise<{ unlocked: boolean; streak: number }> {
-  const [g] = await db`select community_unlocked_at from goals where id = ${goalId} and user_id = ${userId}`;
+  const [g] = await db`select community_unlocked_at, exists(select 1 from alliance_members m join alliances a on a.id = m.alliance_id
+                         where m.goal_id = goals.id and m.user_id = ${userId} and m.status <> 'left' and a.archived_at is null) as allied
+                       from goals where id = ${goalId} and user_id = ${userId}`;
   if (!g) return { unlocked: false, streak: 0 };
   const streak = await goalStreak(db, userId, goalId);
   if (g.community_unlocked_at) return { unlocked: true, streak };
-  if (streak >= COMMUNITY_STREAK) {
+  if (streak >= COMMUNITY_STREAK || g.allied) {
     await db`update goals set community_unlocked_at = now() where id = ${goalId}`;
     return { unlocked: true, streak };
   }

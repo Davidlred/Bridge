@@ -16,7 +16,7 @@ const PULL_PAGE = 1000;
 const ISODate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const Mutation = z.object({
   id: z.string().uuid(),
-  entity: z.enum(['goal', 'task', 'completion', 'settings', 'journal', 'chat']),
+  entity: z.enum(['goal', 'task', 'completion', 'checkin', 'settings', 'journal', 'chat']),
   entityId: z.string().uuid(),
   op: z.enum(['upsert', 'delete', 'complete', 'uncomplete']),
   patch: z.record(z.unknown()).default({}),
@@ -51,9 +51,17 @@ const TaskPatch = z.object({
   position: z.number().int().min(0).max(10_000),
   onDate: ISODate.nullable(),                       // a step: one-time, for this local day; null = a daily habit
   resources: z.array(z.object({ title: z.string().trim().min(1).max(80), url: z.string().trim().max(500).regex(/^https?:\/\//) }).strict()).max(3),
+  measure: z.enum(['reps', 'kg', 'min', 'km', 'pages']).nullable(),   // what a check-in asks for after ticking it
 }).partial().strict();
 
 const CompletionPatch = z.object({ localDate: ISODate });
+/** After ticking a task: how it felt, an amount in the task's unit, a short note. Every part is optional. */
+const CheckinPatch = z.object({
+  localDate: ISODate,
+  feel: z.number().int().min(1).max(5).nullable().default(null),
+  amount: z.number().min(0).max(99_999).nullable().default(null),
+  note: z.string().trim().max(200).nullable().default(null),
+}).strict();
 const JournalPatch = z.object({
   goalId: z.string().uuid().nullable(),
   localDate: ISODate,
@@ -140,9 +148,9 @@ async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
     if (!p.goalId || !p.title) reject('invalid');
     const [g] = await tx`select 1 from goals where id = ${p.goalId!} and user_id = ${userId}`;
     if (!g) reject('goal_missing');
-    await tx`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, notes, origin, position, on_date, resources)
+    await tx`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, notes, origin, position, on_date, resources, measure)
              values (${m.entityId}, ${p.goalId!}, ${userId}, ${p.title!}, ${p.priority ?? 'Medium'}, ${p.timeOfDay ?? null}, ${p.minutes ?? null}, ${p.rationale ?? null}, ${p.notes ?? null}, ${p.origin ?? 'user'}, ${p.position ?? 0},
-                     ${p.onDate ?? null}, ${tx.json(p.resources ?? [])})`;
+                     ${p.onDate ?? null}, ${tx.json(p.resources ?? [])}, ${p.measure ?? null})`;
   } else {
     // Last writer wins per field: only the fields present in the patch are touched, in server-receipt order.
     await tx`update tasks set
@@ -153,7 +161,8 @@ async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
         notes = case when ${'notes' in p} then ${p.notes ?? null} else notes end,
         position = coalesce(${p.position ?? null}, position),
         on_date = case when ${'onDate' in p} then ${p.onDate ?? null}::date else on_date end,
-        resources = case when ${'resources' in p} then ${tx.json(p.resources ?? [])} else resources end, updated_at = now()
+        resources = case when ${'resources' in p} then ${tx.json(p.resources ?? [])} else resources end,
+        measure = case when ${'measure' in p} then ${p.measure ?? null} else measure end, updated_at = now()
       where id = ${m.entityId}`;
   }
   await log(tx, userId, 'task', m.entityId, 'upsert');
@@ -178,7 +187,31 @@ async function applyCompletion(tx: Tx, userId: string, m: Mutation) {
     // Only an uncomplete newer than the completion removes it.
     const gone = await tx`delete from task_completions where task_id = ${m.entityId} and local_date = ${localDate} and completed_at <= ${at} returning 1`;
     if (gone.length) await log(tx, userId, 'completion', m.entityId, 'delete', localDate);
+    // Unticking takes that day's check-in with it.
+    const was = await tx`delete from checkins where task_id = ${m.entityId} and local_date = ${localDate} and updated_at <= ${at} returning 1`;
+    if (was.length) await log(tx, userId, 'checkin', m.entityId, 'delete', localDate);
   } else reject('invalid');
+}
+
+/** One check-in per task and day; the newest write wins. Notes are sealed with the user's key, like the journal. */
+async function applyCheckin(tx: Tx, userId: string, m: Mutation) {
+  const p = check(CheckinPatch, m.patch);
+  const [t] = await tx`select 1 from tasks where id = ${m.entityId} and user_id = ${userId}`;
+  if (!t) reject('task_missing');
+  const at = new Date(m.clientTs);
+  if (m.op === 'delete') {
+    const gone = await tx`delete from checkins where task_id = ${m.entityId} and local_date = ${p.localDate} and updated_at <= ${at} returning 1`;
+    if (gone.length) await log(tx, userId, 'checkin', m.entityId, 'delete', p.localDate);
+    return;
+  }
+  if (m.op !== 'upsert') reject('invalid');
+  const note = p.note ? encryptText(await journalKey(tx, userId), p.note) : null;
+  const saved = await tx`insert into checkins (task_id, user_id, local_date, feel, amount, note_ciphertext, updated_at)
+                         values (${m.entityId}, ${userId}, ${p.localDate}, ${p.feel}, ${p.amount}, ${note}, ${at})
+                         on conflict (task_id, local_date) do update set feel = excluded.feel, amount = excluded.amount, note_ciphertext = excluded.note_ciphertext, updated_at = excluded.updated_at
+                           where checkins.updated_at <= excluded.updated_at
+                         returning 1`;
+  if (saved.length) await log(tx, userId, 'checkin', m.entityId, 'upsert', p.localDate);
 }
 
 async function applySettings(tx: Tx, userId: string, m: Mutation) {
@@ -258,7 +291,7 @@ async function applyChat(tx: Tx, userId: string, m: Mutation) {
   await log(tx, userId, 'chat', m.entityId, 'upsert');
 }
 
-const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, settings: applySettings, journal: applyJournal, chat: applyChat };
+const appliers = { goal: applyGoal, task: applyTask, completion: applyCompletion, checkin: applyCheckin, settings: applySettings, journal: applyJournal, chat: applyChat };
 const ms = (d: Date | null) => (d ? d.getTime() : null);
 
 /**
@@ -326,28 +359,31 @@ export async function syncRoutes(app: FastifyInstance) {
     const latest = new Map<string, (typeof rows)[number]>();
     for (const r of rows) latest.set(`${r.entity}:${r.entity_id}:${r.key ?? ''}`, r);
     const of = (entity: string) => [...latest.values()].filter(r => r.entity === entity);
-    const goalIds = of('goal').map(r => r.entity_id as string), taskIds = of('task').map(r => r.entity_id as string), comps = of('completion');
+    const goalIds = of('goal').map(r => r.entity_id as string), taskIds = of('task').map(r => r.entity_id as string), comps = of('completion'), checks = of('checkin');
 
     const goals = goalIds.length ? await sql`select id, label, statement, category, start_date::text, deadline::text, status, source_alliance_id, color_index, routine, reality_note, feasibility, updated_at from goals where id in ${sql(goalIds)} and user_id = ${req.userId}` : [];
-    const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, on_date::text as on_date, resources, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
+    const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, on_date::text as on_date, resources, measure, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
     const live = comps.length ? await sql`select task_id, local_date::text, completed_at from task_completions where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${comps.map(c => c.entity_id as string)}::uuid[], ${comps.map(c => c.key as string)}::date[]))` : [];
+    const checkRows = checks.length ? await sql`select task_id, local_date::text, feel, amount, note_ciphertext, updated_at from checkins where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${checks.map(c => c.entity_id as string)}::uuid[], ${checks.map(c => c.key as string)}::date[]))` : [];
     const [me] = of('settings').length ? await sql`select settings from users where id = ${req.userId}` : [];
     const journalIds = of('journal').map(r => r.entity_id as string);
     const journalRows = journalIds.length ? await sql`select id, goal_id, local_date::text, mood, body_ciphertext, version, conflict_of, updated_at from journal_entries where id in ${sql(journalIds)} and user_id = ${req.userId}` : [];
     const chatIds = of('chat').map(r => r.entity_id as string);
     const chatRows = chatIds.length ? await sql`select id, conversation, goal_id, role, body_ciphertext, status, suggestion_state, created_at from coach_messages where id in ${sql(chatIds)} and user_id = ${req.userId}` : [];
-    const key = journalRows.length || chatRows.length ? await journalKey(sql, req.userId) : null;
+    const key = journalRows.length || chatRows.length || checkRows.some(c => c.note_ciphertext) ? await journalKey(sql, req.userId) : null;
 
     const alive = new Set(goals.map(g => g.id as string)), done = new Set(live.map(c => `${c.task_id}:${c.local_date}`));
     return {
       cursor: rows.length ? Number(rows[rows.length - 1]!.server_seq) : since,
       hasMore: rows.length === PULL_PAGE,
       goals: goals.map(g => ({ id: g.id, label: g.label, statement: g.statement, category: g.category, startDate: g.start_date, deadline: g.deadline, status: g.status, sourceAllianceId: g.source_alliance_id, colorIndex: g.color_index, routine: g.routine, realityNote: g.reality_note, feasibility: g.feasibility, updatedAt: ms(g.updated_at) })),
-      tasks: tasks.map(t => ({ id: t.id, goalId: t.goal_id, title: t.title, priority: t.priority, timeOfDay: t.time_of_day, minutes: t.minutes, rationale: t.rationale, notes: t.notes, origin: t.origin, sharedTaskId: t.shared_task_id, position: t.position, onDate: t.on_date ?? null, resources: t.resources ?? [], deletedAt: ms(t.deleted_at), updatedAt: ms(t.updated_at) })),
+      tasks: tasks.map(t => ({ id: t.id, goalId: t.goal_id, title: t.title, priority: t.priority, timeOfDay: t.time_of_day, minutes: t.minutes, rationale: t.rationale, notes: t.notes, origin: t.origin, sharedTaskId: t.shared_task_id, position: t.position, onDate: t.on_date ?? null, resources: t.resources ?? [], measure: t.measure ?? null, deletedAt: ms(t.deleted_at), updatedAt: ms(t.updated_at) })),
       completions: live.map(c => ({ taskId: c.task_id, localDate: c.local_date, completedAt: ms(c.completed_at) })),
+      checkins: checkRows.map(c => ({ taskId: c.task_id, localDate: c.local_date, feel: c.feel, amount: c.amount === null ? null : Number(c.amount), note: c.note_ciphertext ? decryptText(key!, c.note_ciphertext) : null, updatedAt: ms(c.updated_at) })),
       removed: {
         goals: goalIds.filter(id => !alive.has(id)),
         completions: comps.filter(c => !done.has(`${c.entity_id}:${c.key}`)).map(c => ({ taskId: c.entity_id, localDate: c.key })),
+        checkins: checks.filter(c => !checkRows.some(r => r.task_id === c.entity_id && r.local_date === c.key)).map(c => ({ taskId: c.entity_id, localDate: c.key })),
       },
       settings: me?.settings ?? null,
       journal: journalRows.map(j => ({ id: j.id, goalId: j.goal_id, localDate: j.local_date, mood: j.mood, body: decryptText(key!, j.body_ciphertext), version: j.version, conflictOf: j.conflict_of, updatedAt: ms(j.updated_at) })),

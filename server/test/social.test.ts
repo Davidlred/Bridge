@@ -300,6 +300,65 @@ run('community, alliances and chat', () => {
       // Bo can still read and post in the alliance chat
       expect((await call(b, 'GET', `/v1/alliances/${al.id}`)).statusCode).toBe(200);
     });
+
+    it('lets a coach start a class on day one and follow each student who shares, with check-ins and nudges', async () => {
+      const coach = await signUp('Coach Ada'), s1 = await signUp('Tunde'), s2 = await signUp('Kemi'), s3 = await signUp('Bayo');
+      const lg = await goalWithStreak(coach, 0);
+      // A shared plan needs no streak; other alliances still wait for Community to open
+      expect((await call(coach, 'POST', '/v1/alliances', { name: 'Open crew', planMode: 'own', goalId: lg.g })).json().error).toBe('community_locked');
+      await push(coach, [mut('task', lg.t, 'upsert', { measure: 'reps', title: 'Squats' })]);
+      const cls = (await call(coach, 'POST', '/v1/alliances', { name: 'Strength 101', planMode: 'shared', goalId: lg.g })).json().alliance;
+      expect(cls.planMode).toBe('shared');
+      expect((await call(coach, 'GET', `/v1/community?goalId=${lg.g}`)).json().unlocked).toBe(true);
+
+      const j1 = (await call(s1, 'POST', '/v1/alliances/join', { code: cls.inviteCode })).json().alliance;
+      expect(j1.shared.sharesProgress).toBe(true);
+      expect((await call(s2, 'POST', '/v1/alliances/join', { code: cls.inviteCode, shareProgress: false })).json().alliance.shared.sharesProgress).toBe(false);
+      await call(s3, 'POST', '/v1/alliances/join', { code: cls.inviteCode });
+      await sql`update alliance_members set start_date = current_date - 4 where user_id = ${s3.user.id}`;    // joined 4 days ago, nothing done since
+
+      // A student ticks the task and checks in; the unit comes from the coach's task
+      const today = (await sql`select to_char((now() at time zone 'UTC') - interval '3 hours', 'YYYY-MM-DD') as d`)[0]!.d as string;
+      let p = await pull(s1);
+      const squat = p.tasks[0];
+      expect(squat).toMatchObject({ title: 'Squats', measure: 'reps', origin: 'shared' });
+      const r = await push(s1, [mut('completion', squat.id, 'complete', { localDate: today }), mut('checkin', squat.id, 'upsert', { localDate: today, feel: 2, amount: 12, note: 'Knee hurt on the last set' })]);
+      expect(r.rejected).toEqual({});
+      p = await pull(s1, p.cursor);
+      expect(p.checkins).toEqual([expect.objectContaining({ taskId: squat.id, localDate: today, feel: 2, amount: 12, note: 'Knee hurt on the last set' })]);
+      expect((await sql`select note_ciphertext::text as n from checkins where task_id = ${squat.id}`)[0]!.n).not.toContain('Knee');     // sealed at rest
+
+      // Only the lead sees the Students view
+      expect((await call(s1, 'GET', `/v1/alliances/${cls.id}/students`)).statusCode).toBe(403);
+      const view = (await call(coach, 'GET', `/v1/alliances/${cls.id}/students`)).json();
+      expect(view).toMatchObject({ name: 'Strength 101', members: 3, sharing: 2 });
+      expect(view.students.map((s: { name: string; progress: { attention: string | null } | null }) => [s.name, s.progress ? s.progress.attention : 'hidden'])).toEqual([['Bayo', 'away'], ['Tunde', null], ['Kemi', 'hidden']]);
+      expect(view.students[1].progress).toMatchObject({ week: { done: 1, due: 1 }, today: { done: 1, total: 1 }, streak: 1, lastActive: today, feel: 2, nudgedToday: false });
+      expect(view.tasks).toEqual([expect.objectContaining({ title: 'Squats', measure: 'reps', feel: 2 })]);
+
+      const one = (await call(coach, 'GET', `/v1/alliances/${cls.id}/students/${s1.user.id}`)).json();
+      expect(one.days).toHaveLength(7);
+      expect(one.tasks[0].days.at(-1)).toEqual({ date: today, state: 'done', feel: 2, amount: 12, note: 'Knee hurt on the last set' });
+      expect(one.tasks[0].days[0].state).toBe('before');
+      expect((await call(coach, 'GET', `/v1/alliances/${cls.id}/students/${s2.user.id}`)).json().error).toBe('not_sharing');
+      // Kemi changes her mind; the lead can't change it for her
+      expect((await call(coach, 'PUT', `/v1/alliances/${cls.id}/sharing`, { on: false })).statusCode).toBe(404);
+      expect((await call(s2, 'PUT', `/v1/alliances/${cls.id}/sharing`, { on: true })).statusCode).toBe(204);
+      expect((await call(coach, 'GET', `/v1/alliances/${cls.id}/students/${s2.user.id}`)).statusCode).toBe(200);
+
+      // One nudge a day per student, naming the plan only
+      pushes.length = 0;
+      expect((await call(coach, 'POST', `/v1/alliances/${cls.id}/students/${s3.user.id}/nudge`)).statusCode).toBe(204);
+      expect((await call(coach, 'POST', `/v1/alliances/${cls.id}/students/${s3.user.id}/nudge`)).json().error).toBe('already_nudged');
+      expect(pushes).toEqual([{ userId: s3.user.id, title: 'Coach is cheering you on' }]);
+      expect((await call(coach, 'GET', `/v1/alliances/${cls.id}/students`)).json().students[0].progress.nudgedToday).toBe(true);
+
+      // Unticking removes that day's check-in
+      const later = { ...mut('completion', squat.id, 'uncomplete', { localDate: today }), clientTs: Date.now() + 1000 };
+      await push(s1, [later]);
+      p = await pull(s1, p.cursor);
+      expect(p.removed.checkins).toEqual([{ taskId: squat.id, localDate: today }]);
+    });
   });
 
   describe('alliance chat', () => {

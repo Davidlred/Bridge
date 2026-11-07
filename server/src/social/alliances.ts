@@ -41,10 +41,10 @@ export async function publishPlanVersion(db: Tx, allianceId: string, from: strin
   const [latest] = await db`select coalesce(max(version), 0) as v from shared_plan_tasks where alliance_id = ${allianceId}`;
   const version = (latest!.v as number) + 1;
   await db`delete from shared_plan_tasks where alliance_id = ${allianceId} and effective_from >= ${from}`;
-  const tasks = await db`select id, title, priority, time_of_day, minutes, rationale, position from tasks where goal_id = ${a!.lead_goal_id} and deleted_at is null order by position`;
+  const tasks = await db`select id, title, priority, time_of_day, minutes, rationale, position, measure from tasks where goal_id = ${a!.lead_goal_id} and deleted_at is null order by position`;
   for (const t of tasks) {
-    await db`insert into shared_plan_tasks (id, alliance_id, version, title, priority, time_of_day, minutes, rationale, position, effective_from, source_task_id)
-             values (${uuidv7()}, ${allianceId}, ${version}, ${t.title}, ${t.priority}, ${t.time_of_day}, ${t.minutes}, ${t.rationale}, ${t.position}, ${from}, ${t.id})`;
+    await db`insert into shared_plan_tasks (id, alliance_id, version, title, priority, time_of_day, minutes, rationale, position, effective_from, source_task_id, measure)
+             values (${uuidv7()}, ${allianceId}, ${version}, ${t.title}, ${t.priority}, ${t.time_of_day}, ${t.minutes}, ${t.rationale}, ${t.position}, ${from}, ${t.id}, ${t.measure})`;
   }
   return version;
 }
@@ -63,8 +63,8 @@ async function applyToMember(db: Tx, allianceId: string, m: { user_id: string; g
   const today = await localToday(db, m.user_id);
   const [v] = await db`select max(version) as v from shared_plan_tasks where alliance_id = ${allianceId} and (effective_from <= ${today} or ${force})`;
   if (!v?.v || (v.v <= m.applied_version && !force)) return;
-  const rows = await db`select title, priority, time_of_day, minutes, rationale, position, source_task_id from shared_plan_tasks where alliance_id = ${allianceId} and version = ${v.v} and deleted_at is null`;
-  const mine = await db`select t.id, t.shared_task_id, t.deleted_at, t.title, t.priority, t.time_of_day, t.minutes, t.rationale, t.position,
+  const rows = await db`select title, priority, time_of_day, minutes, rationale, position, measure, source_task_id from shared_plan_tasks where alliance_id = ${allianceId} and version = ${v.v} and deleted_at is null`;
+  const mine = await db`select t.id, t.shared_task_id, t.deleted_at, t.title, t.priority, t.time_of_day, t.minutes, t.rationale, t.position, t.measure,
                                exists(select 1 from task_completions c where c.task_id = t.id and c.local_date = ${today}) as done
                         from tasks t where t.goal_id = ${m.goal_id} and t.origin = 'shared'`;
   for (const r of rows) {
@@ -72,14 +72,14 @@ async function applyToMember(db: Tx, allianceId: string, m: { user_id: string; g
     if (t && onlyIncomplete && t.done) continue;
     if (t) {
       // Unchanged tasks aren't touched, so devices only download what the lead actually changed.
-      if (!t.deleted_at && (['title', 'priority', 'time_of_day', 'minutes', 'rationale', 'position'] as const).every(k => t[k] === r[k])) continue;
+      if (!t.deleted_at && (['title', 'priority', 'time_of_day', 'minutes', 'rationale', 'position', 'measure'] as const).every(k => t[k] === r[k])) continue;
       await db`update tasks set title = ${r.title}, priority = ${r.priority}, time_of_day = ${r.time_of_day}, minutes = ${r.minutes}, rationale = ${r.rationale},
-                                position = ${r.position}, deleted_at = null, updated_at = now() where id = ${t.id}`;
+                                position = ${r.position}, measure = ${r.measure}, deleted_at = null, updated_at = now() where id = ${t.id}`;
       await log(db, m.user_id, 'task', t.id);
     } else {
       const id = uuidv7();
-      await db`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, origin, shared_task_id, position)
-               values (${id}, ${m.goal_id}, ${m.user_id}, ${r.title}, ${r.priority}, ${r.time_of_day}, ${r.minutes}, ${r.rationale}, 'shared', ${r.source_task_id}, ${r.position})`;
+      await db`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, origin, shared_task_id, position, measure)
+               values (${id}, ${m.goal_id}, ${m.user_id}, ${r.title}, ${r.priority}, ${r.time_of_day}, ${r.minutes}, ${r.rationale}, 'shared', ${r.source_task_id}, ${r.position}, ${r.measure})`;
       await log(db, m.user_id, 'task', id);
     }
   }
@@ -135,7 +135,7 @@ async function summary(allianceId: string, userId: string) {
   const blocked = new Set(await blockedWith(sql, userId));
   // A member who completed their goal stays (chat, feed, cheering) but has no more daily tasks, so they are
   // "finished": not away, and not counted in the collective streak or the group's progress.
-  const members = await sql`select m.user_id, m.goal_id, m.role, m.start_date::text, m.joined_at, u.display_name, g.status = 'completed' as finished
+  const members = await sql`select m.user_id, m.goal_id, m.role, m.start_date::text, m.joined_at, m.shares_progress, u.display_name, g.status = 'completed' as finished
                             from alliance_members m join users u on u.id = m.user_id join goals g on g.id = m.goal_id
                             where m.alliance_id = ${allianceId} and m.status <> 'left' and u.deleted_at is null order by m.joined_at`;
   const today = await localToday(sql, userId);
@@ -164,7 +164,9 @@ async function summary(allianceId: string, userId: string) {
     const mine = await tasksToday(me.goal_id);
     let gDone = 0, gTotal = 0;
     for (const m of active) { const t = await tasksToday(m.goal_id); gDone += t.done; gTotal += t.total; }
-    shared = { lead: firstName(a.lead), goal: a.goal, deadline: a.deadline, me: mine, group: { done: gDone, total: gTotal }, isLead: a.owner_id === userId };
+    shared = { lead: firstName(a.lead), goal: a.goal, deadline: a.deadline, me: mine, group: { done: gDone, total: gTotal }, isLead: a.owner_id === userId,
+               // A member's progress on this plan (ticks and check-ins) is visible to the lead while this is on.
+               sharesProgress: a.owner_id !== userId && (me.shares_progress as boolean) };
   }
   const feed = await sql`
     select u.display_name, m.user_id, 'joined' as what, null as title, m.joined_at as at from alliance_members m join users u on u.id = m.user_id
@@ -250,7 +252,8 @@ export async function allianceRoutes(app: FastifyInstance) {
     if (NAME_BLOCK.test(b.name) || (b.about && NAME_BLOCK.test(b.about))) throw new HttpError(422, 'name_not_allowed');
     const [g] = await sql`select category from goals where id = ${b.goalId} and user_id = ${req.userId} and status = 'active'`;
     if (!g) throw new HttpError(404, 'goal_missing');
-    if (!(await communityUnlocked(sql, req.userId, b.goalId)).unlocked) throw new HttpError(403, 'community_locked');
+    // A shared plan can start on day one (a teacher or coach setting up a class); other alliances need Community open.
+    if (b.planMode !== 'shared' && !(await communityUnlocked(sql, req.userId, b.goalId)).unlocked) throw new HttpError(403, 'community_locked');
     if (b.listed && await isMinor(sql, req.userId)) throw new HttpError(403, 'minor_unlisted');
     const id = uuidv7();
     await sql.begin(async tx => {
@@ -323,7 +326,7 @@ export async function allianceRoutes(app: FastifyInstance) {
   app.get<{ Params: { code: string } }>('/v1/alliances/preview/:code', { onRequest: auth }, async req => ({ preview: await preview(req.params.code, req.userId) }));
 
   app.post('/v1/alliances/join', { onRequest: auth, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async req => {
-    const b = z.object({ code: z.string().regex(/^[A-Za-z]{4}-\d{4}$/), goalId: z.string().uuid().optional() }).safeParse(req.body);
+    const b = z.object({ code: z.string().regex(/^[A-Za-z]{4}-\d{4}$/), goalId: z.string().uuid().optional(), shareProgress: z.boolean().default(true) }).safeParse(req.body);
     if (!b.success) throw new HttpError(400, 'invalid_code_format');
     const p = await preview(b.data.code, req.userId);
     // Under 18: not findable alliances, only the private ones they are invited to.
@@ -350,9 +353,11 @@ export async function allianceRoutes(app: FastifyInstance) {
         const [g] = goalId ? await tx`select 1 from goals where id = ${goalId} and user_id = ${req.userId} and status = 'active'` : [];
         if (!g) throw new HttpError(400, 'goal_required');
       }
-      await tx`insert into alliance_members (alliance_id, user_id, goal_id, role, start_date, status, joined_at, applied_version)
-               values (${p.id}, ${req.userId}, ${goalId!}, 'member', ${today}, 'active', now(), 0)
-               on conflict (alliance_id, user_id) do update set status = 'active', goal_id = excluded.goal_id, start_date = excluded.start_date, joined_at = now(), applied_version = 0, role = 'member'`;
+      // Only shared plans have a lead who follows each member's progress; the join screen says so.
+      const shares = p.planMode === 'shared' && b.data.shareProgress;
+      await tx`insert into alliance_members (alliance_id, user_id, goal_id, role, start_date, status, joined_at, applied_version, shares_progress)
+               values (${p.id}, ${req.userId}, ${goalId!}, 'member', ${today}, 'active', now(), 0, ${shares})
+               on conflict (alliance_id, user_id) do update set status = 'active', goal_id = excluded.goal_id, start_date = excluded.start_date, joined_at = now(), applied_version = 0, role = 'member', shares_progress = excluded.shares_progress`;
       if (p.planMode === 'shared') await applyToMember(tx, p.id, { user_id: req.userId, goal_id: goalId!, applied_version: 0 });
     });
     return { alliance: await summary(p.id, req.userId) };

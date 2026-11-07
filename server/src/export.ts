@@ -18,6 +18,7 @@ export async function exportRoutes(app: FastifyInstance) {
     const goals = await sql`select id, label, statement, category, start_date::text, deadline::text, status, routine, reality_note, feasibility from goals where user_id = ${id} order by start_date`;
     const tasks = await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, position, deleted_at from tasks where user_id = ${id} order by goal_id, position`;
     const completions = await sql`select task_id, local_date::text, completed_at from task_completions where user_id = ${id} order by local_date`;
+    const checkins = await sql`select task_id, local_date::text, feel, amount, note_ciphertext, updated_at from checkins where user_id = ${id} order by local_date`;
     const journal = await sql`select id, goal_id, local_date::text, mood, body_ciphertext, updated_at from journal_entries where user_id = ${id} and conflict_of is null order by local_date`;
     const coach = await sql`select id, conversation, role, body_ciphertext, created_at from coach_messages where user_id = ${id} order by created_at`;
     const alliances = await sql`select a.name, a.plan_mode, m.role, m.status, m.joined_at from alliance_members m join alliances a on a.id = m.alliance_id where m.user_id = ${id}`;
@@ -31,6 +32,7 @@ export async function exportRoutes(app: FastifyInstance) {
       goals,
       tasks: tasks.map(t => ({ ...t, deleted_at: iso(t.deleted_at) })),
       completions: completions.map(c => ({ ...c, completed_at: iso(c.completed_at) })),
+      checkins: checkins.map(c => ({ task_id: c.task_id, local_date: c.local_date, feel: c.feel, amount: c.amount === null ? null : Number(c.amount), note: c.note_ciphertext ? decryptText(key, c.note_ciphertext) : null, updated_at: iso(c.updated_at) })),
       journal: journal.map(j => ({ id: j.id, goal_id: j.goal_id, local_date: j.local_date, mood: j.mood, body: decryptText(key, j.body_ciphertext), updated_at: iso(j.updated_at) })),
       coach: coach.map(c => {
         const b = JSON.parse(decryptText(key, c.body_ciphertext) || '{}') as { text?: string; suggestion?: unknown };

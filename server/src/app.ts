@@ -10,6 +10,7 @@ import { coachRoutes } from './coach/routes.js';
 import websocket from '@fastify/websocket';
 import { communityRoutes } from './social/community.js';
 import { allianceRoutes } from './social/alliances.js';
+import { studentRoutes } from './social/students.js';
 import { chatRoutes } from './social/chat.js';
 import { deviceRoutes } from './push.js';
 import { gameRoutes } from './social/game.js';
@@ -69,6 +70,7 @@ export async function buildApp() {
   await app.register(websocket);
   await app.register(communityRoutes);
   await app.register(allianceRoutes);
+  await app.register(studentRoutes);
   await app.register(chatRoutes);
   await app.register(deviceRoutes);
   await app.register(gameRoutes);
