@@ -134,7 +134,8 @@ private struct Initial: View {
     @ObservationIgnored private var silence: Task<Void, Never>?
     @ObservationIgnored private var onDone: ((String) -> Void)?
 
-    static var available: Bool { SFSpeechRecognizer()?.isAvailable ?? false }
+    /// The phone can recognise speech in its language (whether it is reachable right now is checked on tap).
+    static var available: Bool { SFSpeechRecognizer() != nil }
 
     func start(onDone: @escaping (String) -> Void) {
         guard !listening else { stop(); return }
@@ -148,7 +149,7 @@ private struct Initial: View {
     }
 
     private func begin() {
-        guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else { return }
+        guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else { problem = String(localized: "Speech isn't available right now. Try again in a moment, or type it."); return }
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try? session.setActive(true, options: .notifyOthersOnDeactivation)
