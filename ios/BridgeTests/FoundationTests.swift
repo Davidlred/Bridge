@@ -189,6 +189,26 @@ final class FoundationSnapshotTests: XCTestCase {
         } }
         verify(VStack(alignment: .leading, spacing: 20) { row(72); row(22) }.padding(24).frame(maxWidth: .infinity, alignment: .leading).background(Theme.s0), named: "arc-tab")
     }
+    /// Reminders Arc set: on this phone, synced from another phone, notifications off, passed; and a call.
+    func testArcActions() {
+        let now = DateComponents(calendar: Calendar.current, year: 2026, month: 11, day: 7, hour: 14, minute: 32).date!
+        let call = CoachAction(type: "reminder", at: "2026-11-07T17:00", text: "Call Sharon", call: "Sharon")
+        let alarm = CoachAction(type: "reminder", at: "2026-11-08T06:00", text: "Wake up for the long run")
+        verify(VStack(spacing: 12) {
+            ArcActionCard(action: call, pending: true, allowed: true, now: now)
+            ArcActionCard(action: alarm, pending: false, allowed: true, now: now)
+            ArcActionCard(action: alarm, pending: true, allowed: false, now: now)
+            ArcActionCard(action: CoachAction(type: "reminder", at: "2026-11-07T09:00", text: "Call Sharon", call: "Sharon"), pending: false, allowed: true, now: now)
+            ArcActionCard(action: CoachAction(type: "call", name: "Mum"), pending: false, allowed: true, now: now)
+        }.padding(16).frame(width: 360).background(Theme.bg), named: "arc-actions")
+    }
+    func testCallSteps() {
+        verify(VStack(spacing: 32) {
+            CallStepView(step: .needsContacts("Sharon", denied: false))
+            CallStepView(step: .pick("Sharon", [PhoneContact(name: "Sharon Okafor", number: "+234 803 000 0001", label: "Mobile"), PhoneContact(name: "Sharon Bello", number: "0803 000 0007", label: "Work")]))
+            CallStepView(step: .notFound("Kemi"))
+        }.padding(24).background(Theme.bg), named: "call-steps")
+    }
     func testGoalDetails() { verify(GoalDetailsView(goal: goal).background(Theme.s1), named: "goal-details") }
     func testDeleteGoal() { verify(DeleteGoalSheet(onDelete: {}, onCancel: {}).background(Theme.s1), named: "goal-delete") }
     func testGoalCrossed() { verify(GoalCrossedView(goal: overdue, onNext: {}, onClose: {}), named: "goal-crossed") }

@@ -154,6 +154,7 @@ class ReminderScheduler @Inject constructor(
 @AndroidEntryPoint
 class ReminderReceiver : BroadcastReceiver() {
     @Inject lateinit var scheduler: ReminderScheduler
+    @Inject lateinit var arc: ArcReminders
 
     override fun onReceive(context: Context, intent: Intent) {
         val result = goAsync()
@@ -172,6 +173,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 }
                 // Boot, time-zone change, the nightly alarm, or any fired reminder: lay out the next 24 hours.
                 scheduler.reschedule()
+                // Reminders set by asking Arc are lost when the phone restarts unless they are set again.
+                if (!action.startsWith("app.thebridge.reminder.")) arc.rescheduleAll()
             } finally {
                 result.finish()
             }

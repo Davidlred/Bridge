@@ -42,7 +42,9 @@ actor NotificationScheduler {
 
     func reschedule() async {
         let snapshot = await MainActor.run { Self.snapshot() }
-        center.removeAllPendingNotificationRequests()
+        // Everything this scheduler set before; reminders set by asking Arc ("arc.…") stay.
+        let mine = await center.pendingNotificationRequests().map(\.identifier).filter { !$0.hasPrefix(ArcReminders.prefix) }
+        center.removePendingNotificationRequests(withIdentifiers: mine)
         guard snapshot.hasGoals else { return }
         let settings = await MainActor.run { RhythmStore.effective(ReminderSettings.load()) }
         var requests: [UNNotificationRequest] = []

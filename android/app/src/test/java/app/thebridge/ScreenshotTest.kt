@@ -16,6 +16,7 @@ import app.thebridge.data.JournalItem
 import app.thebridge.data.local.ChatMessageEntity
 import app.thebridge.data.local.JournalEntity
 import app.thebridge.data.remote.SuggestionDto
+import app.thebridge.feature.coach.ArcAlarms
 import app.thebridge.feature.coach.ChatItem
 import app.thebridge.feature.coach.CoachActions
 import app.thebridge.feature.coach.CoachScreen
@@ -290,6 +291,24 @@ class ScreenshotTest {
             ChatItem(ChatMessageEntity("m2", "c1", "coach", "Yes. Running with others makes the long weeks easier. This one fits your race.", "done", null, "pending"), null, false, pick),
         )), CoachActions())
     }
+    // Reminders Arc set: one on this phone (may ring late until exact alarms are allowed), one synced from another phone. The mic shows with nothing typed.
+    @Test fun coachReminders() = snap("coach-reminders") {
+        fun action(id: String, text: String, a: app.thebridge.data.phone.CoachActionDto) =
+            ChatItem(ChatMessageEntity(id, "c1", "coach", text, "done"), null, false, null, a)
+        CoachScreen(CoachUi(loaded = true, goals = listOf(marathon), focus = marathon, alarms = ArcAlarms(pending = setOf("m2"), exact = false), items = listOf(
+            msg("m1", "user", "Remind me to call Sharon at 5"),
+            action("m2", "Done. I'll remind you at 5:00 PM to call Sharon.", app.thebridge.data.phone.CoachActionDto("reminder", at = "2026-11-07T17:00", text = "Call Sharon", call = "Sharon")),
+            msg("m3", "user", "Set an alarm for 6 tomorrow morning"),
+            action("m4", "Done. Your alarm is set for 6:00 AM tomorrow.", app.thebridge.data.phone.CoachActionDto("reminder", at = "2026-11-08T06:00", text = "Wake up for the long run")),
+        )), CoachActions(listen = {}), clock = java.time.LocalDateTime.of(2026, 11, 7, 14, 32))
+    }
+    private fun callSheet(s: app.thebridge.feature.coach.CallUi) = snap("call-" + s::class.simpleName!!.lowercase()) {
+        Box(Modifier.background(LocalBridgeColors.current.bg).padding(24.dp)) { app.thebridge.feature.coach.CallContent(s, app.thebridge.feature.coach.CallSheetActions()) }
+    }
+    @Test fun callPermission() = callSheet(app.thebridge.feature.coach.CallUi.NeedsContacts("Sharon"))
+    @Test fun callPick() = callSheet(app.thebridge.feature.coach.CallUi.Pick("Sharon", listOf(
+        app.thebridge.data.phone.PhoneContact("Sharon Okafor", "+234 803 000 0001", "Mobile"), app.thebridge.data.phone.PhoneContact("Sharon Bello", "0803 000 0007", "Work"))))
+    @Test fun callRinging() = callSheet(app.thebridge.feature.coach.CallUi.Ringing(app.thebridge.data.phone.PhoneContact("Sharon Okafor", "+234 803 000 0001", "Mobile"), 3, direct = true))
     @Test fun allianceCreateFindable() = snap("alliance-create-findable") {
         Box(Modifier.padding(24.dp)) { CreateAllianceContent(CommunitySheet.Create("Dawn Runners", listed = true, about = "Early runs before work"), marathon, {}, {}, {}) }
     }

@@ -76,6 +76,8 @@ struct MainTabs: View {
             NavigationStack(path: $router.profile) { ProfileView().routes() }
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }.tag(Tab.profile)
         }
+        // "Arc, call Sharon": from the chat, the coach, or a reminder's Call button.
+        .arcCallSheet()
         // Arc bubbles only while the app is in front and motion is allowed.
         .task(id: !reduceMotion && scenePhase == .active) { if !reduceMotion && scenePhase == .active { await arc.run() } }
     }

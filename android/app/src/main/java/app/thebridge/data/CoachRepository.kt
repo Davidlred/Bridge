@@ -39,6 +39,8 @@ class CoachRepository @Inject constructor(
     private val store: DataStore<Preferences>,
     @dagger.hilt.android.qualifiers.ApplicationContext private val ctx: android.content.Context,
     private val rhythm: RhythmStore,
+    private val arc: app.thebridge.data.reminders.ArcReminders,
+    private val calls: app.thebridge.data.phone.ArcCalls,
 ) {
     val messages: Flow<List<ChatMessageEntity>> = db.chat().all()
 
@@ -86,6 +88,8 @@ class CoachRepository @Inject constructor(
         val routine = rhythm.rhythm.first()
         val body = buildJsonObject {
             put("message", userMsg.text); put("mode", mode); put("localDate", LocalDay.today()); put("focusGoalId", focusGoalId)
+            // The wall clock lets the coach set reminders ("in 20 minutes", "at 5") and start calls.
+            put("localTime", java.time.LocalDateTime.now().toString().take(16))
             // Ids let the server store this exchange so it follows the account to other devices.
             put("conversation", conv); put("messageId", userMsg.id); put("replyId", reply.id); put("sentAt", userMsg.createdAt)
             putJsonArray("history") { history.forEach { m -> add(buildJsonObject { put("role", m.role); put("text", m.text.take(4000)) }) } }
@@ -117,6 +121,13 @@ class CoachRepository @Inject constructor(
                     }
                     is CoachEvent.Suggest -> db.chat().upsert(reply.copy(text = text.toString(), status = "streaming", suggestion = api.json.encodeToString(SuggestionDto.serializer(), e.suggestion), suggestionState = "pending"))
                     is CoachEvent.Alliance -> db.chat().upsert(reply.copy(text = text.toString(), status = "streaming", alliance = api.json.encodeToString(app.thebridge.data.remote.AllianceSuggestionDto.serializer(), e.alliance), suggestionState = "pending"))
+                    // Asked for on this phone, so it happens here straight away: the reminder is set, the call sheet opens.
+                    is CoachEvent.Action -> {
+                        db.chat().upsert(reply.copy(text = text.toString(), status = "streaming", action = api.json.encodeToString(app.thebridge.data.phone.CoachActionDto.serializer(), e.action)))
+                        val a = e.action
+                        if (a.type == "reminder" && a.at != null && a.text != null) arc.set(app.thebridge.data.reminders.ArcReminder(reply.id, a.at, a.text, a.call))
+                        if (a.type == "call" && a.name != null) calls.call(app.thebridge.data.phone.CallTarget.Name(a.name))
+                    }
                 }
             }
             // Keep the suggestion fields written above; only the text and status change here.
@@ -137,6 +148,8 @@ class CoachRepository @Inject constructor(
 
     fun alliance(m: ChatMessageEntity): app.thebridge.data.remote.AllianceSuggestionDto? =
         m.alliance?.let { runCatching { api.json.decodeFromString(app.thebridge.data.remote.AllianceSuggestionDto.serializer(), it) }.getOrNull() }
+    fun action(m: ChatMessageEntity): app.thebridge.data.phone.CoachActionDto? =
+        m.action?.let { runCatching { api.json.decodeFromString(app.thebridge.data.phone.CoachActionDto.serializer(), it) }.getOrNull() }
     fun suggestion(m: ChatMessageEntity): SuggestionDto? = m.suggestion?.let { runCatching { api.json.decodeFromString(SuggestionDto.serializer(), it) }.getOrNull() }
 
     /** "Add to plan": the suggestion becomes an AI task on the goal in focus. */

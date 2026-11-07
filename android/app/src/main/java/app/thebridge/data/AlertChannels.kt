@@ -15,6 +15,8 @@ import app.thebridge.R
 object AlertChannels {
     const val REMINDERS = "reminders_alert"
     const val UPDATES = "updates_alert"
+    /** Reminders and alarms set by asking Arc: the phone's alarm sound, so they are as hard to miss as an alarm clock. */
+    const val ARC_ALARMS = "arc_alarms"
     private val OLD = listOf("reminders", "updates")
     /** Three long buzzes: hard to miss in a pocket. */
     val VIBRATION = longArrayOf(0, 600, 250, 600, 250, 600)
@@ -35,6 +37,10 @@ object AlertChannels {
         nm.createNotificationChannels(listOf(
             channel(REMINDERS, R.string.notif_channel_reminders, R.string.notif_channel_reminders_desc),
             channel(UPDATES, R.string.notif_channel_updates, R.string.notif_channel_updates_desc),
+            channel(ARC_ALARMS, R.string.notif_channel_arc, R.string.notif_channel_arc_desc).apply {
+                setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) ?: sound, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                setBypassDnd(true)
+            },
         ))
     }
 }

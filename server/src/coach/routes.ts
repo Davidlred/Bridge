@@ -27,6 +27,8 @@ export const CoachRequest = z.object({
   focusGoalId: z.string().uuid().nullish(),
   mode: z.enum(['chat', 'study']).default('chat'),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // The phone's wall clock ("2026-11-07T14:32"). Sent by apps that can set reminders and start calls; without it the coach offers neither.
+  localTime: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
   // Ids for syncing the exchange to the user's other devices (optional for older clients).
   conversation: z.string().uuid().optional(),
   messageId: z.string().uuid().optional(),
@@ -49,6 +51,45 @@ export const Suggestion = z.object({
   priority: z.enum(['High', 'Medium', 'Low']).catch('Medium'),
   timeOfDay: z.string().max(24).nullish(),
 });
+
+/**
+ * Things the coach can do on the phone. Reminders are scheduled by the app on the device; calls are placed by the app,
+ * which finds the person in the phone's contacts. Numbers never reach the server or the model, only the name as said.
+ */
+const LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+export const ReminderAction = z.object({
+  at: z.string().regex(LOCAL),
+  text: z.string().trim().min(1).max(80),
+  call: z.string().trim().min(1).max(60).nullish().transform(v => v ?? null),
+});
+export const CallAction = z.object({ name: z.string().trim().min(1).max(60) });
+export type CoachAction = ({ type: 'reminder' } & z.infer<typeof ReminderAction>) | ({ type: 'call' } & z.infer<typeof CallAction>);
+
+/** Wall-clock minutes since 1970 for "YYYY-MM-DDTHH:MM", so two local times can be compared without a time zone. */
+const minutes = (t: string) => Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8, 10), +t.slice(11, 13), +t.slice(14, 16)) / 60_000;
+
+/** A reminder must be ahead of the phone's clock (a minute's grace) and within a year. */
+export function validReminder(at: string, now: string): boolean {
+  const d = minutes(at) - minutes(now);
+  return Number.isFinite(d) && d >= -1 && d <= 366 * 24 * 60;
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** What the coach is told about reminders and calls (only for apps that send their clock). */
+export function actionsBlock(localTime: string): string {
+  const day = WEEKDAYS[new Date(Date.UTC(+localTime.slice(0, 4), +localTime.slice(5, 7) - 1, +localTime.slice(8, 10))).getUTCDay()];
+  return [
+    `It is ${day} ${localTime.replace('T', ' ')} on the user's phone (local time).`,
+    "You can set reminders and start phone calls on the user's phone.",
+    "- When the user asks you to remind them of something, or to set an alarm, at a time: confirm in one short sentence with the day and time (e.g. \"Done. I'll remind you at 5:00 PM to call Sharon.\"), then append a fenced JSON block exactly like this:",
+    '```json\n{"setReminder":{"at":"YYYY-MM-DDTHH:MM","text":"short, e.g. Call Sharon","call":"the person\'s name if the reminder is to call someone, else null"}}\n```',
+    '  "at" is local time on the phone. "In 20 minutes" counts from now; a time already past today means tomorrow. If they gave no time, ask when, without a block.',
+    '- When the user asks you to call or phone someone now: reply only "Calling <name>." and append ```json\n{"callContact":{"name":"<name>"}}\n```',
+    '  Use the name exactly as they said it ("Mum", "Dr Bello"). You never see phone numbers: the phone finds the person in its contacts.',
+    'An action block replaces any task or alliance suggestion in that reply. Never claim to have called anyone or set anything without the block.',
+  ].join('\n');
+}
 
 /** The coach's pick among the alliances it was shown, with why; the server fills in the rest from its own list. */
 const AlliancePick = z.object({ id: z.string().uuid(), reason: z.string().trim().max(200).default('') });
@@ -76,7 +117,7 @@ export const CRISIS_REPLY = "I'm really sorry you're feeling this way, and I'm g
 export class SuggestionSplitter {
   private pending = '';
   private block: string | null = null;
-  private static markers = ['```', '{"suggestTask"', '{"suggestAlliance"'];
+  private static markers = ['```', '{"suggestTask"', '{"suggestAlliance"', '{"setReminder"', '{"callContact"'];
 
   push(chunk: string): string {
     if (this.block !== null) { this.block += chunk; return ''; }
@@ -96,16 +137,20 @@ export class SuggestionSplitter {
     return out;
   }
 
-  finish(): { rest: string; suggestion: z.infer<typeof Suggestion> | null; alliance: z.infer<typeof AlliancePick> | null } {
-    if (this.block === null) return { rest: this.pending, suggestion: null, alliance: null };
+  finish(): { rest: string; suggestion: z.infer<typeof Suggestion> | null; alliance: z.infer<typeof AlliancePick> | null; action: CoachAction | null } {
+    if (this.block === null) return { rest: this.pending, suggestion: null, alliance: null, action: null };
     try {
       const raw = this.block.replace(/```(?:json)?/gi, '').trim();
       const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
-      const s = Suggestion.safeParse(json.suggestTask);
-      const a = AlliancePick.safeParse(json.suggestAlliance);
-      return { rest: '', suggestion: s.success ? s.data : null, alliance: a.success ? a.data : null };
+      const r = ReminderAction.safeParse(json.setReminder);
+      const c = CallAction.safeParse(json.callContact);
+      const action: CoachAction | null = r.success ? { type: 'reminder', ...r.data } : c.success ? { type: 'call', ...c.data } : null;
+      // An action replaces any suggestion in the same reply.
+      const s = action ? null : Suggestion.safeParse(json.suggestTask);
+      const a = action ? null : AlliancePick.safeParse(json.suggestAlliance);
+      return { rest: '', suggestion: s?.success ? s.data : null, alliance: a?.success ? a.data : null, action };
     } catch {
-      return { rest: '', suggestion: null, alliance: null };
+      return { rest: '', suggestion: null, alliance: null, action: null };
     }
   }
 }
@@ -154,6 +199,7 @@ function prompt(req: CoachRequest, journal: string[], alliances: AllianceOption[
   const history = req.history.map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.text}`).join('\n');
   return [
     `Today is ${req.localDate}.`,
+    req.localTime ? actionsBlock(req.localTime) : '',
     goals || 'The user has no active goals yet.',
     req.rhythm ? routineLine(req.rhythm) : '',
     alliancesBlock(alliances, lockedStreak),
@@ -165,12 +211,13 @@ function prompt(req: CoachRequest, journal: string[], alliances: AllianceOption[
 
 /** Stores one message (encrypted with the user's key) and logs it for sync. */
 export async function saveMessage(userId: string, id: string, conversation: string, role: 'user' | 'coach', text: string,
-  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date, goalId: string | null = null, alliance: AllianceCard | null = null) {
+  suggestion: z.infer<typeof Suggestion> | null, status: 'sent' | 'done' | 'interrupted', at: Date, goalId: string | null = null, alliance: AllianceCard | null = null,
+  action: CoachAction | null = null) {
   await sql.begin(async tx => {
     const [other] = await tx`select user_id from coach_messages where id = ${id}`;
     if (other && other.user_id !== userId) return;                 // never touch another user's row
     const key = await journalKey(tx, userId);
-    const body = encryptText(key, JSON.stringify({ text, suggestion, alliance }));
+    const body = encryptText(key, JSON.stringify({ text, suggestion, alliance, ...(action ? { action } : {}) }));
     await tx`insert into coach_messages (id, user_id, conversation, role, body_ciphertext, status, suggestion_state, created_at, goal_id)
              values (${id}, ${userId}, ${conversation}, ${role}, ${body}, ${status}, ${suggestion || alliance ? 'pending' : null}, ${at}, ${goalId})
              on conflict (id) do update set body_ciphertext = excluded.body_ciphertext, status = excluded.status,
@@ -180,7 +227,7 @@ export async function saveMessage(userId: string, id: string, conversation: stri
 }
 
 export async function coachRoutes(app: FastifyInstance) {
-  // Server-Sent Events: "token" {text}* → "suggestion" {…}? | "alliance" {…}? → "done" {} | "error" {error}
+  // Server-Sent Events: "token" {text}* → "suggestion" {…}? | "alliance" {…}? | "reminder" {at,text,call}? | "call" {name}? → "done" {} | "error" {error}
   app.post('/v1/coach/messages', { onRequest: auth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = CoachRequest.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, 'invalid_request');
@@ -217,6 +264,7 @@ export async function coachRoutes(app: FastifyInstance) {
     let replyText = '';
     let suggestion: z.infer<typeof Suggestion> | null = null;
     let alliance: AllianceCard | null = null;
+    let action: CoachAction | null = null;
     // Alliances to recommend (never in a crisis). Before Community opens for the goal the coach is told, so it can say when.
     const unlock = goalId && !crisis ? await communityUnlocked(sql, req.userId, goalId) : null;
     const options = unlock ? await suggestAlliances(req.userId, goalId!) : [];
@@ -235,6 +283,12 @@ export async function coachRoutes(app: FastifyInstance) {
         }
         const end = splitter.finish();
         if (end.rest) { replyText += end.rest; send('token', { text: end.rest }); }
+        // Actions only for apps that sent their clock, and reminders only ahead of it.
+        if (r.localTime && end.action && (end.action.type === 'call' || validReminder(end.action.at, r.localTime))) {
+          action = end.action;
+          if (action.type === 'reminder') send('reminder', { at: action.at, text: action.text, call: action.call });
+          else send('call', { name: action.name });
+        }
         suggestion = end.suggestion;
         if (suggestion) send('suggestion', suggestion);
         // Only an alliance the coach was actually shown, filled in from the server's own list.
@@ -255,7 +309,7 @@ export async function coachRoutes(app: FastifyInstance) {
       // Saved before the stream closes, so the reply is already there when the app syncs right after.
       // A partial reply is kept as "interrupted" (the app shows "Reply interrupted · Retry"); an empty one isn't stored.
       if (store && replyText) {
-        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1), goalId, alliance)
+        await saveMessage(req.userId, r.replyId!, r.conversation!, 'coach', replyText.trimEnd(), suggestion, status, new Date(sentAt.getTime() + 1), goalId, alliance, action)
           .catch(e => req.log.error({ err: e.message }, 'coach_save_failed'));
       }
       out.end();

@@ -12,6 +12,10 @@ final class CoachModel {
     var happyUntil = Date.distantPast
     var notice: String?
     var showEarlier = false
+    /// Reply ids with a reminder waiting on this phone, and whether notifications can ring.
+    var pendingAlarms: Set<UUID> = []
+    var alarmsAllowed = true
+    let speech = SpeechListener()
     // Study Mode
     var studySeconds = 0
     var studyNotes = ""
@@ -30,6 +34,12 @@ final class CoachModel {
         reload()
         NotificationCenter.default.addObserver(forName: .syncApplied, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.reload() } }
         NotificationCenter.default.addObserver(forName: .coachFocusChanged, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.showEarlier = false; self?.focusVersion += 1 } }
+        NotificationCenter.default.addObserver(forName: .arcRemindersChanged, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.refreshAlarms() } }
+        refreshAlarms()
+    }
+
+    func refreshAlarms() {
+        Task { pendingAlarms = await ArcReminders.pending(); alarmsAllowed = await ArcReminders.allowed() }
     }
     func reload() { messages = (try? ctx.fetch(FetchDescriptor<ChatMessageEntity>(sortBy: [SortDescriptor(\.createdAt)]))) ?? [] }
 
@@ -72,11 +82,22 @@ final class CoachModel {
 
     static func alliance(_ m: ChatMessageEntity) -> AllianceSuggestion? { m.allianceJSON.flatMap { try? JSONDecoder().decode(AllianceSuggestion.self, from: $0) } }
     static func suggestion(_ m: ChatMessageEntity) -> Suggestion? { m.suggestionJSON.flatMap { try? JSONDecoder().decode(Suggestion.self, from: $0) } }
+    static func action(_ m: ChatMessageEntity) -> CoachAction? { m.actionJSON.flatMap { try? JSONDecoder().decode(CoachAction.self, from: $0) } }
+
+    /// Sets a reminder from its card (a reply synced from another phone, or one that was cancelled).
+    func setReminder(_ m: ChatMessageEntity) {
+        guard let a = Self.action(m), let at = a.at, let text = a.text else { return }
+        Task { await ArcReminders.set(id: m.id, at: at, text: text, call: a.call); refreshAlarms() }
+    }
+    func cancelReminder(_ m: ChatMessageEntity) { Task { await ArcReminders.cancel(id: m.id); refreshAlarms() } }
+    func call(_ m: ChatMessageEntity) { if let n = Self.action(m)?.callName { ArcCalls.shared.call(.name(n)) } }
 
     func send(store: GoalStore, focus: GoalState?, study: Bool = false, retry: ChatMessageEntity? = nil) {
         let text = (retry?.text ?? (study ? studyInput : input)).trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, !busy else { return }
         if study { studyInput = ""; studyReplyId = nil } else if retry == nil { input = "" }
+        // "Call Sharon" is done on the phone: the name is looked up in contacts and nothing goes to the coach.
+        if retry == nil, let target = ArcCommand.parseCall(text, coachName: coachName) { ArcCalls.shared.call(target); return }
         if retry == nil { Analytics.track(.coachMessageSent, ["study": study]) }
         let t = thread(store.goals)
         let conv = conversation(for: focus?.id, oldest: t.oldest)
@@ -90,7 +111,8 @@ final class CoachModel {
         }
         let reply = ChatMessageEntity(conversation: conv, role: "coach", text: "", status: "streaming", createdAt: .now.addingTimeInterval(0.001), goalId: focus?.id)
         // Ids let the server store this exchange so it follows the account to other devices.
-        var body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "history": history, "goals": goals,
+        // The wall clock lets the coach set reminders ("in 20 minutes", "at 5") and start calls.
+        var body: [String: Any] = ["message": text, "mode": study ? "study" : "chat", "localDate": LocalDay.today(), "localTime": ArcReminders.format(.now), "history": history, "goals": goals,
                                    "focusGoalId": focus?.id.uuidString.lowercased() ?? NSNull(),
                                    "conversation": conv.uuidString.lowercased(), "messageId": user.id.uuidString.lowercased(), "replyId": reply.id.uuidString.lowercased(),
                                    "sentAt": Int(user.createdAt.timeIntervalSince1970 * 1000)]
@@ -126,6 +148,8 @@ final class CoachModel {
     }
 
     @ObservationIgnored private var pendingReply: ChatMessageEntity?
+    /// The coach's name, for "Arc, call Sharon" when it has been renamed.
+    var coachName = "Arc"
 
     /// Applies one stream event. Runs on the main actor; models are looked up by id.
     private func handle(_ event: CoachEvent, replyId: UUID, userId: UUID, stream: StreamState) {
@@ -142,6 +166,11 @@ final class CoachModel {
             reply.suggestionJSON = try? JSONEncoder().encode(s); reply.suggestionState = "pending"
         case .alliance(let a):
             reply.allianceJSON = try? JSONEncoder().encode(a); reply.suggestionState = "pending"
+        case .action(let a):
+            // Asked for on this phone, so it happens here straight away: the reminder is set, the call starts.
+            reply.actionJSON = try? JSONEncoder().encode(a)
+            if a.type == "reminder", let at = a.at, let text = a.text { Task { await ArcReminders.set(id: replyId, at: at, text: text, call: a.call); refreshAlarms() } }
+            if a.type == "call", let name = a.name { ArcCalls.shared.call(.name(name)) }
         }
         reload()
     }
@@ -244,7 +273,7 @@ struct CoachView: View {
         let focus = t.focus
         let name = session.user?.coachName ?? "Arc"
         TimelineView(.periodic(from: .now, by: 0.2)) { tl in
-            let mood = model.mood(now: tl.date, typing: focused && !model.input.isEmpty)
+            let mood = model.speech.listening ? .listening : model.mood(now: tl.date, typing: focused && !model.input.isEmpty)
             VStack(spacing: 0) {
                 VStack(spacing: 4) {
                     // Accessibility text sizes: the buttons get their own row instead of sitting over the mascot.
@@ -296,6 +325,7 @@ struct CoachView: View {
                     .onChange(of: model.messages.last?.text) { proxy.scrollTo("end", anchor: .bottom) }
                     .onChange(of: model.awaiting) { proxy.scrollTo("end", anchor: .bottom) }
                 }
+                if let p = model.speech.problem { Text(p).font(BFont.body(13)).foregroundStyle(Theme.warn).padding(.horizontal, 16).padding(.vertical, 6) }
                 if let n = model.notice { Text(n).font(BFont.body(13)).foregroundStyle(Theme.warn).padding(.horizontal, 16).padding(.vertical, 6) }
                 if !model.busy && model.input.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -311,16 +341,24 @@ struct CoachView: View {
                     .padding(.bottom, 10)
                 }
                 HStack(spacing: 8) {
-                    TextField("Message your coach", text: $model.input).focused($focused).font(BFont.body(15)).submitLabel(.send).onSubmit { model.send(store: store, focus: focus) }
+                    TextField(model.speech.listening ? LocalizedStringKey("Listening…") : LocalizedStringKey("Message your coach"), text: model.speech.listening ? .constant(model.speech.text) : $model.input).focused($focused).font(BFont.body(15)).submitLabel(.send).onSubmit { model.coachName = name; model.send(store: store, focus: focus) }
                         .padding(.horizontal, 18).frame(minHeight: 48).background(Theme.s1, in: Capsule()).overlay(Capsule().stroke(focused ? Theme.mut : Theme.line, lineWidth: 1))
-                    SendButton(enabled: !model.input.trimmingCharacters(in: .whitespaces).isEmpty && !model.busy, size: 48) { model.send(store: store, focus: focus) }
+                    // Nothing typed: the mic, to say it instead ("Arc, call Sharon").
+                    if model.input.isEmpty && SpeechListener.available {
+                        MicButton(listening: model.speech.listening, enabled: !model.busy) {
+                            model.coachName = name
+                            model.speech.start { said in model.input = said; model.send(store: store, focus: focus) }
+                        }
+                    } else {
+                        SendButton(enabled: !model.input.trimmingCharacters(in: .whitespaces).isEmpty && !model.busy, size: 48) { model.coachName = name; model.send(store: store, focus: focus) }
+                    }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 12)
             }
         }
         .background(Theme.bg)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { model.reload() }
+        .onAppear { model.reload(); model.refreshAlarms() }
     }
 
     @ViewBuilder private func coachMessage(_ m: ChatMessageEntity, focus: GoalState?) -> some View {
@@ -328,6 +366,10 @@ struct CoachView: View {
             if !m.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { CoachBubbleText(text: m.text.trimmingCharacters(in: .whitespacesAndNewlines)) }
             if m.status == "interrupted" {
                 Button("Reply interrupted · Retry") { model.retryInterrupted(m, store: store, focus: focus) }.font(BFont.body(12, .medium)).foregroundStyle(Theme.bad).frame(minHeight: 32)
+            }
+            if let a = CoachModel.action(m), m.status == "done" {
+                ArcActionCard(action: a, pending: model.pendingAlarms.contains(m.id), allowed: model.alarmsAllowed,
+                              set: { model.setReminder(m) }, cancel: { model.cancelReminder(m) }, call: { model.call(m) })
             }
             // The card appears only after the stream finishes.
             if let s = CoachModel.suggestion(m), m.status == "done" {
@@ -404,6 +446,84 @@ private struct CoachBubbleText: View {
             .background(Theme.s1, in: UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18, style: .continuous))
             .overlay(UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18, style: .continuous).stroke(Theme.line, lineWidth: 1))
             .frame(maxWidth: 320, alignment: .leading)
+    }
+}
+
+private struct MicButton: View {
+    let listening: Bool, enabled: Bool
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: listening ? "stop.fill" : "mic.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(listening ? Theme.onAcc : Theme.ink)
+                .frame(width: 48, height: 48).background(listening ? Theme.acc : Theme.s1, in: Circle()).overlay(Circle().stroke(Theme.line, lineWidth: listening ? 0 : 1))
+        }
+        .disabled(!enabled).opacity(enabled ? 1 : 0.35).accessibilityLabel(listening ? "Stop listening" : "Speak instead of typing")
+    }
+}
+
+/// A reminder or call Arc set up: when, what, and what can still be done with it on this phone.
+struct ArcActionCard: View {
+    let action: CoachAction
+    let pending: Bool
+    let allowed: Bool
+    var now: Date = .now
+    var set: () -> Void = {}
+    var cancel: () -> Void = {}
+    var call: () -> Void = {}
+
+    private func outline(_ title: LocalizedStringKey, icon: String?, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) { if let icon { Image(systemName: icon) }; Text(title).lineLimit(1) }
+                .font(BFont.body(14, .medium)).foregroundStyle(Theme.ink2).padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44)
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
+        }
+    }
+
+    private func when(_ d: Date) -> String {
+        let time = d.formatted(date: .omitted, time: .shortened)
+        let cal = Calendar.current
+        if cal.isDate(d, inSameDayAs: now) { return String(localized: "Today, \(time)") }
+        if let t = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(d, inSameDayAs: t) { return String(localized: "Tomorrow, \(time)") }
+        return "\(d.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))), \(time)"
+    }
+
+    var body: some View {
+        if action.type == "call" {
+            if let n = action.callName { outline("Call \(n)", icon: "phone.fill", action: call) }
+        } else if let d = action.date {
+            let past = d <= now && !pending
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "alarm").font(.system(size: 18)).foregroundStyle(past ? Theme.mut : Theme.ink2).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(when(d)).font(BFont.display(15)).foregroundStyle(past ? Theme.mut : Theme.ink)
+                        if let t = action.text { Text(t).font(BFont.body(13)).foregroundStyle(Theme.mut) }
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                if pending {
+                    Label("Set on this phone", systemImage: "checkmark.circle.fill").font(BFont.body(12, .medium)).foregroundStyle(Theme.ok)
+                    if !allowed {
+                        Text("Notifications are off, so this reminder can't ring.").font(BFont.body(12)).foregroundStyle(Theme.warn)
+                        Button("Turn on notifications") { if let u = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(u) } }
+                            .font(BFont.body(13, .semibold)).foregroundStyle(Theme.accInk).frame(minHeight: 36)
+                    }
+                    HStack(spacing: 8) {
+                        if let n = action.callName { outline("Call \(n)", icon: "phone.fill", action: call) }
+                        outline("Cancel", icon: nil, action: cancel)
+                    }
+                } else if !past {
+                    Button(action: set) {
+                        Text("Set reminder on this phone").font(BFont.body(14, .semibold)).foregroundStyle(Theme.onAcc).frame(maxWidth: .infinity, minHeight: 44).background(Theme.acc, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                } else {
+                    Text("This time has passed.").font(BFont.body(12)).foregroundStyle(Theme.mut2)
+                    if let n = action.callName { outline("Call \(n)", icon: "phone.fill", action: call) }
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.s1, in: RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
+        }
     }
 }
 

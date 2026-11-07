@@ -25,9 +25,12 @@ class MainActivity : ComponentActivity() {
     private val auth: AuthViewModel by viewModels()
     @Inject lateinit var appearance: Appearance
     @Inject lateinit var rhythm: app.thebridge.data.RhythmStore
+    @Inject lateinit var calls: app.thebridge.data.phone.ArcCalls
+    @Inject lateinit var arc: app.thebridge.data.reminders.ArcReminders
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) handle(intent)
         enableEdgeToEdge()
         setContent {
             // Until the setting is read the splash shows, which is black in both themes.
@@ -42,9 +45,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    /** A reminder's "Call" button: the alarm goes away and the call sheet opens. */
+    private fun handle(intent: android.content.Intent?) {
+        if (intent?.action != app.thebridge.data.reminders.ArcReminders.ACTION_CALL) return
+        intent.getStringExtra(app.thebridge.data.reminders.ArcReminders.EXTRA_ID)?.let { arc.dismissAlarm(it) }
+        intent.getStringExtra(app.thebridge.data.reminders.ArcReminders.EXTRA_CALL)?.let { calls.call(app.thebridge.data.phone.CallTarget.Name(it)) }
+    }
+
     /** Only recorded when the user turned on "Let Arc learn my routine". */
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch { rhythm.recordOpen() }
+        // Picks up "Alarms & reminders" being allowed in Settings, so Arc's reminders ring on the minute.
+        lifecycleScope.launch { arc.rescheduleAll() }
     }
 }

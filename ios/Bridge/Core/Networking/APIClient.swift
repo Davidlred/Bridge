@@ -36,7 +36,7 @@ struct AuthResponse: Decodable, Sendable {
 }
 
 struct Suggestion: Codable, Equatable, Sendable { let title: String; var rationale: String = ""; var priority: String = "Medium"; var timeOfDay: String? }
-enum CoachEvent: Sendable { case token(String), suggestion(Suggestion), alliance(AllianceSuggestion) }
+enum CoachEvent: Sendable { case token(String), suggestion(Suggestion), alliance(AllianceSuggestion), action(CoachAction) }
 /// A findable alliance the coach recommended; `code` opens its join preview.
 struct AllianceSuggestion: Codable, Equatable, Sendable { let id: String; let name: String; let about: String?; let planMode: String; let members: Int; let cap: Int; let code: String; let reason: String }
 enum CoachStreamError: Error { case interrupted }
@@ -73,7 +73,7 @@ struct Changes: Decodable, Sendable {
     let cursor: Int; let hasMore: Bool
     let goals: [Goal]; let tasks: [Task]; let completions: [Completion]; let removed: Removed
     let journal: [Journal]?; let removedJournal: [UUID]?
-    struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let goalId: UUID?; let role: String; let text: String; let suggestion: Suggestion?; let alliance: AllianceSuggestion?; let status: String; let suggestionState: String?; let createdAt: Double }
+    struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let goalId: UUID?; let role: String; let text: String; let suggestion: Suggestion?; let alliance: AllianceSuggestion?; var action: CoachAction? = nil; let status: String; let suggestionState: String?; let createdAt: Double }
     let chat: [Chat]?; let removedChat: [UUID]?
     /// Synced settings the app shows locally (unknown keys are ignored).
     struct Settings: Decodable, Sendable { let coachReadsJournal: Bool?; let share: String? }
@@ -211,6 +211,11 @@ actor APIClient {
                     case "token": if let t = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["text"] as? String { await onEvent(.token(t)) }
                     case "suggestion": if let s = try? JSONDecoder().decode(Suggestion.self, from: data) { await onEvent(.suggestion(s)) }
                     case "alliance": if let a = try? JSONDecoder().decode(AllianceSuggestion.self, from: data) { await onEvent(.alliance(a)) }
+                    case "reminder":
+                        if let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let at = o["at"] as? String, let text = o["text"] as? String {
+                            await onEvent(.action(CoachAction(type: "reminder", at: at, text: text, call: o["call"] as? String)))
+                        }
+                    case "call": if let name = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["name"] as? String { await onEvent(.action(CoachAction(type: "call", name: name))) }
                     case "done": finished = true
                     case "error": throw CoachStreamError.interrupted
                     default: break

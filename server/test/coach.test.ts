@@ -38,7 +38,7 @@ describe('SuggestionSplitter', async () => {
     const id = '0190a000-0000-7000-8000-000000000001';
     const visible = ['Running with others helps on long weeks. ', '```json\n{"suggestAlliance":{"id":"' + id + '","reason":"Same race, same pace."}}\n```'].map(c => s.push(c)).join('');
     expect(visible).toBe('Running with others helps on long weeks. ');
-    expect(s.finish()).toEqual({ rest: '', suggestion: null, alliance: { id, reason: 'Same race, same pace.' } });
+    expect(s.finish()).toEqual({ rest: '', suggestion: null, alliance: { id, reason: 'Same race, same pace.' }, action: null });
     const { alliancesBlock } = await import('../src/coach/routes.js');
     expect(alliancesBlock([])).toBe('');
     const block = alliancesBlock([{ id, name: 'Half marathon crew', about: 'First half together', planMode: 'own', members: 4, cap: 15, goal: null, label: 'Half marathon', code: 'HALF-1234' }]);
@@ -46,6 +46,28 @@ describe('SuggestionSplitter', async () => {
     expect(block).not.toContain('HALF-1234');      // the join code never goes to the model
     expect(alliancesBlock([{ id, name: 'Crew', about: null, planMode: 'own', members: 2, cap: 15, goal: null, label: 'Run', code: 'CREW-1111' }], 3))
       .toContain('opens for this goal at a 7-day streak; they are at 3');
+  });
+
+  it('reads reminder and call actions, which replace any suggestion, and keeps them out of the visible text', async () => {
+    const { validReminder } = await import('../src/coach/routes.js');
+    const s = new SuggestionSplitter();
+    const visible = ["Done. I'll remind you at 5:00 PM to call Sharon.", '\n``', '`json\n{"setReminder":{"at":"2026-11-07T17:00","text":"Call Sharon","call":"Sharon"},',
+      '"suggestTask":{"title":"Plan the call","priority":"Low"}}\n```'].map(c => s.push(c)).join('');
+    expect(visible).toBe("Done. I'll remind you at 5:00 PM to call Sharon.\n");
+    expect(s.finish()).toEqual({ rest: '', suggestion: null, alliance: null, action: { type: 'reminder', at: '2026-11-07T17:00', text: 'Call Sharon', call: 'Sharon' } });
+    const c = new SuggestionSplitter();
+    expect(['Calling Mum.', ' {"callContact":{"name":"Mum"}}'].map(x => c.push(x)).join('')).toBe('Calling Mum. ');
+    expect(c.finish().action).toEqual({ type: 'call', name: 'Mum' });
+    // A reminder without a call has call: null; a malformed time is no action at all.
+    const n = new SuggestionSplitter(); n.push('```json\n{"setReminder":{"at":"2026-11-07T06:00","text":"Wake up"}}\n```');
+    expect(n.finish().action).toEqual({ type: 'reminder', at: '2026-11-07T06:00', text: 'Wake up', call: null });
+    const bad = new SuggestionSplitter(); bad.push('```json\n{"setReminder":{"at":"5pm","text":"Call Sharon"}}\n```');
+    expect(bad.finish().action).toBeNull();
+    // Ahead of the phone's clock (a minute's grace) and within a year.
+    expect(validReminder('2026-11-07T17:00', '2026-11-07T14:32')).toBe(true);
+    expect(validReminder('2026-11-07T14:31', '2026-11-07T14:32')).toBe(true);
+    expect(validReminder('2026-11-07T14:00', '2026-11-07T14:32')).toBe(false);
+    expect(validReminder('2028-01-01T09:00', '2026-11-07T14:32')).toBe(false);
   });
 
   it('handles a bare JSON suggestion and text with stray backticks', () => {
@@ -91,6 +113,37 @@ db('coach and journal', () => {
     expect(lastPrompt).toContain('Run a half marathon in under 2 hours');
     expect(lastPrompt).toContain('[x] Easy run 5 km');
     expect(lastPrompt).toContain('Coach: Morning, Sharon.');
+  });
+
+  it('sets reminders and starts calls only for apps that send their clock, and syncs the reminder card', async () => {
+    const a = await signUp();
+    const conversation = uuidv7(), messageId = uuidv7(), replyId = uuidv7();
+    script = ["Done. I'll remind you at 5:00 PM to call Sharon.", '\n```json\n{"setReminder":{"at":"2026-11-07T17:00","text":"Call Sharon","call":"Sharon"}}\n```'];
+    const r = await ask(a.accessToken, 'Remind me to call Sharon at 5', { localDate: '2026-11-07', localTime: '2026-11-07T14:32', conversation, messageId, replyId, sentAt: 1_000 });
+    const ev = events(r.body);
+    expect(ev.filter(e => e.event === 'token').map(e => e.data.text).join('')).toBe("Done. I'll remind you at 5:00 PM to call Sharon.\n");
+    expect(ev.find(e => e.event === 'reminder')!.data).toEqual({ at: '2026-11-07T17:00', text: 'Call Sharon', call: 'Sharon' });
+    expect(lastPrompt).toContain("It is Saturday 2026-11-07 14:32 on the user's phone");
+    expect(lastPrompt).toContain('{"setReminder"');
+    // The card follows the account to another phone (which can set the reminder there too).
+    const p = await pull(a.accessToken);
+    expect(p.chat.find((m: { id: string }) => m.id === replyId)).toMatchObject({ action: { type: 'reminder', at: '2026-11-07T17:00', text: 'Call Sharon', call: 'Sharon' } });
+    expect(p.chat.find((m: { id: string }) => m.id === messageId)).toMatchObject({ action: null });
+
+    // A time behind the phone's clock is dropped.
+    script = ['Done.', '```json\n{"setReminder":{"at":"2026-11-07T09:00","text":"Call Sharon","call":"Sharon"}}\n```'];
+    expect(events((await ask(a.accessToken, 'Remind me at 9', { localDate: '2026-11-07', localTime: '2026-11-07T14:32' })).body).some(e => e.event === 'reminder')).toBe(false);
+
+    // Calls: just the name, as said.
+    script = ['Calling Mum.', '```json\n{"callContact":{"name":"Mum"}}\n```'];
+    expect(events((await ask(a.accessToken, 'ring my mum', { localDate: '2026-11-07', localTime: '2026-11-07T14:32' })).body).find(e => e.event === 'call')!.data).toEqual({ name: 'Mum' });
+
+    // Older apps (no clock): the coach isn't told it can, and nothing is sent even if the model tries.
+    const before = lastPrompt;
+    await ask(a.accessToken, 'Make tomorrow easier');
+    expect(before).toContain('{"callContact"');
+    expect(lastPrompt).not.toContain('{"setReminder"');
+    expect(events((await ask(a.accessToken, 'call Mum')).body).some(e => e.event === 'call')).toBe(false);
   });
 
   it('answers self-harm messages with support and resources, without the model', async () => {

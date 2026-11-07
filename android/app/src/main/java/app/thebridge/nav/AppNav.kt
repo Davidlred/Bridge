@@ -315,6 +315,8 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
             }
         }
         if (!fullScreen) BottomBar(nav, dest)
+        // "Arc, call Sharon": from the chat, the coach, or a reminder's Call button.
+        app.thebridge.feature.coach.CallSheetHost()
     }
 
     when (sheet) {

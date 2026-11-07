@@ -68,7 +68,7 @@ class StreamInterrupted : Exception()
 @Serializable data class Removed(val goals: List<String> = emptyList(), val completions: List<CompletionKey> = emptyList())
 @Serializable data class JournalDto(val id: String, val goalId: String? = null, val localDate: String, val mood: Int? = null, val body: String = "", val version: Int = 1, val conflictOf: String? = null, val updatedAt: Long = 0)
 @Serializable data class PullResponse(val cursor: Long, val hasMore: Boolean = false, val goals: List<GoalDto> = emptyList(), val tasks: List<TaskDto> = emptyList(), val completions: List<CompletionDto> = emptyList(), val removed: Removed = Removed(), val settings: JsonObject? = null, val journal: List<JournalDto> = emptyList(), val removedJournal: List<String> = emptyList(), val chat: List<ChatDto> = emptyList(), val removedChat: List<String> = emptyList())
-@Serializable data class ChatDto(val id: String, val conversation: String, val goalId: String? = null, val role: String, val text: String, val suggestion: SuggestionDto? = null, val alliance: AllianceSuggestionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
+@Serializable data class ChatDto(val id: String, val conversation: String, val goalId: String? = null, val role: String, val text: String, val suggestion: SuggestionDto? = null, val alliance: AllianceSuggestionDto? = null, val action: app.thebridge.data.phone.CoachActionDto? = null, val status: String = "done", val suggestionState: String? = null, val createdAt: Long = 0)
 @Serializable data class SuggestionDto(val title: String, val rationale: String = "", val priority: String = "Medium", val timeOfDay: String? = null)
 /** A findable alliance the coach recommended; [code] opens its join preview. */
 @Serializable data class AllianceSuggestionDto(val id: String, val name: String, val about: String? = null, val planMode: String = "own", val members: Int = 1, val cap: Int = 15, val code: String, val reason: String = "")
@@ -136,6 +136,8 @@ sealed interface CoachEvent {
     data class Token(val text: String) : CoachEvent
     data class Suggest(val suggestion: SuggestionDto) : CoachEvent
     data class Alliance(val alliance: AllianceSuggestionDto) : CoachEvent
+    /** The coach set a reminder ([CoachActionDto] with type "reminder") or was asked to call someone (type "call"). */
+    data class Action(val action: app.thebridge.data.phone.CoachActionDto) : CoachEvent
 }
 
 /** All HTTP goes through here. Repositories call it; ViewModels never do. */
@@ -200,6 +202,9 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
                                 "token" -> onEvent(CoachEvent.Token(data["text"]!!.jsonPrimitive.content))
                                 "suggestion" -> onEvent(CoachEvent.Suggest(json.decodeFromJsonElement(SuggestionDto.serializer(), data)))
                                 "alliance" -> onEvent(CoachEvent.Alliance(json.decodeFromJsonElement(AllianceSuggestionDto.serializer(), data)))
+                                "reminder" -> onEvent(CoachEvent.Action(app.thebridge.data.phone.CoachActionDto("reminder", at = data["at"]?.jsonPrimitive?.content,
+                                    text = data["text"]?.jsonPrimitive?.content, call = (data["call"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content)))
+                                "call" -> onEvent(CoachEvent.Action(app.thebridge.data.phone.CoachActionDto("call", name = data["name"]?.jsonPrimitive?.content)))
                                 "done" -> finished = true
                                 "error" -> throw StreamInterrupted()
                             }

@@ -27,7 +27,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class ChatItem(val message: ChatMessageEntity, val suggestion: SuggestionDto?, val dividerBefore: Boolean, val alliance: app.thebridge.data.remote.AllianceSuggestionDto? = null)
+data class ChatItem(val message: ChatMessageEntity, val suggestion: SuggestionDto?, val dividerBefore: Boolean, val alliance: app.thebridge.data.remote.AllianceSuggestionDto? = null,
+                    val action: app.thebridge.data.phone.CoachActionDto? = null)
+
+/** Reminders Arc set on this phone (by coach reply id), and whether they can ring on time. */
+data class ArcAlarms(val pending: Set<String> = emptySet(), val exact: Boolean = true, val notificationsOn: Boolean = true)
 
 data class CoachUi(
     /** False until the goals, messages and coach name have been read once: no empty state or default name flashes. */
@@ -44,6 +48,7 @@ data class CoachUi(
     val streaming: Boolean = false,
     val happyUntil: Long = 0,
     val notice: UiText? = null,
+    val alarms: ArcAlarms = ArcAlarms(),
     // Study Mode
     val studySeconds: Int = 0,
     val studyNotes: String = "",
@@ -62,6 +67,9 @@ data class CoachUi(
     val busy: Boolean get() = awaiting || streaming
 }
 
+
+private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+
 @HiltViewModel
 class CoachViewModel @Inject constructor(
     private val coach: CoachRepository,
@@ -69,12 +77,18 @@ class CoachViewModel @Inject constructor(
     private val toaster: Toaster,
     session: SessionManager,
     private val analytics: app.thebridge.data.Analytics,
+    private val arc: app.thebridge.data.reminders.ArcReminders,
+    private val calls: app.thebridge.data.phone.ArcCalls,
 ) : ViewModel() {
     private val local = MutableStateFlow(CoachUi())
     private val showEarlier = MutableStateFlow(false)
 
+    /** Re-read when the screen comes back, after the user may have changed alarm or notification settings. */
+    private val settingsTick = MutableStateFlow(0)
+    private val alarms = combine(arc.all, settingsTick) { rs, _ -> ArcAlarms(rs.map { it.id }.toSet(), arc.exact(), arc.notificationsOn()) }
+
     val state: StateFlow<CoachUi> = combine(local, coach.messages, coach.focusPick, goalsRepo.activeGoals(),
-        combine(session.user.map { it?.coachName ?: "Arc" }, showEarlier, coach.conversationPicks, ::Triple)) { l, msgs, (pick, newestAtPick), goals, (name, earlier, convPicks) ->
+        combine(session.user.map { it?.coachName ?: "Arc" }, showEarlier, coach.conversationPicks, alarms) { a, b, c, d -> Quad(a, b, c, d) }) { l, msgs, (pick, newestAtPick), goals, (name, earlier, convPicks, alarms) ->
         val focusId = CoachRepository.focusOf(goals.map { it.goal.id }, pick, newestAtPick)
         val oldest = goals.minOfOrNull { it.goal.id }
         // Only this goal's thread; within it, the current conversation unless "Show earlier conversation".
@@ -82,9 +96,9 @@ class CoachViewModel @Inject constructor(
         val conv = convPicks[focusId ?: "none"] ?: thread.lastOrNull()?.conversation
         val shown = if (earlier || conv == null) thread else thread.filter { it.conversation == conv }
         l.copy(
-            loaded = true, coachName = name, goals = goals.sortedBy { it.goal.id }, focus = goals.firstOrNull { it.goal.id == focusId },
+            loaded = true, coachName = name, alarms = alarms, goals = goals.sortedBy { it.goal.id }, focus = goals.firstOrNull { it.goal.id == focusId },
             hasEarlier = !earlier && thread.any { it.conversation != conv },
-            items = shown.mapIndexed { i, m -> ChatItem(m, coach.suggestion(m), i > 0 && shown[i - 1].conversation != m.conversation, coach.alliance(m)) },
+            items = shown.mapIndexed { i, m -> ChatItem(m, coach.suggestion(m), i > 0 && shown[i - 1].conversation != m.conversation, coach.alliance(m), coach.action(m)) },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CoachUi())
 
@@ -103,6 +117,8 @@ class CoachViewModel @Inject constructor(
         val text = (if (study) s.studyInput else s.input).trim()
         if (text.isEmpty() || s.busy) return
         local.update { if (study) it.copy(studyInput = "", studyReply = null) else it.copy(input = "") }
+        // "Call Sharon" is done on the phone: the name is looked up in contacts and nothing goes to the coach.
+        app.thebridge.data.phone.ArcCommand.parseCall(text, state.value.coachName)?.let { calls.call(it); return }
         analytics.track(app.thebridge.data.Event.CoachMessageSent, "study" to study)
         run(study) { onFirst -> coach.send(text, state.value.focus?.goal?.id, if (study) "study" else "chat", onFirstToken = onFirst) }
     }
@@ -138,6 +154,18 @@ class CoachViewModel @Inject constructor(
         }
     }
     fun dismissSuggestion(item: ChatItem) = viewModelScope.launch { coach.dismissSuggestion(item.message) }
+
+    // --- Things Arc did on the phone ---
+    /** Sets a reminder from its card (a reply synced from another phone, or one that was cancelled). */
+    fun setReminder(item: ChatItem) = viewModelScope.launch {
+        val a = item.action ?: return@launch
+        if (a.at != null && a.text != null) arc.set(app.thebridge.data.reminders.ArcReminder(item.message.id, a.at, a.text, a.call))
+    }
+    fun cancelReminder(item: ChatItem) = viewModelScope.launch { arc.cancel(item.message.id); toaster.show(UiText.Res(R.string.arc_reminder_cancelled), ToastKind.Info) }
+    fun callFrom(item: ChatItem) { (item.action?.call ?: item.action?.name)?.let { calls.call(app.thebridge.data.phone.CallTarget.Name(it)) } }
+    /** Spoken to Arc: sent as if typed, so "call Sharon" works by voice too. */
+    fun spoken(text: String) { onInput(text); send() }
+    fun refreshSettings() = settingsTick.update { it + 1 }
 
     // --- Study Mode: a focus timer that pauses 10 s after the app goes to the background ---
     private var timer: Job? = null

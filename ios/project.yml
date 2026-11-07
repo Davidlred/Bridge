@@ -45,6 +45,9 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBlack
         NSCameraUsageDescription: Take a photo for your goal images. It is only used to picture your future and is never shared.
+        NSContactsUsageDescription: When you ask your coach to call someone, The Bridge finds them in your contacts. Your contacts stay on this phone and are never uploaded.
+        NSMicrophoneUsageDescription: Talk to your coach instead of typing.
+        NSSpeechRecognitionUsageDescription: Turns what you say to your coach into text, on this phone when it can.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIAppFonts:

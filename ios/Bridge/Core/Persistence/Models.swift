@@ -96,6 +96,8 @@ import SwiftData
     var goalId: UUID?
     /// An alliance the coach recommended (AllianceSuggestion JSON).
     var allianceJSON: Data?
+    /// Something the coach did on the phone: a reminder or a call (CoachAction JSON).
+    var actionJSON: Data?
     init(id: UUID = UUIDv7.next(), conversation: UUID, role: String, text: String, status: String, createdAt: Date = .now, goalId: UUID? = nil) {
         self.id = id; self.conversation = conversation; self.role = role; self.text = text; self.status = status; self.createdAt = createdAt; self.goalId = goalId
     }

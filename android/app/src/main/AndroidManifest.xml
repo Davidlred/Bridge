@@ -6,6 +6,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- "Arc, call Sharon": find the person in contacts (read on the phone, never uploaded) and ring them -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Reminders set by asking Arc ring on the minute once the user allows it in Settings -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Calling is optional: tablets without a phone can still install the app -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+
+    <queries>
+        <!-- Speaking to Arc uses the phone's speech recogniser -->
+        <intent><action android:name="android.speech.action.RECOGNIZE_SPEECH" /></intent>
+    </queries>
 
     <application
         android:name=".BridgeApp"
@@ -54,6 +66,9 @@
                 <action android:name="android.intent.action.TIME_SET" />
             </intent-filter>
         </receiver>
+
+        <!-- Reminders set by asking Arc: the alarm, and Snooze -->
+        <receiver android:name=".data.reminders.ArcAlarmReceiver" android:exported="false" />
 
         <!-- Camera captures for the onboarding photo (cache only, deleted after upload) -->
         <provider

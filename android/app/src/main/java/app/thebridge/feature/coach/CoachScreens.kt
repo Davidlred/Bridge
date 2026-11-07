@@ -80,6 +80,9 @@ data class CoachActions(
     val onInput: (String) -> Unit = {}, val send: () -> Unit = {}, val chip: (String) -> Unit = {}, val retry: (ChatItem) -> Unit = {},
     val add: (ChatItem) -> Unit = {}, val dismiss: (ChatItem) -> Unit = {}, val showEarlier: () -> Unit = {}, val newChat: () -> Unit = {}, val study: () -> Unit = {},
     val focus: (String) -> Unit = {}, val openAlliance: (ChatItem) -> Unit = {},
+    // Things Arc does on the phone. [listen] is null when the phone has no speech recogniser.
+    val setReminder: (ChatItem) -> Unit = {}, val cancelReminder: (ChatItem) -> Unit = {}, val call: (ChatItem) -> Unit = {},
+    val allowExact: () -> Unit = {}, val allowNotifications: () -> Unit = {}, val listen: (() -> Unit)? = null,
 )
 
 /** Mascot status line and dot colour for each mood (copy from the prototype). */
@@ -104,7 +107,7 @@ private fun rememberNow(until: Long): Long {
 }
 
 @Composable
-fun CoachScreen(ui: CoachUi, actions: CoachActions) {
+fun CoachScreen(ui: CoachUi, actions: CoachActions, clock: java.time.LocalDateTime = java.time.LocalDateTime.now()) {
     val c = LocalBridgeColors.current
     var focused by remember { mutableStateOf(false) }
     val now = rememberNow(ui.happyUntil)
@@ -155,7 +158,7 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
             if (ui.loaded && ui.items.isEmpty()) item { Greeting(ui) }
             items(ui.items, key = { it.message.id }) { item ->
                 if (item.dividerBefore) Divider()
-                if (item.message.role == "coach") CoachBubble(item, ui, actions) else UserBubble(item, actions)
+                if (item.message.role == "coach") CoachBubble(item, ui, actions, clock) else UserBubble(item, actions)
             }
             if (ui.awaiting) item { TypingDots() }
         }
@@ -177,8 +180,90 @@ fun CoachScreen(ui: CoachUi, actions: CoachActions) {
                         if (ui.input.isEmpty()) Text(hint, style = BType.body(15), color = c.mut2); inner()
                     }
                 })
-            SendButton(enabled = ui.input.isNotBlank() && !ui.busy, size = 48, onClick = actions.send)
+            // Nothing typed: the mic, to say it instead ("Arc, call Sharon").
+            val listen = actions.listen
+            if (ui.input.isEmpty() && listen != null) MicButton(enabled = !ui.busy, onClick = listen)
+            else SendButton(enabled = ui.input.isNotBlank() && !ui.busy, size = 48, onClick = actions.send)
         }
+    }
+}
+
+@Composable
+private fun MicButton(enabled: Boolean, onClick: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Box(Modifier.size(48.dp).alpha(if (enabled) 1f else .35f).background(c.s1, CircleShape).border(1.dp, c.line, CircleShape).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(painterResource(R.drawable.ic_mic), stringResource(R.string.coach_speak), tint = c.ink, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** "Today, 5:00 PM", "Tomorrow, 6:00 AM", or "Sat 14 Nov, 9:00 AM". */
+@Composable
+private fun whenText(t: java.time.LocalDateTime, now: java.time.LocalDateTime): String {
+    val time = t.format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+    return when (t.toLocalDate()) {
+        now.toLocalDate() -> stringResource(R.string.arc_today_at, time)
+        now.toLocalDate().plusDays(1) -> stringResource(R.string.arc_tomorrow_at, time)
+        else -> stringResource(R.string.arc_day_at, t.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")), time)
+    }
+}
+
+/** A reminder or call Arc set up: when, what, and what can still be done with it on this phone. */
+@Composable
+private fun ActionCard(item: ChatItem, ui: CoachUi, actions: CoachActions, now: java.time.LocalDateTime) {
+    val c = LocalBridgeColors.current
+    val a = item.action ?: return
+    val callName = a.call ?: a.name
+    @Composable fun Outline(text: String, icon: Int?, modifier: Modifier = Modifier, onClick: () -> Unit) =
+        Row(modifier.heightIn(min = 44.dp).border(1.dp, c.line, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+            if (icon != null) Icon(painterResource(icon), null, tint = c.ink2, modifier = Modifier.size(18.dp))
+            Text(text, style = BType.body(14, FontWeight.Medium), color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    if (a.type == "call") {
+        if (callName != null) Outline(stringResource(R.string.arc_call_name, callName), R.drawable.ic_call) { actions.call(item) }
+        return
+    }
+    val at = a.at?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() } ?: return
+    val pending = item.message.id in ui.alarms.pending
+    val past = !at.isAfter(now)
+    Column(Modifier.fillMaxWidth().background(c.s1, RoundedCornerShape(16.dp)).border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(painterResource(R.drawable.ic_alarm), null, tint = if (past && !pending) c.mut else c.ink2, modifier = Modifier.size(20.dp))
+            Column(Modifier.weight(1f)) {
+                Text(whenText(at, now), style = BType.display(15, 1.3f), color = if (past && !pending) c.mut else c.ink)
+                a.text?.let { Text(it, style = BType.body(13), color = c.mut) }
+            }
+        }
+        when {
+            pending -> {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(painterResource(R.drawable.ic_check_circle), null, tint = c.ok, modifier = Modifier.size(16.dp))
+                    Text(stringResource(R.string.arc_reminder_set), style = BType.body(12, FontWeight.Medium), color = c.ok)
+                }
+                if (!ui.alarms.notificationsOn) Notice(stringResource(R.string.arc_notifications_off), stringResource(R.string.arc_turn_on), actions.allowNotifications)
+                else if (!ui.alarms.exact) Notice(stringResource(R.string.arc_may_be_late), stringResource(R.string.arc_ring_on_time), actions.allowExact)
+                Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (callName != null) Outline(stringResource(R.string.arc_call_name, callName), R.drawable.ic_call, Modifier.weight(1f)) { actions.call(item) }
+                    Outline(stringResource(R.string.arc_cancel_reminder), null, if (callName == null) Modifier.weight(1f) else Modifier) { actions.cancelReminder(item) }
+                }
+            }
+            !past -> Box(Modifier.fillMaxWidth().heightIn(min = 44.dp).background(c.acc, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { actions.setReminder(item) }, contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.arc_set_reminder), style = BType.body(14, FontWeight.SemiBold), color = c.onAcc)
+            }
+            else -> {
+                Text(stringResource(R.string.arc_reminder_passed), style = BType.body(12), color = c.mut2)
+                if (callName != null) Outline(stringResource(R.string.arc_call_name, callName), R.drawable.ic_call, Modifier.fillMaxWidth()) { actions.call(item) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Notice(text: String, link: String, onClick: () -> Unit) {
+    val c = LocalBridgeColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(text, style = BType.body(12, lineHeight = 1.4f), color = c.warn)
+        Text(link, style = BType.body(13, FontWeight.SemiBold), color = c.accInk, modifier = Modifier.heightIn(min = 36.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 8.dp))
     }
 }
 
@@ -206,7 +291,7 @@ private fun Divider() {
 }
 
 @Composable
-private fun CoachBubble(item: ChatItem, ui: CoachUi, actions: CoachActions) {
+private fun CoachBubble(item: ChatItem, ui: CoachUi, actions: CoachActions, now: java.time.LocalDateTime) {
     val c = LocalBridgeColors.current
     val m = item.message
     Column(Modifier.fw(.86f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -214,6 +299,7 @@ private fun CoachBubble(item: ChatItem, ui: CoachUi, actions: CoachActions) {
             modifier = Modifier.background(c.s1, RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)).border(1.dp, c.line, RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)).padding(horizontal = 14.dp, vertical = 12.dp))
         if (m.status == "interrupted") Text(stringResource(R.string.coach_interrupted), style = BType.body(12, FontWeight.Medium), color = c.bad,
             modifier = Modifier.heightIn(min = 32.dp).clickable(role = Role.Button) { actions.retry(item) }.padding(vertical = 6.dp))
+        if (item.action != null && m.status == "done") ActionCard(item, ui, actions, now)
         val s = item.suggestion
         // The card appears only after the stream finishes.
         if (s != null && m.status == "done") when (m.suggestionState) {

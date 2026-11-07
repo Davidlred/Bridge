@@ -84,6 +84,8 @@ data class ChatMessageEntity(
     @androidx.room.ColumnInfo(defaultValue = "NULL") val goalId: String? = null,
     /** An alliance the coach recommended, JSON {id, name, about, planMode, members, cap, code, reason}. */
     @androidx.room.ColumnInfo(defaultValue = "NULL") val alliance: String? = null,
+    /** Something the coach did on the phone, JSON {type: reminder|call, at, text, call, name} (CoachActionDto). */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val action: String? = null,
 )
 
 @Dao
@@ -276,8 +278,8 @@ interface PullDao {
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
         SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class],
-    version = 8, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)],
+    version = 9, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao

@@ -890,4 +890,44 @@
     <string name="coach_style_efficient">Efficient</string>
     <string name="coach_style_efficient_sub">Short and to the point. No small talk.</string>
     <string name="coach_style_plus">PLUS</string>
+
+    <!-- Arc on the phone: reminders, alarms and calls -->
+    <string name="notif_channel_arc">Reminders from your coach</string>
+    <string name="notif_channel_arc_desc">Reminders and alarms you asked your coach to set.</string>
+    <string name="arc_alarm_body">Reminder · %1$s</string>
+    <string name="arc_call_name">Call %1$s</string>
+    <string name="arc_snooze">Snooze 10 min</string>
+    <string name="arc_reminder_cancelled">Reminder cancelled.</string>
+    <string name="arc_today_at">Today, %1$s</string>
+    <string name="arc_tomorrow_at">Tomorrow, %1$s</string>
+    <string name="arc_day_at">%1$s, %2$s</string>
+    <string name="arc_reminder_set">Set on this phone</string>
+    <string name="arc_notifications_off">Notifications are off, so this reminder can\'t ring.</string>
+    <string name="arc_turn_on">Turn on notifications</string>
+    <string name="arc_may_be_late">Android may ring this a few minutes late.</string>
+    <string name="arc_ring_on_time">Let it ring on the minute</string>
+    <string name="arc_cancel_reminder">Cancel</string>
+    <string name="arc_set_reminder">Set reminder on this phone</string>
+    <string name="arc_reminder_passed">This time has passed.</string>
+    <string name="coach_speak">Speak instead of typing</string>
+    <string name="coach_speak_prompt">Talk to %1$s</string>
+    <string name="call_title">Call %1$s</string>
+    <string name="call_permission_body">To call %1$s, The Bridge looks them up in your contacts. Your contacts stay on this phone and are never uploaded.</string>
+    <string name="call_permission_denied">Contacts are turned off for The Bridge. You can turn them on in Settings.</string>
+    <string name="call_open_settings">Open Settings</string>
+    <string name="call_allow">Allow contacts and calls</string>
+    <string name="call_not_now">Not now</string>
+    <string name="call_finding">Finding %1$s…</string>
+    <string name="call_not_found">No %1$s in your contacts</string>
+    <string name="call_not_found_body">Check how they\'re saved, or say their full name.</string>
+    <string name="call_close">Close</string>
+    <string name="call_which">Which %1$s?</string>
+    <string name="call_cancel">Cancel</string>
+    <plurals name="call_in">
+        <item quantity="one">Calling in %d second</item>
+        <item quantity="other">Calling in %d seconds</item>
+    </plurals>
+    <string name="call_calling">Calling…</string>
+    <string name="call_opens_dialer">Your phone app opens with the number ready.</string>
+    <string name="call_now">Call now</string>
 </resources>
