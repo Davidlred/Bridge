@@ -10,6 +10,7 @@ import { push } from '../push.js';
 import { runText } from '../ai/replicate.js';
 import { blockedWith, firstName } from './progress.js';
 import { gameFrame, socketClosed, type SocketCtx } from './game.js';
+import { whoseDayFrame, whoseDaySocketClosed } from './whoseday.js';
 
 const PAGE = 50;
 /** Obvious slurs never post; everything else posts at once and is checked by the moderation model right after. */
@@ -116,8 +117,9 @@ export async function chatRoutes(app: FastifyInstance) {
         } catch { socket.close(4401, 'unauthorized'); }
       } else if (msg.type === 'subscribe' && userId) await subscribe();
       else if (msg.type?.startsWith('game:') && userId) await gameFrame(userId, msg, game);
+      else if (msg.type?.startsWith('wd:') && userId) await whoseDayFrame(userId, msg, game);
       else if (msg.type === 'ping') send({ type: 'pong' });
     });
-    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) socketClosed(userId, game); });
+    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) { socketClosed(userId, game); whoseDaySocketClosed(userId, game); } });
   });
 }

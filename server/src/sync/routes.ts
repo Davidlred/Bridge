@@ -37,6 +37,7 @@ const GoalPatch = z.object({
   routine: z.string().max(1000).nullable(),         // onboarding step 2, shown in Reality Check
   realityNote: z.string().max(1000).nullable(),     // "Why I started"
   feasibility: Feasibility.nullable(),
+  private: z.boolean(),                             // hidden from other people in games
 }).partial().strict();
 
 const TaskPatch = z.object({
@@ -52,6 +53,7 @@ const TaskPatch = z.object({
   onDate: ISODate.nullable(),                       // a step: one-time, for this local day; null = a daily habit
   resources: z.array(z.object({ title: z.string().trim().min(1).max(80), url: z.string().trim().max(500).regex(/^https?:\/\//) }).strict()).max(3),
   measure: z.enum(['reps', 'kg', 'min', 'km', 'pages']).nullable(),   // what a check-in asks for after ticking it
+  private: z.boolean(),                             // in games, shown as "Private task" with its length only
 }).partial().strict();
 
 const CompletionPatch = z.object({ localDate: ISODate });
@@ -103,9 +105,9 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
   }
   if (!row) {
     if (!p.label || !p.statement || !p.startDate || !p.deadline || p.deadline <= p.startDate) reject('invalid');
-    await tx`insert into goals (id, user_id, label, statement, category, start_date, deadline, status, color_index, routine, reality_note, feasibility)
+    await tx`insert into goals (id, user_id, label, statement, category, start_date, deadline, status, color_index, routine, reality_note, feasibility, private)
              values (${m.entityId}, ${userId}, ${p.label!}, ${p.statement!}, ${p.category ?? null}, ${p.startDate!}, ${p.deadline!}, ${p.status ?? 'active'}, ${p.colorIndex ?? 0},
-                     ${p.routine ?? null}, ${p.realityNote ?? null}, ${p.feasibility ? tx.json(p.feasibility) : null})`;
+                     ${p.routine ?? null}, ${p.realityNote ?? null}, ${p.feasibility ? tx.json(p.feasibility) : null}, ${p.private ?? false})`;
   } else {
     if ((p.deadline ?? row.deadline) <= (p.startDate ?? row.start_date)) reject('invalid');
     await tx`update goals set
@@ -116,6 +118,7 @@ async function applyGoal(tx: Tx, userId: string, m: Mutation) {
         routine = case when ${'routine' in p} then ${p.routine ?? null} else routine end,
         reality_note = case when ${'realityNote' in p} then ${p.realityNote ?? null} else reality_note end,
         feasibility = case when ${'feasibility' in p} then ${p.feasibility ? tx.json(p.feasibility) : null}::jsonb else feasibility end,
+        private = coalesce(${p.private ?? null}::boolean, private),
         updated_at = now()
       where id = ${m.entityId}`;
   }
@@ -148,9 +151,9 @@ async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
     if (!p.goalId || !p.title) reject('invalid');
     const [g] = await tx`select 1 from goals where id = ${p.goalId!} and user_id = ${userId}`;
     if (!g) reject('goal_missing');
-    await tx`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, notes, origin, position, on_date, resources, measure)
+    await tx`insert into tasks (id, goal_id, user_id, title, priority, time_of_day, minutes, rationale, notes, origin, position, on_date, resources, measure, private)
              values (${m.entityId}, ${p.goalId!}, ${userId}, ${p.title!}, ${p.priority ?? 'Medium'}, ${p.timeOfDay ?? null}, ${p.minutes ?? null}, ${p.rationale ?? null}, ${p.notes ?? null}, ${p.origin ?? 'user'}, ${p.position ?? 0},
-                     ${p.onDate ?? null}, ${tx.json(p.resources ?? [])}, ${p.measure ?? null})`;
+                     ${p.onDate ?? null}, ${tx.json(p.resources ?? [])}, ${p.measure ?? null}, ${p.private ?? false})`;
   } else {
     // Last writer wins per field: only the fields present in the patch are touched, in server-receipt order.
     await tx`update tasks set
@@ -162,7 +165,8 @@ async function applyTaskChange(tx: Tx, userId: string, m: Mutation) {
         position = coalesce(${p.position ?? null}, position),
         on_date = case when ${'onDate' in p} then ${p.onDate ?? null}::date else on_date end,
         resources = case when ${'resources' in p} then ${tx.json(p.resources ?? [])} else resources end,
-        measure = case when ${'measure' in p} then ${p.measure ?? null} else measure end, updated_at = now()
+        measure = case when ${'measure' in p} then ${p.measure ?? null} else measure end,
+        private = coalesce(${p.private ?? null}::boolean, private), updated_at = now()
       where id = ${m.entityId}`;
   }
   await log(tx, userId, 'task', m.entityId, 'upsert');
@@ -361,8 +365,8 @@ export async function syncRoutes(app: FastifyInstance) {
     const of = (entity: string) => [...latest.values()].filter(r => r.entity === entity);
     const goalIds = of('goal').map(r => r.entity_id as string), taskIds = of('task').map(r => r.entity_id as string), comps = of('completion'), checks = of('checkin');
 
-    const goals = goalIds.length ? await sql`select id, label, statement, category, start_date::text, deadline::text, status, source_alliance_id, color_index, routine, reality_note, feasibility, updated_at from goals where id in ${sql(goalIds)} and user_id = ${req.userId}` : [];
-    const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, on_date::text as on_date, resources, measure, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
+    const goals = goalIds.length ? await sql`select id, label, statement, category, start_date::text, deadline::text, status, source_alliance_id, color_index, routine, reality_note, feasibility, private, updated_at from goals where id in ${sql(goalIds)} and user_id = ${req.userId}` : [];
+    const tasks = taskIds.length ? await sql`select id, goal_id, title, priority, time_of_day, minutes, rationale, notes, origin, shared_task_id, position, on_date::text as on_date, resources, measure, private, deleted_at, updated_at from tasks where id in ${sql(taskIds)} and user_id = ${req.userId}` : [];
     const live = comps.length ? await sql`select task_id, local_date::text, completed_at from task_completions where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${comps.map(c => c.entity_id as string)}::uuid[], ${comps.map(c => c.key as string)}::date[]))` : [];
     const checkRows = checks.length ? await sql`select task_id, local_date::text, feel, amount, note_ciphertext, updated_at from checkins where user_id = ${req.userId} and (task_id, local_date) in (select * from unnest(${checks.map(c => c.entity_id as string)}::uuid[], ${checks.map(c => c.key as string)}::date[]))` : [];
     const [me] = of('settings').length ? await sql`select settings from users where id = ${req.userId}` : [];
@@ -376,8 +380,8 @@ export async function syncRoutes(app: FastifyInstance) {
     return {
       cursor: rows.length ? Number(rows[rows.length - 1]!.server_seq) : since,
       hasMore: rows.length === PULL_PAGE,
-      goals: goals.map(g => ({ id: g.id, label: g.label, statement: g.statement, category: g.category, startDate: g.start_date, deadline: g.deadline, status: g.status, sourceAllianceId: g.source_alliance_id, colorIndex: g.color_index, routine: g.routine, realityNote: g.reality_note, feasibility: g.feasibility, updatedAt: ms(g.updated_at) })),
-      tasks: tasks.map(t => ({ id: t.id, goalId: t.goal_id, title: t.title, priority: t.priority, timeOfDay: t.time_of_day, minutes: t.minutes, rationale: t.rationale, notes: t.notes, origin: t.origin, sharedTaskId: t.shared_task_id, position: t.position, onDate: t.on_date ?? null, resources: t.resources ?? [], measure: t.measure ?? null, deletedAt: ms(t.deleted_at), updatedAt: ms(t.updated_at) })),
+      goals: goals.map(g => ({ id: g.id, label: g.label, statement: g.statement, category: g.category, startDate: g.start_date, deadline: g.deadline, status: g.status, sourceAllianceId: g.source_alliance_id, colorIndex: g.color_index, routine: g.routine, realityNote: g.reality_note, feasibility: g.feasibility, private: g.private, updatedAt: ms(g.updated_at) })),
+      tasks: tasks.map(t => ({ id: t.id, goalId: t.goal_id, title: t.title, priority: t.priority, timeOfDay: t.time_of_day, minutes: t.minutes, rationale: t.rationale, notes: t.notes, origin: t.origin, sharedTaskId: t.shared_task_id, position: t.position, onDate: t.on_date ?? null, resources: t.resources ?? [], measure: t.measure ?? null, private: t.private, deletedAt: ms(t.deleted_at), updatedAt: ms(t.updated_at) })),
       completions: live.map(c => ({ taskId: c.task_id, localDate: c.local_date, completedAt: ms(c.completed_at) })),
       checkins: checkRows.map(c => ({ taskId: c.task_id, localDate: c.local_date, feel: c.feel, amount: c.amount === null ? null : Number(c.amount), note: c.note_ciphertext ? decryptText(key!, c.note_ciphertext) : null, updatedAt: ms(c.updated_at) })),
       removed: {

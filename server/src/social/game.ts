@@ -7,6 +7,7 @@ import { HttpError, uuidv7 } from '../util.js';
 import { bus } from '../realtime.js';
 import { push } from '../push.js';
 import { blockedWith, firstName, localToday } from './progress.js';
+import { openLobby as openWhoseDayLobby, openWhoseDay, whoseDayView } from './whoseday.js';
 
 /**
  * Game Night, "Who's Drifting?". Server-authoritative: the server picks the Drifter, owns the planks, validates every
@@ -320,12 +321,24 @@ export async function gameRoutes(app: FastifyInstance) {
       waiting: s.members.filter(m => !m.done && m.userId !== req.userId).map(m => m.name),
       meLeft: s.members.find(m => m.userId === req.userId)?.left ?? null,
       game: g && !['result', 'cancelled'].includes(g.phase) ? view(g) : null,
+      whoseDay: (() => { const w = openWhoseDay(req.params.id); return w ? whoseDayView(w) : null; })(),
     };
   });
 
-  /** Opens the lobby. Before everyone has finished (or with fewer than 4 eligible) it's practice: no ranking points. */
-  app.post<{ Params: { id: string } }>('/v1/alliances/:id/game', { onRequest: auth }, async req => {
+  /**
+   * Opens the lobby for one of the two games ({ kind: 'drifting' | 'whose_day' }, Who's Drifting? by default).
+   * Before everyone has finished (or with fewer than 4 eligible) it's practice: no ranking points.
+   * One game runs per alliance at a time: asking for the other kind while one is open is a 409 naming the open one.
+   */
+  app.post<{ Params: { id: string }; Body: { kind?: string } | null }>('/v1/alliances/:id/game', { onRequest: auth }, async (req, reply) => {
     await member(req.params.id, req.userId);
+    const kind = z.enum(['drifting', 'whose_day']).catch('drifting').parse(req.body?.kind ?? 'drifting');
+    const open = openByAlliance.get(req.params.id);
+    const drifting = open && games.get(open) && !['result', 'cancelled'].includes(games.get(open)!.phase);
+    const whose = openWhoseDay(req.params.id);
+    if (kind === 'whose_day' && drifting) return reply.code(409).send({ error: 'other_game_open', kind: 'drifting' });
+    if (kind === 'drifting' && whose) return reply.code(409).send({ error: 'other_game_open', kind: 'whose_day' });
+    if (kind === 'whose_day') return { game: whoseDayView(await openWhoseDayLobby(req.params.id)) };
     const g = await openLobby(req.params.id);
     return { game: view(g) };
   });
@@ -334,11 +347,14 @@ export async function gameRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string; gameId: string } }>('/v1/alliances/:id/games/:gameId/share', { onRequest: auth }, async (req, reply) => {
     await member(req.params.id, req.userId);
     if (!z.string().uuid().safeParse(req.params.gameId).success) throw new HttpError(404, 'not_found');
-    const [s] = await sql`select s.builders_won, u.display_name from game_sessions s left join users u on u.id = s.drifter_id
+    const [s] = await sql`select s.kind, s.builders_won, u.display_name, w.display_name as winner, (select score from game_players where game_id = s.id and user_id = s.winner_id) as score
+                          from game_sessions s left join users u on u.id = s.drifter_id left join users w on w.id = s.winner_id
                           where s.id = ${req.params.gameId} and s.alliance_id = ${req.params.id} and s.ended_at is not null`;
     if (!s) throw new HttpError(404, 'not_found');
     const name = firstName(s.display_name ?? '');
-    const body = s.builders_won ? `Game night: the Builders caught ${name}.` : `Game night: ${name} drifted away undetected.`;
+    const body = s.kind === 'whose_day'
+      ? (s.winner ? `Game night: ${firstName(s.winner)} won Whose Day? with ${s.score} points.` : 'Game night: Whose Day? is over.')
+      : s.builders_won ? `Game night: the Builders caught ${name}.` : `Game night: ${name} drifted away undetected.`;
     const [m] = await sql`insert into alliance_messages (id, alliance_id, user_id, kind, body, client_id, moderation) values (${uuidv7()}, ${req.params.id}, null, 'game', ${body}, ${req.params.gameId}, 'allow')
                           on conflict (alliance_id, client_id) where client_id is not null do nothing returning id, created_at`;
     if (m) bus.publish(`alliance:${req.params.id}`, { type: 'message', message: { id: m.id, clientId: req.params.gameId, userId: null, name: null, mine: false, kind: 'game', body, createdAt: (m.created_at as Date).getTime() } });
