@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { uuidv7 } from '../src/util.js';
-import { arcLine, displayNames, goalHint, rank, stageAt, streakOf, strip, wdTiming } from '../src/social/whoseday.js';
+import { arcLine, displayNames, goalHint, rank, routineHint, stageAt, streakOf, strip, wdTiming } from '../src/social/whoseday.js';
 
 vi.mock('../src/ai/replicate.js', async orig => ({ ...(await orig<typeof import('../src/ai/replicate.js')>()), runText: vi.fn(async () => 'allow') }));
 
@@ -29,8 +29,14 @@ describe('Whose Day? rules', () => {
     const p = (name: string, score: number, early: number, lockMs: number[]) => ({ name, score, early, lockMs });
     expect(rank([p('A', 5, 1, [4000]), p('B', 5, 2, [9000]), p('C', 5, 2, [2000]), p('D', 7, 0, [])]).map(x => x.name)).toEqual(['D', 'C', 'B', 'A']);
   });
+  it('hints at routine in shared plans', () => {
+    expect(routineHint('06:10', 12)).toBe('an early riser');
+    expect(routineHint('22:30', 12)).toBe('a night owl');
+    expect(routineHint('09:00', 12)).toBe('joined the alliance 12 days ago');
+    expect(routineHint(null, 1)).toBe('joined the alliance 1 day ago');
+  });
   it("writes Arc's line from a named task", () => {
-    const list = { ownerId: 'x', allianceGoalId: 'g', goalHint: '', goalTitle: 'Licence', deadline: null, goalPrivate: false,
+    const list = { ownerId: 'x', allianceGoalId: 'g', how: false, goalStreak: 0, goalHint: '', goalTitle: 'Licence', deadline: null, goalPrivate: false,
       tasks: [{ name: null, private: true, durationMin: 10, priority: 'low' as const, doneAt: '06:00', goalId: 'g', streak: 9 },
         { name: 'Hazard clips', private: false, durationMin: 20, priority: 'high' as const, doneAt: '07:40', goalId: 'g', streak: 4 }] };
     expect(arcLine(list, 'Kemi')).toBe('Hazard clips at 7:40am. 4 days running. Kemi means it.');
@@ -106,7 +112,7 @@ run('Whose Day? games', () => {
     const st = (await call(ps[0]!, 'GET', `/v1/alliances/${a.id}/game`)).json();
     expect(st).toMatchObject({ unlocked: true, whoseDay: null });
     const lobby = (await call(ps[1]!, 'POST', `/v1/alliances/${a.id}/game`, { kind: 'whose_day' })).json().game;
-    expect(lobby).toMatchObject({ kind: 'whose_day', phase: 'lobby', rounds: 3 });
+    expect(lobby).toMatchObject({ kind: 'whose_day', phase: 'lobby', rounds: 3, allianceName: 'Night Owls' });
     // One game at a time: Who's Drifting? can't open beside it
     expect((await call(ps[2]!, 'POST', `/v1/alliances/${a.id}/game`, { kind: 'drifting' })).json()).toEqual({ error: 'other_game_open', kind: 'whose_day' });
     expect((await call(ps[2]!, 'GET', `/v1/alliances/${a.id}/game`)).json().whoseDay.id).toBe(lobby.id);
@@ -155,6 +161,8 @@ run('Whose Day? games', () => {
       await until(() => socks[0]!.last()?.phase === 'reveal' && socks[0]!.last()!.current === round);
       const r = socks[0]!.last()!.round.reveal;
       expect(r).toMatchObject({ ownerId: ids[o], goalTitle: 'Run', deadline: '2030-01-01', ownerPoints: 1, arcLine: expect.stringContaining('means it.') });
+      // Everyone tapping "Next list" moves on before the reveal timer
+      if (round === 0) { socks.forEach(s => s.send({ type: 'wd:next', gameId: lobby.id, round: 0 })); }
       expect(Object.fromEntries(r.guesses.map((x: { userId: string; points: number }) => [x.userId, x.points]))).toEqual({ [ids[others[0]!]!]: 3, [ids[others[1]!]!]: 0, [ids[others[2]!]!]: 2 });
     }
     expect(seen.size).toBe(3);

@@ -4,6 +4,8 @@ const list = z.string().default('').transform(s => s.split(',').map(x => x.trim(
 
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /** Testing only: Community and alliances open without the 7-day streak. Ignored in production. */
+  COMMUNITY_OPEN_NOW: z.enum(['true', 'false']).default('false'),
   PORT: z.coerce.number().default(8080),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),

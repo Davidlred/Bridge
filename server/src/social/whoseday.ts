@@ -4,7 +4,7 @@ import { sql } from '../db.js';
 import { uuidv7 } from '../util.js';
 import { bus } from '../realtime.js';
 import { push } from '../push.js';
-import { blockedWith, localToday } from './progress.js';
+import { blockedWith, goalStreak, localToday } from './progress.js';
 import { unlockStatus } from './game.js';
 import type { SocketCtx } from './game.js';
 
@@ -31,6 +31,8 @@ export interface PublicTask { name: string | null; private: boolean; durationMin
 interface ListTask extends PublicTask { goalId: string; streak: number }
 interface DayList {
   ownerId: string; tasks: ListTask[];
+  /** Shared-plan alliance: everyone has the same tasks, so the clues show how the day went, not what was on it. */
+  how: boolean; goalStreak: number;
   goalHint: string; goalTitle: string | null; deadline: string | null; goalPrivate: boolean; allianceGoalId: string;
 }
 interface Guess { guessId: string; stage: 1 | 2 | 3; atMs: number; points: number; correct: boolean }
@@ -41,10 +43,12 @@ interface Player {
   pool: boolean;
   /** "Your game is still on" was sent (once per game). */
   toldStillOn?: boolean;
+  /** Tapped "Next list" during the reveal; when everyone has, the next round starts early. */
+  next?: boolean;
   score: number; guessPoints: number; ownerPoints: number; right: number; early: number; guessed: number; lockMs: number[]; fooled: number;
 }
 interface Game {
-  id: string; allianceId: string; phase: Phase; players: Map<string, Player>; rounds: Round[]; current: number;
+  id: string; allianceId: string; allianceName: string; phase: Phase; players: Map<string, Player>; rounds: Round[]; current: number;
   ranked: boolean; wantsRanked: boolean; localDate: string; endsAt: number; timer?: NodeJS.Timeout; stageTimers: NodeJS.Timeout[];
   done: { finished: number; eligible: number };
   results?: Results;
@@ -89,31 +93,46 @@ export function streakOf(days: string[], today: string): number {
 export const strip = (t: { name: string; private: boolean; durationMin: number | null; priority: Priority; doneAt: string | null }, goalPrivate: boolean): PublicTask =>
   t.private || goalPrivate ? { name: null, private: true, durationMin: t.durationMin, priority: t.priority, doneAt: t.doneAt } : { ...t, private: false };
 
-/** What a player finished today, across their active goals, in the order they ticked them. Null if they can't be in the pool. */
+/**
+ * What a player finished today for this alliance's goal (other goals never count or show), in the order they ticked
+ * them. Null if they can't be in the pool.
+ */
 async function dayList(allianceId: string, userId: string): Promise<DayList | null> {
-  const [m] = await sql`select m.goal_id, g.label, g.category, g.deadline::text, g.private, coalesce(u.home_timezone, 'UTC') as tz
-                        from alliance_members m join goals g on g.id = m.goal_id join users u on u.id = m.user_id
+  const [m] = await sql`select m.goal_id, g.label, g.category, g.deadline::text, g.private, coalesce(u.home_timezone, 'UTC') as tz,
+                               a.plan_mode, (now()::date - m.joined_at::date) as joined_days
+                        from alliance_members m join goals g on g.id = m.goal_id join users u on u.id = m.user_id join alliances a on a.id = m.alliance_id
                         where m.alliance_id = ${allianceId} and m.user_id = ${userId} and m.status <> 'left'`;
   if (!m) return null;
   const today = await localToday(sql, userId);
   const rows = await sql`select t.id, t.goal_id, t.title, t.priority, t.minutes, t.private, g.private as goal_private,
                                 to_char(c.completed_at at time zone ${m.tz}, 'HH24:MI') as done_at
                          from task_completions c join tasks t on t.id = c.task_id join goals g on g.id = t.goal_id
-                         where c.user_id = ${userId} and c.local_date = ${today} and t.deleted_at is null and g.status = 'active'
+                         where c.user_id = ${userId} and c.local_date = ${today} and t.goal_id = ${m.goal_id} and t.deleted_at is null
                          order by c.completed_at, t.position`;
   if (!rows.some(r => !r.private && !r.goal_private)) return null;           // nothing to guess from
   const history = await sql`select task_id, local_date::text as d from task_completions where task_id in ${sql(rows.map(r => r.id as string))} and local_date > ${today}::date - 60`;
   const byTask = new Map<string, string[]>();
   for (const h of history) byTask.set(h.task_id, [...(byTask.get(h.task_id) ?? []), h.d]);
+  const how = m.plan_mode === 'shared';
+  const first = rows.map(r => r.done_at as string | null).filter((x): x is string => !!x).sort()[0] ?? null;
   return {
-    ownerId: userId, allianceGoalId: m.goal_id,
+    ownerId: userId, allianceGoalId: m.goal_id, how, goalStreak: await goalStreak(sql, userId, m.goal_id),
     tasks: rows.map(r => ({
       ...strip({ name: r.title, private: r.private, durationMin: r.minutes ?? null, priority: PRIORITY[r.priority] ?? 'med', doneAt: r.done_at }, r.goal_private),
       goalId: r.goal_id, streak: streakOf(byTask.get(r.id) ?? [], today),
     })),
-    goalHint: goalHint(m.category, m.private), goalPrivate: m.private,
+    goalHint: how ? routineHint(first, Number(m.joined_days)) : goalHint(m.category, m.private), goalPrivate: m.private,
     goalTitle: m.private ? null : m.label, deadline: m.private ? null : m.deadline,
   };
+}
+
+/** Shared plans, clue 3: something from the member's own routine. Never the journal or mood. */
+export function routineHint(firstTick: string | null, joinedDays: number): string {
+  const h = firstTick ? Number(firstTick.slice(0, 2)) : null;
+  if (h !== null && h < 7) return 'an early riser';
+  if (h !== null && h >= 21) return 'a night owl';
+  if (joinedDays <= 0) return 'joined the alliance today';
+  return `joined the alliance ${joinedDays} day${joinedDays === 1 ? '' : 's'} ago`;
 }
 
 /** "7:40am" from "07:40". */
@@ -176,10 +195,10 @@ function roundView(g: Game, r: Round, index: number) {
   const now = Date.now();
   const stage = r.revealed ? 4 : stageAt(r.startsAt, now);
   const showMeta = stage >= 2;
-  const tasks = r.list.tasks.map(t => ({
-    name: t.name, private: t.private, durationMin: showMeta ? t.durationMin : null,
-    ...(showMeta ? { priority: t.priority, doneAt: t.doneAt } : {}),
-  }));
+  const how = r.list.how;
+  const tasks = r.list.tasks.map(t => how
+    ? { name: t.name, private: t.private, durationMin: null, doneAt: t.doneAt, ...(showMeta ? { streak: t.streak } : {}) }
+    : { name: t.name, private: t.private, durationMin: showMeta ? t.durationMin : null, ...(showMeta ? { priority: t.priority, doneAt: t.doneAt } : {}) });
   const minutes = r.list.tasks.reduce((a, t) => a + (t.durationMin ?? 0), 0);
   const finishedBy = r.list.tasks.map(t => t.doneAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   const owner = g.players.get(r.list.ownerId);
@@ -187,8 +206,9 @@ function roundView(g: Game, r: Round, index: number) {
     index, total: g.rounds.length, stage, startsAt: r.startsAt,
     stageEndsAt: stage === 1 ? r.startsAt + wdTiming.stageMs : stage === 2 ? r.startsAt + 2 * wdTiming.stageMs : stage === 3 ? r.startsAt + wdTiming.closeMs : r.startsAt + wdTiming.roundMs,
     closesAt: r.startsAt + wdTiming.closeMs, revealAt: r.startsAt + wdTiming.roundMs,
-    tasks, count: tasks.length,
-    ...(showMeta ? { minutes, finishedBy } : {}),
+    tasks, count: tasks.length, how,
+    ...(showMeta ? { minutes: how ? null : minutes, finishedBy } : {}),
+    ...(how && showMeta ? { goalStreak: r.list.goalStreak } : {}),
     ...(stage >= 3 ? { goalHint: r.list.goalHint } : {}),
     guessed: r.guesses.size, guessers: guessers(g, r).length,
     ...(r.revealed ? {
@@ -208,7 +228,7 @@ function roundView(g: Game, r: Round, index: number) {
 function view(g: Game) {
   const r = g.rounds[g.current];
   return {
-    id: g.id, kind: 'whose_day', allianceId: g.allianceId, ranked: g.ranked, phase: g.phase, endsAt: g.endsAt, now: Date.now(),
+    id: g.id, kind: 'whose_day', allianceId: g.allianceId, allianceName: g.allianceName, ranked: g.ranked, phase: g.phase, endsAt: g.endsAt, now: Date.now(),
     done: g.done,
     rounds: g.phase === 'lobby' ? plannedRounds(present(g).length) : g.rounds.length, current: g.current,
     players: [...g.players.values()].map(p => ({ userId: p.userId, name: p.name, absent: p.absent, score: p.score })),
@@ -242,9 +262,9 @@ export async function openLobby(allianceId: string): Promise<Game> {
   const open = openWhoseDay(allianceId);
   if (open) return open;
   const s = await unlockStatus(allianceId);
-  const [owner] = await sql`select owner_id from alliances where id = ${allianceId}`;
+  const [owner] = await sql`select owner_id, name from alliances where id = ${allianceId}`;
   const g: Game = {
-    id: uuidv7(), allianceId, phase: 'lobby', players: new Map(), rounds: [], current: 0, ranked: false, wantsRanked: s.ranked,
+    id: uuidv7(), allianceId, allianceName: owner!.name, phase: 'lobby', players: new Map(), rounds: [], current: 0, ranked: false, wantsRanked: s.ranked,
     localDate: await localToday(sql, owner!.owner_id), endsAt: Date.now() + wdTiming.lobbyMs, stageTimers: [],
     done: { finished: s.finished, eligible: s.eligible },
   };
@@ -317,9 +337,17 @@ function reveal(g: Game) {
   r.arcLine = arcLine(r.list, owner?.name ?? '');
   g.phase = 'reveal';
   g.endsAt = Date.now() + wdTiming.revealMs;
-  g.timer = setTimeout(() => { g.current++; if (g.current < g.rounds.length) beginRound(g); else void finish(g); }, wdTiming.revealMs);
+  for (const p of g.players.values()) p.next = false;
+  g.timer = setTimeout(() => advance(g), wdTiming.revealMs);
   publish(g);
   for (const p of present(g)) void tell(g, p);
+}
+
+function advance(g: Game) {
+  if (g.phase !== 'reveal') return;
+  clearTimers(g);
+  g.current++;
+  if (g.current < g.rounds.length) beginRound(g); else void finish(g);
 }
 
 /** Sharpest Eye, Dark Horse and Arc's favourite task of the night. */
@@ -329,9 +357,9 @@ export function results(players: Player[], rounds: Round[]): Results {
   const eye = by(p => p.guessPoints), horse = by(p => p.ownerPoints);
   const shown = rounds.filter(r => r.revealed);
   const ownLists = (id: string) => shown.filter(r => r.list.ownerId === id).length;
-  // Prefer a "life" task (not for the alliance goal), then the longest streak.
-  const pool = shown.flatMap(r => r.list.tasks.filter(t => t.name).map(t => ({ t, ownerId: r.list.ownerId, life: t.goalId !== r.list.allianceGoalId })));
-  const fav = pool.sort((a, b) => Number(b.life) - Number(a.life) || b.t.streak - a.t.streak)[0];
+  // The earliest-finished task of the night (Study Mode time stays on the phone, so it isn't used).
+  const pool = shown.flatMap(r => r.list.tasks.filter(t => t.name).map(t => ({ t, ownerId: r.list.ownerId })));
+  const fav = pool.sort((a, b) => (a.t.doneAt ?? '99').localeCompare(b.t.doneAt ?? '99') || b.t.streak - a.t.streak)[0];
   return {
     scores: ranked.map(p => ({ userId: p.userId, score: p.score, right: p.right, early: p.early })),
     sharpest: eye ? { userId: eye.userId, points: eye.guessPoints, right: eye.right, of: shown.length - ownLists(eye.userId), early: eye.early } : null,
@@ -382,11 +410,14 @@ const Frame = z.discriminatedUnion('type', [
   z.object({ type: z.literal('wd:pool'), gameId: z.string().uuid(), on: z.boolean() }),
   z.object({ type: z.literal('wd:guess'), gameId: z.string().uuid(), target: z.string().uuid() }),
   z.object({ type: z.literal('wd:leave'), gameId: z.string().uuid() }),
+  z.object({ type: z.literal('wd:next'), gameId: z.string().uuid(), round: z.number().int().min(0) }),
 ]);
 
 const poolSetting = async (userId: string) => {
   const [u] = await sql`select settings from users where id = ${userId}`;
-  return (u?.settings as Record<string, unknown> | null)?.whoseDayShareList !== false;
+  const s = (u?.settings as Record<string, unknown> | null) ?? {};
+  if (typeof s.whoseDayShareList === 'boolean') return s.whoseDayShareList;
+  return s.share !== 'nothing';
 };
 
 export async function whoseDayFrame(userId: string, raw: unknown, ctx: SocketCtx) {
@@ -450,6 +481,12 @@ export async function whoseDayFrame(userId: string, raw: unknown, ctx: SocketCtx
       // Everyone else learns only how many have locked in.
       if (guessers(g, r).every(x => r.guesses.has(x.userId))) reveal(g);
       else publish(g);
+      return;
+    }
+    case 'wd:next': {
+      if (g.phase !== 'reveal' || m.round !== g.current) return;
+      p.next = true;
+      if (present(g).every(x => x.next)) advance(g);
       return;
     }
     case 'wd:leave': {
