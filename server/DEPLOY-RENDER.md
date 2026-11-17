@@ -22,8 +22,9 @@ Render dashboard.
    - Name: `the-bridge`.
    - Region: the one closest to your testers (for Nigeria, `West EU (London)` or `Central EU (Frankfurt)`).
    - Database password: generate one and save it in your password manager.
-2. When the project is ready, click **Connect** in the top bar.
-3. Find **Session pooler**, not "Direct connection". Render can't reach Supabase's direct address. Copy the URI. It looks like:
+2. When the project is ready, click **Connect** in the top bar, then the **Direct** tile ("Connection string").
+3. Set **Method** to **Session pooler**, not "Direct connection". Render can't reach Supabase's direct address. If
+   there's a **Type** option, pick **URI**. Copy the line. It looks like:
    `postgresql://postgres.abcdefgh:[YOUR-PASSWORD]@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`
 4. Replace `[YOUR-PASSWORD]` with the password from step 1. This whole line is your **DATABASE_URL**.
 
