@@ -1,4 +1,5 @@
 import { env } from '../env.js';
+import { sql } from '../db.js';
 
 const BASE = 'https://api.replicate.com/v1';
 const headers = () => ({ Authorization: `Bearer ${env.REPLICATE_API_TOKEN}`, 'Content-Type': 'application/json' });
@@ -44,7 +45,19 @@ async function create(model: string, body: object, signal?: AbortSignal, extra: 
   }
 }
 
+/**
+ * The server-wide daily ceiling (AI_DAILY_BUDGET). Moderation (the fast model) is never capped, so chat stays safe when
+ * the budget runs out; everything else gets the usual "AI unavailable" handling.
+ */
+export async function spendBudget(model: string): Promise<void> {
+  if (!env.AI_DAILY_BUDGET || model === env.MODEL_FAST) return;
+  const [row] = await sql`insert into ai_budget (day, calls) values (current_date, 1)
+                          on conflict (day) do update set calls = ai_budget.calls + 1 returning calls`;
+  if (row!.calls > env.AI_DAILY_BUDGET) throw new AIUnavailable('ai_budget', false);
+}
+
 async function runPrediction(model: string, input: Record<string, unknown>, signal?: AbortSignal, timeoutMs = 90_000): Promise<unknown> {
+  await spendBudget(model);
   const res = await create(model, { input }, signal, { Prefer: 'wait=60' });
   if (res.status === 429 || res.status >= 500) throw new AIUnavailable(`replicate ${res.status}`);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}: ${await res.text()}`, false);
@@ -93,6 +106,7 @@ export class StreamJoiner {
 
 /** Streams new text from a language model via Replicate's SSE stream URL. */
 export async function* streamText(model: string, input: Record<string, unknown>, signal?: AbortSignal): AsyncGenerator<string> {
+  await spendBudget(model);
   const res = await create(model, { input: textInput(model, input), stream: true }, signal);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}`, res.status >= 500 || res.status === 429);
   const p = (await res.json()) as Prediction;

@@ -16,6 +16,12 @@ export async function migrate(dir = fileURLToPath(new URL('../db', import.meta.u
     });
     applied.push(name);
   }
+  // Hosted Postgres like Supabase publishes every table in public through its own web API. Row-level security with no
+  // policies closes that; this server connects as the tables' owner, which RLS doesn't apply to.
+  await sql.unsafe(`do $rls$ declare t record; begin
+    for t in select tablename from pg_tables where schemaname = 'public' and not rowsecurity loop
+      execute format('alter table public.%I enable row level security', t.tablename);
+    end loop; end $rls$`);
   return applied;
 }
 

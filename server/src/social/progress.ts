@@ -38,7 +38,7 @@ export async function communityUnlocked(db: Db, userId: string, goalId: string):
   if (!g) return { unlocked: false, streak: 0 };
   const streak = await goalStreak(db, userId, goalId);
   if (g.community_unlocked_at) return { unlocked: true, streak };
-  const testing = env.COMMUNITY_OPEN_NOW === 'true' && env.NODE_ENV !== 'production';
+  const testing = env.COMMUNITY_OPEN_NOW === 'true';
   if (streak >= COMMUNITY_STREAK || g.allied || testing) {
     await db`update goals set community_unlocked_at = now() where id = ${goalId}`;
     return { unlocked: true, streak };

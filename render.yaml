@@ -1,0 +1,62 @@
+# The Bridge API on Render (free tier, for testers). See server/DEPLOY-RENDER.md.
+# Database: Supabase Postgres (session pooler). Redis: Upstash. Files: Supabase Storage (S3 API).
+# Values marked "sync: false" are secrets: Render asks for them when you create the Blueprint. Never commit them.
+services:
+  - type: web
+    name: bridge-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --include=dev && npm run build
+    # Migrations run on every start; each file is applied once.
+    startCommand: node dist/migrate.js && node dist/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      # Models (not secrets). Change them here, then run `npm run check-ai` locally.
+      - key: MODEL_PLANNER
+        value: anthropic/claude-opus-4.7
+      - key: MODEL_COACH
+        value: anthropic/claude-opus-4.7
+      - key: MODEL_FAST
+        value: anthropic/claude-4.5-haiku
+      - key: MODEL_IMAGE
+        value: google/imagen-4
+      - key: MODEL_IMAGE_EDIT
+        value: google/nano-banana
+      # Most AI calls per day across all testers (chat moderation is never capped). 0 = no ceiling.
+      - key: AI_DAILY_BUDGET
+        value: "300"
+      # Testers can make alliances without the 7-day streak. Set to "false" before launch.
+      - key: COMMUNITY_OPEN_NOW
+        value: "true"
+      - key: S3_REGION
+        sync: false
+      # Secrets and per-account values
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_PRIVATE_KEY_PEM
+        sync: false
+      - key: JWT_ISSUER
+        sync: false
+      - key: JOURNAL_KEK
+        sync: false
+      - key: MEDIA_SIGNING_SECRET
+        sync: false
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: GOOGLE_CLIENT_IDS
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false

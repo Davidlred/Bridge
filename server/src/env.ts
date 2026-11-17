@@ -4,10 +4,12 @@ const list = z.string().default('').transform(s => s.split(',').map(x => x.trim(
 
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  /** Testing only: Community and alliances open without the 7-day streak. Ignored in production. */
+  /** Testing only: Community and alliances open without the 7-day streak. Off unless set; turn it off before launch. */
   COMMUNITY_OPEN_NOW: z.enum(['true', 'false']).default('false'),
   /** Arcade games switched off (comma-separated ids, e.g. "whose,word"). Everything built is on by default. */
   GAMES_OFF: z.string().default(''),
+  /** Most AI calls (coach, plans, images) the whole server makes per UTC day; 0 = no ceiling. Chat moderation is never capped. */
+  AI_DAILY_BUDGET: z.coerce.number().int().min(0).default(0),
   PORT: z.coerce.number().default(8080),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
