@@ -149,18 +149,18 @@ class TodayViewModel @Inject constructor(
     }
     fun closeCelebrate() { celebrate.value = null }
 
-    fun addTask(goalId: String, title: String, notes: String, priority: String, time: String, measure: String? = null) = viewModelScope.launch {
-        repo.addTask(goalId, title, notes, priority, time, measure); toaster.show(UiText.Res(R.string.toast_task_added), ToastKind.Ok)
+    fun addTask(goalId: String, title: String, notes: String, priority: String, time: String, measure: String? = null, isPrivate: Boolean = false) = viewModelScope.launch {
+        repo.addTask(goalId, title, notes, priority, time, measure, isPrivate); toaster.show(UiText.Res(R.string.toast_task_added), ToastKind.Ok)
     }
-    fun updateTask(id: String, title: String, notes: String, priority: String, time: String, measure: String? = null) = viewModelScope.launch {
-        repo.updateTask(id, title, notes, priority, time, measure, setMeasure = true); toaster.show(UiText.Res(R.string.toast_task_updated), ToastKind.Ok)
+    fun updateTask(id: String, title: String, notes: String, priority: String, time: String, measure: String? = null, isPrivate: Boolean = false) = viewModelScope.launch {
+        repo.updateTask(id, title, notes, priority, time, measure, setMeasure = true, isPrivate = isPrivate); toaster.show(UiText.Res(R.string.toast_task_updated), ToastKind.Ok)
     }
     fun deleteTask(id: String) = viewModelScope.launch { repo.deleteTask(id); toaster.show(UiText.Res(R.string.toast_task_deleted)) }
 
     /** A new deadline re-runs the Reality Check (not the plan). The date itself is exactly what the user picked. */
-    fun saveGoal(id: String, label: String, deadline: LocalDate) = viewModelScope.launch {
+    fun saveGoal(id: String, label: String, deadline: LocalDate, isPrivate: Boolean? = null) = viewModelScope.launch {
         val before = repo.activeGoals().first().find { it.goal.id == id }?.goal ?: return@launch
-        repo.updateGoal(id, label = label, deadline = deadline)
+        repo.updateGoal(id, label = label, deadline = deadline, isPrivate = isPrivate)
         toaster.show(UiText.Res(R.string.toast_goal_updated), ToastKind.Ok)
         if (before.deadline != deadline.toString()) recheck(id)
     }

@@ -25,7 +25,7 @@ import app.thebridge.ui.theme.LocalBridgeColors
 
 /** Community inside a goal: wires [CommunityScreen] and its sheets to the ViewModel. */
 @Composable
-fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (String) -> Unit = {}, onBoard: (String) -> Unit = {}, onDms: () -> Unit = {},
+fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (allianceId: String, kind: String) -> Unit = { _, _ -> }, onBoard: (String) -> Unit = {}, onDms: () -> Unit = {},
                    onStudents: (app.thebridge.data.remote.AllianceDto) -> Unit = {}, vm: CommunityViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
@@ -44,7 +44,7 @@ fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (St
         back = onBack, retry = { vm.refresh() }, cycleShare = { vm.cycleShare() }, startPreview = vm::startPreview, endPreview = vm::endPreview, showTab = vm::showTab,
         react = { p, r -> vm.react(p, r) }, postMenu = vm::openPostMenu, create = vm::openCreate, join = vm::openJoin, select = vm::select,
         invite = { inviteFor = it }, sampleInvite = vm::sampleInvite, openChat = { onOpenChat(it.id) }, options = vm::askLeave, applyNow = { vm.applyNow(it) },
-        openDms = onDms, alliancePlus = { paywall = true }, playGame = { onPlay(it.id) }, nudge = { vm.nudge(it) }, openBoard = { onBoard(it.id) },
+        openDms = onDms, alliancePlus = { paywall = true }, playGame = { a, kind -> onPlay(a.id, kind) }, nudge = { vm.nudge(it) }, openBoard = { onBoard(it.id) },
         setListed = { a, on -> vm.setListed(a, on) }, students = onStudents, setSharing = { a, on -> vm.setSharing(a, on) }, leadShared = vm::openLeadShared,
     ))
     if (paywall) app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.AlliancePlus, onDismiss = { paywall = false; vm.refresh() })

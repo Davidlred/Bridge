@@ -533,7 +533,7 @@ private fun RealityView(ui: TodayUi, g: GoalState, actions: TodayActions) {
 // ---------------- Sheets ----------------
 
 @Composable
-fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: String, time: String, measure: String?) -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: String, time: String, measure: String?, isPrivate: Boolean) -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
               checkin: app.thebridge.data.local.CheckinEntity? = null, onCheckIn: (() -> Unit)? = null) {
     val c = LocalBridgeColors.current
     var title by rememberSaveable { mutableStateOf(t?.task?.title.orEmpty()) }
@@ -541,6 +541,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
     var priority by rememberSaveable { mutableStateOf(t?.task?.priority ?: "Medium") }
     var time by rememberSaveable { mutableStateOf(t?.task?.timeOfDay.orEmpty()) }
     var measure by rememberSaveable { mutableStateOf(t?.task?.measure) }
+    var isPrivate by rememberSaveable { mutableStateOf(t?.task?.isPrivate == true) }
     var error by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf(false) }
     val readOnly = t?.readOnly == true
@@ -563,6 +564,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
                 BridgeField(stringResource(R.string.field_when), time, { time = it.take(24) }, stringResource(R.string.field_when_hint), Modifier.weight(1f))
             }
             if (!readOnly) MeasurePicker(measure) { measure = it }
+            if (!readOnly) app.thebridge.feature.community.SwitchRow(isPrivate, stringResource(R.string.task_private), stringResource(R.string.task_private_sub)) { isPrivate = it }
             t?.task?.rationale?.let {
                 Text(it, style = BType.body(13, lineHeight = 1.5f), color = c.mut)
             }
@@ -571,7 +573,7 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
                 Text(stringResource(R.string.task_links), style = BType.label(11f, 0.12f), color = c.mut)
                 t.links.forEach { LinkRow(it) }
             }
-            val save = { if (title.trim().length < 2) error = true else onSave(title, notes, priority, time, measure) }
+            val save = { if (title.trim().length < 2) error = true else onSave(title, notes, priority, time, measure, isPrivate) }
             when {
                 t == null -> PrimaryButton(stringResource(R.string.add_to_today), save)
                 confirm -> Column(Modifier.fillMaxWidth().background(c.badTint, RoundedCornerShape(16.dp)).border(1.dp, c.bad, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -598,10 +600,11 @@ fun TaskSheet(t: PlanTask?, onSave: (title: String, notes: String, priority: Str
 }
 
 @Composable
-fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate) -> Unit, onArchive: () -> Unit, onDismiss: () -> Unit, onComplete: (() -> Unit)? = null) {
+fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate, Boolean) -> Unit, onArchive: () -> Unit, onDismiss: () -> Unit, onComplete: (() -> Unit)? = null) {
     val c = LocalBridgeColors.current
     var label by rememberSaveable { mutableStateOf(g.goal.label) }
     var deadline by rememberSaveable { mutableStateOf(g.goal.deadline) }
+    var isPrivate by rememberSaveable { mutableStateOf(g.goal.isPrivate) }
     var error by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf(false) }
     val today = LocalDate.parse(app.thebridge.data.local.LocalDay.today())
@@ -613,6 +616,7 @@ fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate)
             BridgeField(stringResource(R.string.field_name), label, { label = it.take(24); error = false }, "", error = if (error) stringResource(R.string.review_name_err) else null)
             DateField(stringResource(R.string.target_date), picked, today, Deadlines.MIN_DAYS_EDIT, { deadline = it.toString() })
             if (Deadlines.check(picked, today, Deadlines.MIN_DAYS_EDIT) != null) DeadlineMessage(picked, today, Deadlines.MIN_DAYS_EDIT)
+            app.thebridge.feature.community.SwitchRow(isPrivate, stringResource(R.string.goal_private), stringResource(R.string.goal_private_sub)) { isPrivate = it }
             if (confirm) Column(Modifier.fillMaxWidth().background(c.badTint, RoundedCornerShape(16.dp)).border(1.dp, c.bad, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.archive_title), style = BType.display(16), color = c.ink)
                 Text(stringResource(R.string.archive_body), style = BType.body(13, lineHeight = 1.45f), color = c.ink2)
@@ -624,7 +628,7 @@ fun EditGoalSheet(g: GoalState, canArchive: Boolean, onSave: (String, LocalDate)
                 PrimaryButton(stringResource(R.string.save_changes), {
                     when {
                         label.trim().length < 2 -> error = true
-                        Deadlines.check(picked, today, Deadlines.MIN_DAYS_EDIT) == null -> onSave(label, picked)
+                        Deadlines.check(picked, today, Deadlines.MIN_DAYS_EDIT) == null -> onSave(label, picked, isPrivate)
                     }
                 })
                 if (onComplete != null) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, c.line, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = onComplete), contentAlignment = Alignment.Center) {

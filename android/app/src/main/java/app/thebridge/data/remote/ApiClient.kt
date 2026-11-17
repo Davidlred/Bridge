@@ -61,8 +61,10 @@ class StreamInterrupted : Exception()
 
 @Serializable data class MutationDto(val id: String, val entity: String, val entityId: String, val op: String, val patch: JsonElement, val clientTs: Long)
 @Serializable data class PushResponse(val accepted: List<String> = emptyList(), val rejected: Map<String, String> = emptyMap())
-@Serializable data class GoalDto(val id: String, val label: String, val statement: String, val startDate: String, val deadline: String, val status: String, val sourceAllianceId: String? = null, val colorIndex: Int = 0, val updatedAt: Long = 0, val routine: String? = null, val realityNote: String? = null, val feasibility: Feasibility? = null, val category: String? = null)
-@Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0, val onDate: String? = null, val resources: List<LinkDto> = emptyList(), val measure: String? = null)
+@Serializable data class GoalDto(val id: String, val label: String, val statement: String, val startDate: String, val deadline: String, val status: String, val sourceAllianceId: String? = null, val colorIndex: Int = 0, val updatedAt: Long = 0, val routine: String? = null, val realityNote: String? = null, val feasibility: Feasibility? = null, val category: String? = null,
+    @kotlinx.serialization.SerialName("private") val isPrivate: Boolean = false)
+@Serializable data class TaskDto(val id: String, val goalId: String, val title: String, val priority: String, val timeOfDay: String? = null, val minutes: Int? = null, val rationale: String? = null, val notes: String? = null, val origin: String = "user", val sharedTaskId: String? = null, val position: Int = 0, val deletedAt: Long? = null, val updatedAt: Long = 0, val onDate: String? = null, val resources: List<LinkDto> = emptyList(), val measure: String? = null,
+    @kotlinx.serialization.SerialName("private") val isPrivate: Boolean = false)
 @Serializable data class CheckinDto(val taskId: String, val localDate: String, val feel: Int? = null, val amount: Double? = null, val note: String? = null, val updatedAt: Long = 0)
 @Serializable data class CompletionDto(val taskId: String, val localDate: String, val completedAt: Long = 0)
 @Serializable data class CompletionKey(val taskId: String, val localDate: String)
@@ -128,7 +130,33 @@ class StreamInterrupted : Exception()
     val drifterId: String? = null, val ejectedId: String? = null, val buildersWon: Boolean? = null, val tally: Map<String, Int> = emptyMap(), val mvpId: String? = null,
 )
 @Serializable data class GameStatusDto(val unlocked: Boolean = false, val rankedToday: Boolean = false, val eligible: Int = 0, val finished: Int = 0, val needsPlayers: Boolean = false,
-    val waiting: List<String> = emptyList(), val meLeft: Int? = null, val game: GameDto? = null)
+    val waiting: List<String> = emptyList(), val meLeft: Int? = null, val game: GameDto? = null, val whoseDay: WhoseDayDto? = null)
+
+// --- Whose Day? (Game Night #2). Fields appear only once their clue stage is reached; the owner only at the reveal. ---
+@Serializable data class WdTaskDto(val name: String? = null, @kotlinx.serialization.SerialName("private") val isPrivate: Boolean = false, val durationMin: Int? = null, val priority: String? = null, val doneAt: String? = null, val streak: Int? = null)
+@Serializable data class WdGuessDto(val userId: String, val guessId: String? = null, val correct: Boolean = false, val points: Int = 0, val stage: Int? = null)
+@Serializable data class WdRevealDto(val ownerId: String, val ownerName: String = "", val goalTitle: String? = null, val deadline: String? = null, val goalPrivate: Boolean = false,
+    val ownerPoints: Int = 0, val arcLine: String = "", val guesses: List<WdGuessDto> = emptyList())
+@Serializable data class WdRoundDto(val index: Int = 0, val total: Int = 0, val stage: Int = 1, val startsAt: Long = 0, val stageEndsAt: Long = 0, val closesAt: Long = 0, val revealAt: Long = 0,
+    val tasks: List<WdTaskDto> = emptyList(), val count: Int = 0, val minutes: Int? = null, val finishedBy: String? = null, val goalHint: String? = null, val how: Boolean = false, val goalStreak: Int? = null,
+    val guessed: Int = 0, val guessers: Int = 0, val reveal: WdRevealDto? = null)
+@Serializable data class WdPlayerDto(val userId: String, val name: String, val absent: Boolean = false, val score: Int = 0)
+@Serializable data class WdScoreDto(val userId: String, val score: Int = 0, val right: Int = 0, val early: Int = 0)
+@Serializable data class WdSharpestDto(val userId: String, val points: Int = 0, val right: Int = 0, val of: Int = 0, val early: Int = 0)
+@Serializable data class WdDarkHorseDto(val userId: String, val points: Int = 0, val fooled: Int = 0, val lists: Int = 0)
+@Serializable data class WdFavouriteDto(val task: String, val userId: String, val streak: Int = 0)
+@Serializable data class WdResultsDto(val scores: List<WdScoreDto> = emptyList(), val sharpest: WdSharpestDto? = null, val darkHorse: WdDarkHorseDto? = null, val favourite: WdFavouriteDto? = null)
+@Serializable data class WdDoneDto(val finished: Int = 0, val eligible: Int = 0)
+@Serializable data class WhoseDayDto(
+    val id: String, val kind: String = "whose_day", val allianceId: String, val allianceName: String = "", val ranked: Boolean = false, val phase: String, val endsAt: Long = 0, val now: Long = 0,
+    val done: WdDoneDto = WdDoneDto(), val rounds: Int = 0, val current: Int = 0, val players: List<WdPlayerDto> = emptyList(), val round: WdRoundDto? = null, val results: WdResultsDto? = null,
+)
+@Serializable data class WdPreviewDto(val name: String? = null, @kotlinx.serialization.SerialName("private") val isPrivate: Boolean = false, val durationMin: Int? = null)
+@Serializable data class WdOwnGuessDto(val guessId: String, val stage: Int = 1)
+/** Told only to this player: whether this round is their list, their locked guess, and in the lobby what others would see of their list. */
+@Serializable data class WdYouDto(val gameId: String, val round: Int = 0, val pool: Boolean = true, val owner: Boolean = false, val guess: WdOwnGuessDto? = null,
+    val eligible: Boolean? = null, val preview: List<WdPreviewDto> = emptyList())
+@Serializable private data class WhoseDayResponse(val game: WhoseDayDto)
 @Serializable data class RatingDto(val overall: Int, val tier: String, val rank: Int, val of: Int, val band: String = "", val productivity: Int, val efficiency: Int, @kotlinx.serialization.SerialName("fun") val funScore: Int)
 @Serializable data class BoardRowDto(val rank: Int, val name: String, val score: Int, val tier: String, val members: Int, val mine: Boolean = false)
 @Serializable data class BoardDto(val category: String = "other", val band: String = "", val rank: Int = 0, val of: Int = 0, val rows: List<BoardRowDto> = emptyList())
@@ -310,6 +338,8 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun gameStatus(allianceId: String): GameStatusDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/game", null, authed = true))
     suspend fun openGame(allianceId: String): GameDto = json.decodeFromString<GameResponse>(call("POST", "/v1/alliances/$allianceId/game", null, authed = true)).game
     suspend fun nudge(allianceId: String): Int = json.decodeFromString<NudgeResponse>(call("POST", "/v1/alliances/$allianceId/game/nudge", null, authed = true)).sent
+    /** Opens (or returns) the Whose Day? lobby. A 409 `other_game_open` means Who's Drifting? is running. */
+    suspend fun openWhoseDay(allianceId: String): WhoseDayDto = json.decodeFromString<WhoseDayResponse>(call("POST", "/v1/alliances/$allianceId/game", buildJsonObject { put("kind", "whose_day") }, authed = true)).game
     suspend fun shareGame(allianceId: String, gameId: String) { call("POST", "/v1/alliances/$allianceId/games/$gameId/share", null, authed = true) }
     suspend fun rating(allianceId: String): RatingDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rating", null, authed = true))
     suspend fun rankings(allianceId: String): BoardDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rankings", null, authed = true))

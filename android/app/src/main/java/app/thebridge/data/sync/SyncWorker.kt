@@ -103,13 +103,13 @@ class RemoteSyncApi @Inject constructor(
         dao.removeGoals(page.removed.goals)                              // cascades to that goal's tasks
         dao.goals(page.goals.map {
             GoalEntity(it.id, it.label, it.statement, it.startDate, it.deadline, it.status, it.sourceAllianceId, it.colorIndex, it.updatedAt, it.routine, it.realityNote,
-                it.feasibility?.let { f -> api.json.encodeToString(app.thebridge.data.remote.Feasibility.serializer(), f) }, it.category)
+                it.feasibility?.let { f -> api.json.encodeToString(app.thebridge.data.remote.Feasibility.serializer(), f) }, it.category, it.isPrivate)
         })
         // A task or completion can arrive after its parent was deleted on another device; skip instead of breaking the foreign key.
         val goals = dao.knownGoals(page.tasks.map { it.goalId }.distinct()).toSet()
         dao.tasks(page.tasks.filter { it.goalId in goals }.map {
             TaskEntity(it.id, it.goalId, it.title, it.priority, it.timeOfDay, it.minutes, it.rationale, it.notes, it.origin, it.sharedTaskId, it.position, it.deletedAt, it.updatedAt,
-                it.onDate, api.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.thebridge.data.remote.LinkDto.serializer()), it.resources), it.measure)
+                it.onDate, api.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.thebridge.data.remote.LinkDto.serializer()), it.resources), it.measure, it.isPrivate)
         })
         page.removed.completions.forEach { dao.removeCompletion(it.taskId, it.localDate) }
         db.journal().delete(page.removedJournal)
@@ -129,6 +129,10 @@ class RemoteSyncApi @Inject constructor(
         page.settings?.get("coachReadsJournal")?.let { v ->
             val on = (v as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
             store.edit { it[androidx.datastore.preferences.core.booleanPreferencesKey("coach_reads_journal")] = on }
+        }
+        page.settings?.get("whoseDayShareList")?.let { v ->
+            val on = (v as? kotlinx.serialization.json.JsonPrimitive)?.content != "false"
+            store.edit { it[androidx.datastore.preferences.core.booleanPreferencesKey("whose_day_share_list")] = on }
         }
         val tasks = dao.knownTasks(page.completions.map { it.taskId }.distinct()).toSet()
         dao.completions(page.completions.filter { it.taskId in tasks }.map { CompletionEntity(it.taskId, it.localDate, it.completedAt) })

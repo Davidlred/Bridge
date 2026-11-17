@@ -76,11 +76,11 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         s == null -> Unit
         s == "limit" -> LimitSheet(onManage = { sheet = null; vm.openGoal(null) }, onUpgrade = { sheet = "plus" }, onDismiss = { sheet = null })
         s == "plus" -> app.thebridge.feature.paywall.PaywallSheet(app.thebridge.data.Product.Plus, onDismiss = { sheet = null })
-        s == "add" && open != null -> TaskSheet(null, onSave = { t, n, p, w, m -> vm.addTask(open.goal.id, t, n, p, w, m); sheet = null }, onToggle = {}, onDelete = {}, onDismiss = { sheet = null })
+        s == "add" && open != null -> TaskSheet(null, onSave = { t, n, p, w, m, pv -> vm.addTask(open.goal.id, t, n, p, w, m, pv); sheet = null }, onToggle = {}, onDelete = {}, onDismiss = { sheet = null })
         s.startsWith("task:") -> {
             val t = ui.goals.flatMap { it.tasks }.find { it.task.id == s.removePrefix("task:") }
             if (t == null) sheet = null
-            else TaskSheet(t, onSave = { title, n, p, w, m -> vm.updateTask(t.task.id, title, n, p, w, m); sheet = null }, onToggle = { tick(t.task.id, it) },
+            else TaskSheet(t, onSave = { title, n, p, w, m, pv -> vm.updateTask(t.task.id, title, n, p, w, m, pv); sheet = null }, onToggle = { tick(t.task.id, it) },
                 onDelete = { vm.deleteTask(t.task.id); sheet = null }, onDismiss = { sheet = null },
                 checkin = ui.checkins[t.task.id], onCheckIn = { sheet = "checkin:${t.task.id}" })
         }
@@ -93,7 +93,7 @@ fun TodayRoute(onAddGoal: () -> Unit, onOpenJournal: (goalId: String) -> Unit, o
         s.startsWith("goal:") -> {
             val g = ui.goals.find { it.goal.id == s.removePrefix("goal:") }
             if (g == null) sheet = null
-            else EditGoalSheet(g, canArchive = true, onSave = { label, d -> vm.saveGoal(g.goal.id, label, d); sheet = null }, onArchive = { vm.archive(g.goal.id); sheet = null }, onDismiss = { sheet = null },
+            else EditGoalSheet(g, canArchive = true, onSave = { label, d, pv -> vm.saveGoal(g.goal.id, label, d, pv); sheet = null }, onArchive = { vm.archive(g.goal.id); sheet = null }, onDismiss = { sheet = null },
                 onComplete = { vm.complete(g.goal.id); sheet = null })
         }
         s == "choose" -> ChooseGoalsSheet(ui.goals.map { it.goal } + ui.paused, ui.goals.map { it.goal.id }.toSet(), if (hasPlus) Int.MAX_VALUE else app.thebridge.data.GoalRepository.FREE_GOAL_LIMIT,

@@ -394,6 +394,54 @@ class ScreenshotTest {
         GameScreen(gameUi(game("result") { copy(drifterId = "u2", ejectedId = "u2", buildersWon = true, tally = mapOf("u2" to 3, "u1" to 1), mvpId = "me",
             players = players.map { it.copy(role = if (it.userId == "u2") "drifter" else "builder", funPoints = if (it.userId == "u2") 6 else 12) }) }), GameActions())
     }
+    // --- Whose Day? ---
+    private val wdPlayers = listOf("me" to "Sharon", "u1" to "Jide", "u2" to "Funmi", "u3" to "Bayo", "u4" to "Lola").map { (id, n) -> app.thebridge.data.remote.WdPlayerDto(id, n) }
+    private val wdTasks = listOf(
+        app.thebridge.data.remote.WdTaskDto("Hazard perception clips", false, 20, "high", "07:40"),
+        app.thebridge.data.remote.WdTaskDto(null, true, 15, "med", "09:10"),
+        app.thebridge.data.remote.WdTaskDto("Read Highway Code ch. 4", false, 15, "low", "12:15"))
+    private fun wd(phase: String, stage: Int = 2, extra: app.thebridge.data.remote.WhoseDayDto.() -> app.thebridge.data.remote.WhoseDayDto = { this }) = app.thebridge.data.remote.WhoseDayDto(
+        "w1", allianceId = "a1", allianceName = "Dawn Runners", ranked = true, phase = phase, endsAt = now + 4_000, now = now,
+        done = app.thebridge.data.remote.WdDoneDto(5, 5), rounds = 5, current = 1, players = wdPlayers,
+        round = app.thebridge.data.remote.WdRoundDto(1, 5, stage, now - 7_000, now + 3_000, now + 8_000, now + 13_000,
+            if (stage >= 2) wdTasks else wdTasks.map { it.copy(priority = null, doneAt = null, durationMin = null) }, 3,
+            minutes = if (stage >= 2) 50 else null, finishedBy = if (stage >= 2) "12:15" else null, goalHint = if (stage >= 3) "someone learning to drive" else null, guessed = 1, guessers = 4)).extra()
+    private fun wdUi(g: app.thebridge.data.remote.WhoseDayDto, you: app.thebridge.data.remote.WdYouDto? = null, choice: String? = null) =
+        app.thebridge.feature.game.WdUi(me = "me", game = g, you = you ?: app.thebridge.data.remote.WdYouDto("w1", 1), choice = choice, now = now)
+    @Test fun gamePicker() = snap("alliance-game-open") {
+        CommunityScreen(open.copy(tab = CommunityTab.Alliance, alliances = listOf(dawn), games = mapOf("a2" to GameStatusDto(unlocked = true, eligible = 5, finished = 5))), CommunityActions(), day, now)
+    }
+    @Test fun wdLobby() = snap("whose-day-lobby") {
+        app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("lobby") { copy(round = null) }, app.thebridge.data.remote.WdYouDto("w1", 0, pool = true, eligible = true,
+            preview = listOf(app.thebridge.data.remote.WdPreviewDto("Easy run", false, 30), app.thebridge.data.remote.WdPreviewDto(null, true, 50)))), app.thebridge.feature.game.WdActions())
+    }
+    @Test fun wdLobbyOff() = snap("whose-day-lobby-off") {
+        app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("lobby") { copy(round = null, players = wdPlayers.take(2), rounds = 3) }, app.thebridge.data.remote.WdYouDto("w1", 0, pool = false, eligible = true,
+            preview = listOf(app.thebridge.data.remote.WdPreviewDto("Easy run", false, 30)))), app.thebridge.feature.game.WdActions())
+    }
+    @Test fun wdRoundEarly() = snap("whose-day-round-1") { app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("round", 1)), app.thebridge.feature.game.WdActions()) }
+    @Test fun wdRound() = snap("whose-day-round") { app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("round", 3), choice = "u2"), app.thebridge.feature.game.WdActions()) }
+    @Test fun wdRoundShared() = snap("whose-day-round-shared") {
+        app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("round", 3) { copy(round = round!!.copy(how = true, goalStreak = 12, goalHint = "an early riser", minutes = null,
+            tasks = listOf(app.thebridge.data.remote.WdTaskDto("Mobility", false, doneAt = "06:40", streak = 12), app.thebridge.data.remote.WdTaskDto("Easy 5K", false, doneAt = "07:15", streak = 9)))) }), app.thebridge.feature.game.WdActions())
+    }
+    @Test fun wdRoundOwner() = snap("whose-day-round-owner") {
+        app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("round", 2), app.thebridge.data.remote.WdYouDto("w1", 1, owner = true)), app.thebridge.feature.game.WdActions())
+    }
+    @Test fun wdReveal() = snap("whose-day-reveal") {
+        app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("reveal", 4) { copy(round = round!!.copy(reveal = app.thebridge.data.remote.WdRevealDto("u2", "Funmi", "Driving licence", "2026-12-20", false, 2,
+            "Hazard perception clips at 7:40am. 6 days running. Funmi means it.", listOf(
+                app.thebridge.data.remote.WdGuessDto("me", "u2", true, 2, 2), app.thebridge.data.remote.WdGuessDto("u1", "u3", false, 0, 1),
+                app.thebridge.data.remote.WdGuessDto("u3", "u2", true, 3, 1), app.thebridge.data.remote.WdGuessDto("u4", null, false, 0, null))))) }),
+            app.thebridge.feature.game.WdActions())
+    }
+    @Test fun wdResults() = snap("whose-day-results") {
+        app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("results") { copy(round = null, results = app.thebridge.data.remote.WdResultsDto(
+            listOf(app.thebridge.data.remote.WdScoreDto("u3", 11, 4, 3), app.thebridge.data.remote.WdScoreDto("me", 9, 3, 1), app.thebridge.data.remote.WdScoreDto("u2", 7, 2, 0),
+                app.thebridge.data.remote.WdScoreDto("u1", 5, 1, 0), app.thebridge.data.remote.WdScoreDto("u4", 3, 0, 0)),
+            app.thebridge.data.remote.WdSharpestDto("u3", 10, 4, 4, 3), app.thebridge.data.remote.WdDarkHorseDto("u1", 4, 4, 1),
+            app.thebridge.data.remote.WdFavouriteDto("Call Mum", "u4", 12))) }), app.thebridge.feature.game.WdActions())
+    }
     @Test fun rankings() = snap("rankings") {
         RankingsScreen(BoardDto("fitness", "2-5", 4, 31, listOf(BoardRowDto(1, "Iron Mornings", 94, "gold", 5), BoardRowDto(2, "Quiet Hustle", 88, "gold", 4),
             BoardRowDto(3, "Page a Day", 84, "silver", 3), BoardRowDto(4, "Dawn Runners", 82, "silver", 4, mine = true), BoardRowDto(5, "Slow Savers", 71, "bronze", 5))), false, {}, {})

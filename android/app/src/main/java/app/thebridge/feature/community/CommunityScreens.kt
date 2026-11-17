@@ -78,7 +78,7 @@ data class CommunityActions(
     val showTab: (CommunityTab) -> Unit = {}, val react: (PostDto, Reaction) -> Unit = { _, _ -> }, val postMenu: (PostDto) -> Unit = {},
     val create: () -> Unit = {}, val join: () -> Unit = {}, val select: (String) -> Unit = {}, val invite: (AllianceDto) -> Unit = {}, val sampleInvite: () -> Unit = {},
     val openChat: (AllianceDto) -> Unit = {}, val options: (AllianceDto) -> Unit = {}, val applyNow: (AllianceDto) -> Unit = {},
-    val openDms: () -> Unit = {}, val alliancePlus: () -> Unit = {}, val playGame: (AllianceDto) -> Unit = {}, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
+    val openDms: () -> Unit = {}, val alliancePlus: () -> Unit = {}, val playGame: (AllianceDto, String) -> Unit = { _, _ -> }, val nudge: (AllianceDto) -> Unit = {}, val openBoard: (AllianceDto) -> Unit = {},
     val setListed: (AllianceDto, Boolean) -> Unit = { _, _ -> },
     /** Lead of a shared plan: each member's progress. Member: share it with the lead or not. */
     val students: (AllianceDto) -> Unit = {}, val setSharing: (AllianceDto, Boolean) -> Unit = { _, _ -> },
@@ -351,7 +351,7 @@ private fun Alliances(ui: CommunityUi, actions: CommunityActions, label: String,
         if (sample) Text(stringResource(R.string.ally_sample), style = BType.label(10f, 0.14f), color = c.accInk)
         AllianceCard(ally, ui, actions, sample, today)
         if (!sample) {
-            GameCard(ally, ui.games[ally.id], label, { actions.playGame(ally) }, { actions.nudge(ally) })
+            GameCard(ally, ui.games[ally.id], label, { kind -> actions.playGame(ally, kind) }, { actions.nudge(ally) })
             ui.ratings[ally.id]?.let { RatingCard(it) { actions.openBoard(ally) } }
             // The founder can raise the cap to 50 (Alliance+ is paid by the founder).
             if (ally.role == "owner" && ally.cap < 50) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).dashed(c.accLine, 14.dp)

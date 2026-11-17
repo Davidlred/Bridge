@@ -88,6 +88,7 @@ fun ProfileScreen(
     analytics: Boolean = false, onAnalytics: (Boolean) -> Unit = {},
     appearance: String = "system", onAppearance: (String) -> Unit = {},
     learnRoutine: Boolean = false, onLearnRoutine: (Boolean) -> Unit = {},
+    whoseDayList: Boolean = true, onWhoseDayList: (Boolean) -> Unit = {},
 ) {
     var choosingLook by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var renaming by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
@@ -135,6 +136,8 @@ fun ProfileScreen(
             }), onShare)
             HorizontalDivider(color = c.line)
             SettingsToggle(stringResource(R.string.settings_analytics), stringResource(R.string.settings_analytics_sub), analytics, onAnalytics)
+            HorizontalDivider(color = c.line)
+            SettingsToggle(stringResource(R.string.wd_pool_title), stringResource(R.string.settings_whose_day_sub), whoseDayList, onWhoseDayList)
         }
         if (hasPhoto) SettingsSection(stringResource(R.string.settings_photo)) {
             SettingsLink(stringResource(R.string.settings_remove_photo), danger = true, onClick = onRemovePhoto)

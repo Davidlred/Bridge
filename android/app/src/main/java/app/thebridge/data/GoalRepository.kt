@@ -184,16 +184,18 @@ class GoalRepository @Inject constructor(
             if (t.onDate != null) put("onDate", t.onDate)
             if (t.resources != "[]") put("resources", json.parseToJsonElement(t.resources))
             if (t.measure != null) put("measure", t.measure)
+            if (t.isPrivate) put("private", true)
         }
         put("title", t.title); put("priority", t.priority); put("timeOfDay", t.timeOfDay); put("notes", t.notes); put("position", t.position)
     }
 
     /** Only the fields passed are changed and sent. The deadline is whatever the user picked. */
-    suspend fun updateGoal(id: String, label: String? = null, deadline: LocalDate? = null, realityNote: String? = null, feasibility: Feasibility? = null, clearFeasibility: Boolean = false) {
+    suspend fun updateGoal(id: String, label: String? = null, deadline: LocalDate? = null, realityNote: String? = null, feasibility: Feasibility? = null, clearFeasibility: Boolean = false, isPrivate: Boolean? = null) {
         val g = db.goals().get(id) ?: return
         val next = g.copy(
             label = label?.trim() ?: g.label, deadline = deadline?.toString() ?: g.deadline, realityNote = realityNote ?: g.realityNote,
             feasibility = when { feasibility != null -> json.encodeToString(Feasibility.serializer(), feasibility); clearFeasibility -> null; else -> g.feasibility },
+            isPrivate = isPrivate ?: g.isPrivate,
             updatedAt = System.currentTimeMillis(),
         )
         if (next == g.copy(updatedAt = next.updatedAt)) return
@@ -205,6 +207,7 @@ class GoalRepository @Inject constructor(
                 if (realityNote != null) put("realityNote", next.realityNote)
                 if (feasibility != null) put("feasibility", json.encodeToJsonElement(Feasibility.serializer(), feasibility))
                 else if (clearFeasibility) put("feasibility", kotlinx.serialization.json.JsonNull)
+                if (isPrivate != null && isPrivate != g.isPrivate) put("private", isPrivate)
             })
         }
     }
@@ -253,8 +256,8 @@ class GoalRepository @Inject constructor(
         }
     }
 
-    suspend fun addTask(goalId: String, title: String, notes: String?, priority: String, timeOfDay: String?, measure: String? = null) {
-        val row = TaskEntity(UuidV7.next(), goalId, title.trim(), priority, timeOfDay?.trim()?.ifEmpty { null }, notes = notes?.trim()?.ifEmpty { null }, position = db.tasks().nextPosition(goalId), measure = measure)
+    suspend fun addTask(goalId: String, title: String, notes: String?, priority: String, timeOfDay: String?, measure: String? = null, isPrivate: Boolean = false) {
+        val row = TaskEntity(UuidV7.next(), goalId, title.trim(), priority, timeOfDay?.trim()?.ifEmpty { null }, notes = notes?.trim()?.ifEmpty { null }, position = db.tasks().nextPosition(goalId), measure = measure, isPrivate = isPrivate)
         write { enqueue -> db.tasks().upsert(row); enqueue("task", row.id, "upsert", taskPatch(row, create = true)) }
     }
 
@@ -272,10 +275,10 @@ class GoalRepository @Inject constructor(
         write { enqueue -> enqueue("settings", userId, "upsert", buildJsonObject { put(key, value) }) }
     }
 
-    suspend fun updateTask(id: String, title: String, notes: String?, priority: String, timeOfDay: String?, measure: String? = null, setMeasure: Boolean = false) {
+    suspend fun updateTask(id: String, title: String, notes: String?, priority: String, timeOfDay: String?, measure: String? = null, setMeasure: Boolean = false, isPrivate: Boolean? = null) {
         val t = db.tasks().get(id) ?: return
         if (t.origin == "shared") return                       // shared-plan tasks are read-only for members
-        val next = t.copy(title = title.trim(), notes = notes?.trim()?.ifEmpty { null }, priority = priority, timeOfDay = timeOfDay?.trim()?.ifEmpty { null }, measure = if (setMeasure) measure else t.measure, updatedAt = System.currentTimeMillis())
+        val next = t.copy(title = title.trim(), notes = notes?.trim()?.ifEmpty { null }, priority = priority, timeOfDay = timeOfDay?.trim()?.ifEmpty { null }, measure = if (setMeasure) measure else t.measure, isPrivate = isPrivate ?: t.isPrivate, updatedAt = System.currentTimeMillis())
         write { enqueue ->
             db.tasks().upsert(next)
             enqueue("task", id, "upsert", buildJsonObject {
@@ -284,6 +287,7 @@ class GoalRepository @Inject constructor(
                 if (next.priority != t.priority) put("priority", next.priority)
                 if (next.timeOfDay != t.timeOfDay) put("timeOfDay", next.timeOfDay)
                 if (next.measure != t.measure) put("measure", next.measure)
+                if (next.isPrivate != t.isPrivate) put("private", next.isPrivate)
             })
         }
     }

@@ -22,6 +22,8 @@ data class GoalEntity(
     val realityNote: String? = null,   // "Why I started"
     val feasibility: String? = null,   // JSON {verdict, reason, suggestedDeadline}
     val category: String? = null,      // from the plan; groups Community by kind of goal
+    /** Hidden from other people in games: shown as "a private goal", its tasks as "Private task". */
+    @androidx.room.ColumnInfo(defaultValue = "0") val isPrivate: Boolean = false,
 )
 
 /** Future Self / If nothing changes. The URL is a signed link; the image itself is cached on disk by a stable key. */
@@ -49,6 +51,8 @@ data class TaskEntity(
     @androidx.room.ColumnInfo(defaultValue = "[]") val resources: String = "[]",
     /** What a check-in asks for after ticking: reps | kg | min | km | pages. Null: how it felt and a note only. */
     @androidx.room.ColumnInfo(defaultValue = "NULL") val measure: String? = null,
+    /** In games other people see "Private task" and how long it took, never the name. */
+    @androidx.room.ColumnInfo(defaultValue = "0") val isPrivate: Boolean = false,
 )
 
 @Entity(tableName = "completions", primaryKeys = ["taskId", "localDate"])
@@ -291,8 +295,8 @@ interface PullDao {
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
         SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class, CheckinEntity::class],
-    version = 10, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
+    version = 11, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao

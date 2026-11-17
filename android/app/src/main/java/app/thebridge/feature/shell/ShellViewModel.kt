@@ -61,6 +61,8 @@ class ShellViewModel @Inject constructor(
     val reminders = reminderScheduler.settings
     val share = social.share
     val coachReadsJournal = store.data.map { it[COACH_READS_JOURNAL] == true }
+    /** "Your list in Whose Day?" (on unless switched off). */
+    val whoseDayShareList = store.data.map { it[androidx.datastore.preferences.core.booleanPreferencesKey("whose_day_share_list")] != false }
     val phase = session.phase
     val user = session.user
     val online = network.online
@@ -155,6 +157,12 @@ class ShellViewModel @Inject constructor(
     fun setCoachReadsJournal(on: Boolean) = viewModelScope.launch {
         store.edit { it[COACH_READS_JOURNAL] = on }
         session.user.value?.id?.let { goals.saveSetting(it, "coachReadsJournal", on) }
+    }
+
+    /** Your finished list can be picked in Whose Day?. Synced, so the game lobby shows the same switch. */
+    fun setWhoseDayShareList(on: Boolean) = viewModelScope.launch {
+        store.edit { it[androidx.datastore.preferences.core.booleanPreferencesKey("whose_day_share_list")] = on }
+        session.user.value?.id?.let { goals.saveSetting(it, "whoseDayShareList", on) }
     }
 
     /** Deletes the photo and every image generated from it (server side), then refreshes the profile. */
