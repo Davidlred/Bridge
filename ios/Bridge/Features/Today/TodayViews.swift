@@ -719,7 +719,7 @@ struct TaskSheet: View {
                 }
                 if task?.readOnly != true {
                     MeasurePicker(value: $measure)
-                    SwitchRow(on: $isPrivate, title: String(localized: "Private"), sub: String(localized: "In games, others see "Private task" and how long it took, never the name."))
+                    SwitchRow(on: $isPrivate, title: String(localized: "Private"), sub: String(localized: "In games, others see \"Private task\" and how long it took, never the name."))
                 }
                 if let r = task?.rationale {
                     Text(r).font(BFont.body(13)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, alignment: .leading)
@@ -782,7 +782,7 @@ struct EditGoalSheet: View {
                 BridgeField(label: "NAME", placeholder: "", text: Binding(get: { label }, set: { label = String($0.prefix(24)); error = false }), error: error ? String(localized: "Give the goal a short name.") : nil, capitalization: .sentences)
                 DateFieldView(label: "TARGET DATE", value: $deadline, minDays: Deadlines.minDaysEdit)
                 if Deadlines.check(deadline, today: LocalDay.today(), minDays: Deadlines.minDaysEdit) != nil { DeadlineMessage(deadline: deadline, minDays: Deadlines.minDaysEdit) }
-                SwitchRow(on: $isPrivate, title: String(localized: "Private goal"), sub: String(localized: "In games, others see "a private goal". Its tasks stay private too."))
+                SwitchRow(on: $isPrivate, title: String(localized: "Private goal"), sub: String(localized: "In games, others see \"a private goal\". Its tasks stay private too."))
                 if confirm {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Archive this goal?").font(BFont.display(16)).foregroundStyle(Theme.ink)

@@ -7,6 +7,7 @@ import { push } from '../push.js';
 import { blockedWith, goalStreak, localToday } from './progress.js';
 import { unlockStatus } from './game.js';
 import type { SocketCtx } from './game.js';
+import type { GameMeta, LiveModule } from '../games/module.js';
 
 /**
  * Game Night #2, "Whose Day?". Arc shows one player's finished list for today with the name hidden; everyone else
@@ -52,6 +53,8 @@ interface Game {
   ranked: boolean; wantsRanked: boolean; localDate: string; endsAt: number; timer?: NodeJS.Timeout; stageTimers: NodeJS.Timeout[];
   done: { finished: number; eligible: number };
   results?: Results;
+  /** Set while start() is running, so two Start taps landing together can't start the game twice. */
+  starting?: boolean;
 }
 interface Results {
   scores: { userId: string; score: number; right: number; early: number }[];
@@ -275,7 +278,12 @@ export async function openLobby(allianceId: string): Promise<Game> {
 
 /** Any player can start once there are 3. Lists come from present players who are done today and in the pool. */
 async function start(g: Game, ctx: SocketCtx) {
-  if (g.phase !== 'lobby') return;
+  if (g.phase !== 'lobby' || g.starting) return;
+  g.starting = true;
+  try { await begin(g, ctx); } finally { g.starting = false; }
+}
+
+async function begin(g: Game, ctx: SocketCtx) {
   const ps = present(g);
   if (ps.length < MIN_PLAYERS) return ctx.send({ type: 'wd:error', gameId: g.id, error: 'need_players' });
   const status = await unlockStatus(g.allianceId);
@@ -513,3 +521,11 @@ export function whoseDaySocketClosed(userId: string, ctx: SocketCtx) {
 }
 
 export const whoseDayView = (g: Game) => view(g);
+
+/** Whose Day? as an Arcade module (live, everyone). */
+export const whoseMeta: GameMeta = { id: 'whose', name: 'Whose Day?', icon: 'person_search', mode: 'everyone', minPlayers: 3, maxPlayers: 15, avgMinutes: 2, tile: 1 };
+export const whoseModule: LiveModule = {
+  kind: 'live', meta: whoseMeta,
+  openLobby: async allianceId => view(await openLobby(allianceId)),
+  openGame: allianceId => { const g = openWhoseDay(allianceId); return g ? view(g) : null; },
+};

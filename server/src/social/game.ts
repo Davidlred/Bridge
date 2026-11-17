@@ -8,6 +8,7 @@ import { bus } from '../realtime.js';
 import { push } from '../push.js';
 import { blockedWith, firstName, localToday } from './progress.js';
 import { openLobby as openWhoseDayLobby, openWhoseDay, whoseDayView } from './whoseday.js';
+import type { GameMeta, LiveModule } from '../games/module.js';
 
 /**
  * Game Night, "Who's Drifting?". Server-authoritative: the server picks the Drifter, owns the planks, validates every
@@ -35,6 +36,8 @@ interface Game {
   id: string; allianceId: string; ranked: boolean; wantsRanked: boolean; phase: Phase; players: Map<string, Player>;
   planks: ('ok' | 'cracked')[]; clues: { who: string; text: string }[]; endsAt: number; timer?: NodeJS.Timeout;
   drifterId?: string; ejectedId?: string | null; buildersWon?: boolean; tally?: Record<string, number>; localDate: string;
+  /** Set while start() is running, so two "ready" taps landing together can't start the game twice. */
+  starting?: boolean;
 }
 
 const games = new Map<string, Game>();
@@ -112,7 +115,12 @@ async function openLobby(allianceId: string): Promise<Game> {
 }
 
 async function start(g: Game, timedOut: boolean) {
-  if (g.phase !== 'lobby') return;
+  if (g.phase !== 'lobby' || g.starting) return;
+  g.starting = true;
+  try { await begin(g, timedOut); } finally { g.starting = false; }
+}
+
+async function begin(g: Game, timedOut: boolean) {
   const ready = [...g.players.values()].filter(p => p.ready && !p.absent);
   if (ready.length < MIN_PLAYERS) {
     if (!timedOut) return;
@@ -332,7 +340,9 @@ export async function gameRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { id: string }; Body: { kind?: string } | null }>('/v1/alliances/:id/game', { onRequest: auth }, async (req, reply) => {
     await member(req.params.id, req.userId);
-    const kind = z.enum(['drifting', 'whose_day']).catch('drifting').parse(req.body?.kind ?? 'drifting');
+    // Arcade ids ('drift', 'whose') and the original kinds both work.
+    const asked = req.body?.kind === 'whose' ? 'whose_day' : req.body?.kind === 'drift' ? 'drifting' : req.body?.kind;
+    const kind = z.enum(['drifting', 'whose_day']).catch('drifting').parse(asked ?? 'drifting');
     const open = openByAlliance.get(req.params.id);
     const drifting = open && games.get(open) && !['result', 'cancelled'].includes(games.get(open)!.phase);
     const whose = openWhoseDay(req.params.id);
@@ -377,3 +387,14 @@ export async function gameRoutes(app: FastifyInstance) {
     return reply.send({ sent });
   });
 }
+
+/** Who's Drifting? as an Arcade module (live, everyone). */
+export const driftMeta: GameMeta = { id: 'drift', name: "Who's Drifting?", icon: 'visibility_off', mode: 'everyone', minPlayers: 3, maxPlayers: 15, avgMinutes: 2, tile: 0 };
+export const driftModule: LiveModule = {
+  kind: 'live', meta: driftMeta,
+  openLobby: async allianceId => view(await openLobby(allianceId)),
+  openGame: allianceId => {
+    const g = games.get(openByAlliance.get(allianceId) ?? '');
+    return g && !['result', 'cancelled'].includes(g.phase) ? view(g) : null;
+  },
+};
