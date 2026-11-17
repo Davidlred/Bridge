@@ -23,14 +23,17 @@ object DevServer {
     private val scanning = AtomicBoolean(false)
     @Volatile private var lastScan = 0L
 
+    /** A build pointed at a hosted server (https) never looks for a PC on the Wi-Fi. */
+    private val local get() = BuildConfig.DEBUG && !BuildConfig.API_BASE.startsWith("https://")
+
     fun init(ctx: Context) {
-        if (!BuildConfig.DEBUG) return
+        if (!local) return
         prefs(ctx).getString(KEY, null)?.let { base = it }
     }
 
     /** After a failed connection. True when a server answered at a different address (the caller retries once). */
     fun rediscover(ctx: Context): Boolean {
-        if (!BuildConfig.DEBUG || System.currentTimeMillis() - lastScan < 30_000 || !scanning.compareAndSet(false, true)) return false
+        if (!local || System.currentTimeMillis() - lastScan < 30_000 || !scanning.compareAndSet(false, true)) return false
         lastScan = System.currentTimeMillis()
         try {
             val port = URI(base).port.takeIf { it > 0 } ?: 8080

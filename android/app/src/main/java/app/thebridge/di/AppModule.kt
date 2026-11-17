@@ -36,7 +36,7 @@ object AppModule {
     }
 
     @Provides @Singleton
-    fun http(): OkHttpClient = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+    fun http(): OkHttpClient = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS) /* a free hosted server can take ~50 s to wake */.build()
 
     @Provides @Singleton
     fun store(@ApplicationContext ctx: Context): DataStore<Preferences> = ctx.sessionStore
