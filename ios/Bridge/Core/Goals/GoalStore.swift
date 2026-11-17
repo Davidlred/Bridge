@@ -18,6 +18,7 @@ struct PlanTask: Identifiable, Equatable {
     var carriedFrom: String? = nil
     /// The unit a check-in asks for after ticking (reps, kg, min, km, pages).
     var measure: String? = nil
+    var isPrivate = false
     var isAI: Bool { origin == "ai" }
     /// Ticking it asks for a check-in: it has a unit to log, or it's on a shared plan.
     var checkable: Bool { measure != nil || origin == "shared" }
@@ -53,6 +54,7 @@ struct GoalState: Identifiable, Equatable {
     var habits: [String] = []
     var doneSteps: [String] = []
     var openSteps: [String] = []
+    var isPrivate = false
     /// No step left to do: offer to plan the next ones.
     var needsSteps: Bool { openSteps.isEmpty }
 }
@@ -98,7 +100,7 @@ final class GoalStore {
             let tasks = live.filter { Progress.showsToday(stepDay: $0.onDate, doneDays: doneOn[$0.id] ?? [], today: today) }
                 .sorted { ($0.onDate == nil ? 1 : 0, $0.onDate ?? "", Self.priorityOrder[$0.priority] ?? 1, $0.position) < ($1.onDate == nil ? 1 : 0, $1.onDate ?? "", Self.priorityOrder[$1.priority] ?? 1, $1.position) }
                 .map { PlanTask(id: $0.id, title: $0.title, priority: $0.priority, timeOfDay: $0.timeOfDay, notes: $0.notes, rationale: $0.rationale, origin: $0.origin, done: doneOn[$0.id]?.contains(today) == true,
-                                links: $0.links, onDate: $0.onDate, carriedFrom: $0.onDate.flatMap { $0 < today ? $0 : nil }, measure: $0.measure) }
+                                links: $0.links, onDate: $0.onDate, carriedFrom: $0.onDate.flatMap { $0 < today ? $0 : nil }, measure: $0.measure, isPrivate: $0.isPrivate) }
             let byDay = steps.sorted { ($0.onDate ?? "") < ($1.onDate ?? "") }
             return GoalState(
                 id: g.id, label: g.label, statement: g.statement, startDate: g.startDate, deadline: g.deadline, colorIndex: g.colorIndex,
@@ -109,7 +111,8 @@ final class GoalStore {
                 journaledToday: journaled.contains(g.id),
                 habits: habits.map(\.title),
                 doneSteps: byDay.filter { !(doneOn[$0.id] ?? []).isEmpty }.map(\.title),
-                openSteps: byDay.filter { (doneOn[$0.id] ?? []).isEmpty }.map(\.title)
+                openSteps: byDay.filter { (doneOn[$0.id] ?? []).isEmpty }.map(\.title),
+                isPrivate: g.isPrivate
             )
         }
     }
@@ -180,9 +183,10 @@ final class GoalStore {
     private func taskRow(_ id: UUID) -> TaskEntity? { try? ctx.fetch(FetchDescriptor<TaskEntity>(predicate: #Predicate { $0.id == id })).first }
 
     /// Only the fields passed are changed and sent. The deadline is whatever the user picked.
-    func updateGoal(_ id: UUID, label: String? = nil, deadline: String? = nil, realityNote: String? = nil, feasibility: Feasibility? = nil) {
+    func updateGoal(_ id: UUID, label: String? = nil, deadline: String? = nil, realityNote: String? = nil, feasibility: Feasibility? = nil, isPrivate: Bool? = nil) {
         guard let g = goalRow(id) else { return }
         var patch: [String: Any] = [:]
+        if let isPrivate, isPrivate != g.isPrivate { g.isPrivate = isPrivate; patch["private"] = isPrivate }
         if let label { g.label = label.trimmingCharacters(in: .whitespaces); patch["label"] = g.label }
         if let deadline { g.deadline = deadline; patch["deadline"] = deadline }
         if let realityNote { g.realityNote = realityNote; patch["realityNote"] = realityNote }
@@ -226,19 +230,20 @@ final class GoalStore {
         commit()
     }
 
-    func addTask(goalId: UUID, title: String, notes: String, priority: String, time: String, measure: String? = nil) {
+    func addTask(goalId: UUID, title: String, notes: String, priority: String, time: String, measure: String? = nil, isPrivate: Bool = false) {
         guard let g = goalRow(goalId) else { return }
         let row = TaskEntity(id: UUIDv7.next(), title: title.trimmingCharacters(in: .whitespaces), priority: priority, origin: "user", position: (g.tasks.map(\.position).max() ?? -1) + 1)
-        row.notes = notes.isEmpty ? nil : notes; row.timeOfDay = time.isEmpty ? nil : time; row.measure = measure; row.goal = g
+        row.notes = notes.isEmpty ? nil : notes; row.timeOfDay = time.isEmpty ? nil : time; row.measure = measure; row.isPrivate = isPrivate; row.goal = g
         ctx.insert(row)
         enqueue("task", row.id, "upsert", ["goalId": goalId.uuidString.lowercased(), "title": row.title, "priority": priority, "timeOfDay": row.timeOfDay ?? NSNull(), "notes": row.notes ?? NSNull(), "origin": "user", "position": row.position,
-                                            "measure": measure ?? NSNull()])
+                                            "measure": measure ?? NSNull(), "private": isPrivate])
         commit()
     }
 
-    func updateTask(_ id: UUID, title: String, notes: String, priority: String, time: String, measure: String?) {
+    func updateTask(_ id: UUID, title: String, notes: String, priority: String, time: String, measure: String?, isPrivate: Bool? = nil) {
         guard let t = taskRow(id), t.origin != "shared" else { return }
         if measure != t.measure { t.measure = measure; t.updatedAt = .now; enqueue("task", id, "upsert", ["measure": measure ?? NSNull()]) }
+        if let isPrivate, isPrivate != t.isPrivate { t.isPrivate = isPrivate; t.updatedAt = .now; enqueue("task", id, "upsert", ["private": isPrivate]) }
         updateTask(id, title: title, notes: notes, priority: priority, time: time)
         commit()
     }

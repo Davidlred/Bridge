@@ -134,6 +134,61 @@ final class FoundationSnapshotTests: XCTestCase {
         ui.ratings = ["a1": RatingDTO(overall: 82, tier: "silver", rank: 4, of: 31, band: "2-5", productivity: 86, efficiency: 78, funScore: 64)]
         verify(community(ui), named: "alliance-game")
     }
+    // MARK: Whose Day?
+    private func wd(_ phase: String, stage: Int = 2, you: WdYouDTO? = nil, choice: String? = nil, edit: (inout WhoseDayDTO) -> Void = { _ in }) -> WhoseDayModel {
+        let m = WhoseDayModel(); m.me = "me"; m.choice = choice
+        let players = [("me", "Sharon"), ("u1", "Jide"), ("u2", "Funmi"), ("u3", "Bayo"), ("u4", "Lola")].map { WdPlayerDTO(userId: $0.0, name: $0.1) }
+        let all = [WdTaskDTO(name: "Hazard perception clips", durationMin: 20, priority: "high", doneAt: "07:40"),
+                   WdTaskDTO(name: nil, isPrivate: true, durationMin: 15, priority: "med", doneAt: "09:10"),
+                   WdTaskDTO(name: "Read Highway Code ch. 4", durationMin: 15, priority: "low", doneAt: "12:15")]
+        let tasks = stage >= 2 ? all : all.map { WdTaskDTO(name: $0.name, isPrivate: $0.isPrivate) }
+        var g = WhoseDayDTO(id: "w1", allianceId: "a1", allianceName: "Dawn Runners", ranked: true, phase: phase, endsAt: ms + 4_000, now: ms,
+                            done: WdDoneDTO(finished: 5, eligible: 5), rounds: 5, current: 1, players: players,
+                            round: WdRoundDTO(index: 1, total: 5, stage: stage, startsAt: ms - 7_000, stageEndsAt: ms + 3_000, closesAt: ms + 8_000, revealAt: ms + 13_000, tasks: tasks, count: 3,
+                                              minutes: stage >= 2 ? 50 : nil, finishedBy: stage >= 2 ? "12:15" : nil, goalHint: stage >= 3 ? "someone learning to drive" : nil, guessed: 1, guessers: 4))
+        edit(&g)
+        m.game = g
+        m.you = you ?? WdYouDTO(gameId: "w1", round: 1)
+        return m
+    }
+    func testWhoseDayLobby() {
+        let m = wd("lobby", you: WdYouDTO(gameId: "w1", round: 0, eligible: true, preview: [WdPreviewDTO(name: "Easy run", durationMin: 30), WdPreviewDTO(name: nil, isPrivate: true, durationMin: 50)])) { $0.round = nil }
+        verify(WhoseDayContent(model: m, now: now), named: "whose-day-lobby")
+    }
+    func testWhoseDayRound() { verify(WhoseDayContent(model: wd("round", stage: 3, choice: "u2"), now: now), named: "whose-day-round") }
+    func testWhoseDayRoundEarly() { verify(WhoseDayContent(model: wd("round", stage: 1), now: now), named: "whose-day-round-1") }
+    func testWhoseDayOwner() { verify(WhoseDayContent(model: wd("round", you: WdYouDTO(gameId: "w1", round: 1, owner: true)), now: now), named: "whose-day-round-owner") }
+    func testWhoseDayShared() {
+        let m = wd("round", stage: 3) { g in
+            g.round?.how = true; g.round?.goalStreak = 12; g.round?.goalHint = "an early riser"; g.round?.minutes = nil
+            g.round?.tasks = [WdTaskDTO(name: "Mobility", doneAt: "06:40", streak: 12), WdTaskDTO(name: "Easy 5K", doneAt: "07:15", streak: 9)]
+        }
+        verify(WhoseDayContent(model: m, now: now), named: "whose-day-round-shared")
+    }
+    func testWhoseDayReveal() {
+        let m = wd("reveal", stage: 4) { g in
+            g.round?.reveal = WdRevealDTO(ownerId: "u2", ownerName: "Funmi", goalTitle: "Driving licence", deadline: "2026-12-20", ownerPoints: 2,
+                                          arcLine: "Hazard perception clips at 7:40am. 6 days running. Funmi means it.",
+                                          guesses: [WdGuessDTO(userId: "me", guessId: "u2", correct: true, points: 2, stage: 2), WdGuessDTO(userId: "u1", guessId: "u3", stage: 1),
+                                                    WdGuessDTO(userId: "u3", guessId: "u2", correct: true, points: 3, stage: 1), WdGuessDTO(userId: "u4")])
+        }
+        verify(WhoseDayContent(model: m, now: now), named: "whose-day-reveal")
+    }
+    func testWhoseDayResults() {
+        let m = wd("results") { g in
+            g.round = nil
+            g.results = WdResultsDTO(scores: [WdScoreDTO(userId: "u3", score: 11, right: 4, early: 3), WdScoreDTO(userId: "me", score: 9, right: 3, early: 1), WdScoreDTO(userId: "u2", score: 7, right: 2),
+                                              WdScoreDTO(userId: "u1", score: 5, right: 1), WdScoreDTO(userId: "u4", score: 3)],
+                                     sharpest: WdSharpestDTO(userId: "u3", points: 10, right: 4, of: 4, early: 3), darkHorse: WdDarkHorseDTO(userId: "u1", points: 4, fooled: 4, lists: 1),
+                                     favourite: WdFavouriteDTO(task: "Call Mum", userId: "u4", streak: 12))
+        }
+        verify(WhoseDayContent(model: m, now: now), named: "whose-day-results")
+    }
+    func testAllianceGameOpen() {
+        var ui = CommunityUI(goal: goal, community: CommunityDTO(unlocked: true, streak: 9), loading: false, tab: .alliance, alliances: [calc])
+        ui.games = ["a1": GameStatusDTO(unlocked: true, eligible: 5, finished: 5)]
+        verify(community(ui), named: "alliance-game-open")
+    }
     func testRankings() {
         verify(RankingsContent(board: BoardDTO(category: "fitness", band: "2-5", rank: 4, of: 31, rows: [
             BoardRowDTO(rank: 1, name: "Iron Mornings", score: 94, tier: "gold", members: 5), BoardRowDTO(rank: 2, name: "Quiet Hustle", score: 88, tier: "gold", members: 4),

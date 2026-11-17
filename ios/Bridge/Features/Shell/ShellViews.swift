@@ -39,6 +39,7 @@ struct ProfileView: View {
     @State private var renaming = false
     @State private var coachName = ""
     @AppStorage("coachReadsJournal") private var coachReadsJournal = false
+    @AppStorage("whoseDayShareList") private var whoseDayList = true
     @AppStorage("rhythmOn") private var learnRoutine = false
     @AppStorage("themeOverride") private var themeOverride = "system"
     @Environment(SocialStore.self) private var social
@@ -127,6 +128,17 @@ struct ProfileView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Share anonymous usage data").font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
                         Text("Counts like tasks done and features used. Never your goals, tasks, journal or messages.").font(BFont.body(12)).foregroundStyle(Theme.mut)
+                    }
+                }
+                .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)
+                Divider().overlay(Theme.line)
+                Toggle(isOn: Binding(get: { whoseDayList }, set: { on in
+                    whoseDayList = on
+                    if let id = session.user?.id { goals.saveSetting(userId: id, "whoseDayShareList", on) }
+                })) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Your list in the pool").font(BFont.body(15, .medium)).foregroundStyle(Theme.ink)
+                        Text("Your finished list can come up in Whose Day? in your alliances.").font(BFont.body(12)).foregroundStyle(Theme.mut)
                     }
                 }
                 .tint(Theme.okFill).padding(.horizontal, Theme.Space.card).padding(.vertical, 12)

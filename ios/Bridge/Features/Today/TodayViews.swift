@@ -438,14 +438,14 @@ struct TodayView: View {
         case .plus:
             PaywallSheet(product: .plus) { sheet = nil }
         case .add(let goalId):
-            TaskSheet(task: nil) { title, notes, priority, time, measure in
-                store.addTask(goalId: goalId, title: title, notes: notes, priority: priority, time: time, measure: measure); sheet = nil
+            TaskSheet(task: nil) { title, notes, priority, time, measure, isPrivate in
+                store.addTask(goalId: goalId, title: title, notes: notes, priority: priority, time: time, measure: measure, isPrivate: isPrivate); sheet = nil
                 toaster.show(String(localized: "Added to today's plan."), .ok)
             } onToggle: { _ in } onDelete: {}
         case .task(let id):
             if let t = store.goals.flatMap(\.tasks).first(where: { $0.id == id }), let g = store.goals.first(where: { $0.tasks.contains(t) }) {
-                TaskSheet(task: t, checkin: store.checkin(id), onCheckIn: { sheet = .checkin(id) }) { title, notes, priority, time, measure in
-                    store.updateTask(id, title: title, notes: notes, priority: priority, time: time, measure: measure); sheet = nil
+                TaskSheet(task: t, checkin: store.checkin(id), onCheckIn: { sheet = .checkin(id) }) { title, notes, priority, time, measure, isPrivate in
+                    store.updateTask(id, title: title, notes: notes, priority: priority, time: time, measure: measure, isPrivate: isPrivate); sheet = nil
                     toaster.show(String(localized: "Task updated."), .ok)
                 } onToggle: { _ in tick(t, g) } onDelete: {
                     store.deleteTask(id); sheet = nil; toaster.show(String(localized: "Task deleted."))
@@ -453,9 +453,9 @@ struct TodayView: View {
             }
         case .goal(let id):
             if let g = store.goals.first(where: { $0.id == id }) {
-                EditGoalSheet(goal: g) { label, deadline in
+                EditGoalSheet(goal: g) { label, deadline, isPrivate in
                     let changed = deadline != g.deadline
-                    store.updateGoal(id, label: label, deadline: deadline); sheet = nil
+                    store.updateGoal(id, label: label, deadline: deadline, isPrivate: isPrivate); sheet = nil
                     toaster.show(String(localized: "Goal updated."), .ok)
                     if changed, let fresh = store.goals.first(where: { $0.id == id }) { model.recheck(fresh) }
                 } onArchive: {
@@ -683,7 +683,7 @@ struct TaskSheet: View {
     let task: PlanTask?
     var checkin: Checkin? = nil
     var onCheckIn: (() -> Void)? = nil
-    var onSave: (String, String, String, String, String?) -> Void
+    var onSave: (String, String, String, String, String?, Bool) -> Void
     var onToggle: (Bool) -> Void
     var onDelete: () -> Void
     @State private var title = ""
@@ -691,6 +691,7 @@ struct TaskSheet: View {
     @State private var priority = "Medium"
     @State private var time = ""
     @State private var measure: String?
+    @State private var isPrivate = false
     @State private var error = false
     @State private var confirm = false
 
@@ -716,7 +717,10 @@ struct TaskSheet: View {
                     .frame(maxWidth: .infinity)
                     BridgeField(label: "WHEN", placeholder: "Any time", text: Binding(get: { time }, set: { time = String($0.prefix(24)) })).frame(maxWidth: 140)
                 }
-                if task?.readOnly != true { MeasurePicker(value: $measure) }
+                if task?.readOnly != true {
+                    MeasurePicker(value: $measure)
+                    SwitchRow(on: $isPrivate, title: String(localized: "Private"), sub: String(localized: "In games, others see "Private task" and how long it took, never the name."))
+                }
                 if let r = task?.rationale {
                     Text(r).font(BFont.body(13)).foregroundStyle(Theme.mut).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -727,7 +731,7 @@ struct TaskSheet: View {
                         ForEach(links, id: \.self) { ResourceLinkRow(link: $0) }
                     }
                 }
-                let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time, measure) } }
+                let save = { if title.trimmingCharacters(in: .whitespaces).count < 2 { error = true } else { onSave(title, notes, priority, time, measure, isPrivate) } }
                 if task == nil {
                     Button("Add to today", action: save).buttonStyle(PrimaryButtonStyle())
                 } else if confirm {
@@ -756,17 +760,18 @@ struct TaskSheet: View {
             }
             .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
         }
-        .onAppear { title = task?.title ?? ""; notes = task?.notes ?? ""; priority = task?.priority ?? "Medium"; time = task?.timeOfDay ?? ""; measure = task?.measure }
+        .onAppear { title = task?.title ?? ""; notes = task?.notes ?? ""; priority = task?.priority ?? "Medium"; time = task?.timeOfDay ?? ""; measure = task?.measure; isPrivate = task?.isPrivate ?? false }
     }
 }
 
 struct EditGoalSheet: View {
     let goal: GoalState
-    var onSave: (String, String) -> Void
+    var onSave: (String, String, Bool) -> Void
     var onArchive: () -> Void
     var onComplete: (() -> Void)?
     @State private var label = ""
     @State private var deadline: String?
+    @State private var isPrivate = false
     @State private var error = false
     @State private var confirm = false
     var body: some View {
@@ -777,6 +782,7 @@ struct EditGoalSheet: View {
                 BridgeField(label: "NAME", placeholder: "", text: Binding(get: { label }, set: { label = String($0.prefix(24)); error = false }), error: error ? String(localized: "Give the goal a short name.") : nil, capitalization: .sentences)
                 DateFieldView(label: "TARGET DATE", value: $deadline, minDays: Deadlines.minDaysEdit)
                 if Deadlines.check(deadline, today: LocalDay.today(), minDays: Deadlines.minDaysEdit) != nil { DeadlineMessage(deadline: deadline, minDays: Deadlines.minDaysEdit) }
+                SwitchRow(on: $isPrivate, title: String(localized: "Private goal"), sub: String(localized: "In games, others see "a private goal". Its tasks stay private too."))
                 if confirm {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Archive this goal?").font(BFont.display(16)).foregroundStyle(Theme.ink)
@@ -790,7 +796,7 @@ struct EditGoalSheet: View {
                 } else {
                     Button("Save changes") {
                         if label.trimmingCharacters(in: .whitespaces).count < 2 { error = true }
-                        else if let deadline, Deadlines.check(deadline, today: LocalDay.today(), minDays: Deadlines.minDaysEdit) == nil { onSave(label, deadline) }
+                        else if let deadline, Deadlines.check(deadline, today: LocalDay.today(), minDays: Deadlines.minDaysEdit) == nil { onSave(label, deadline, isPrivate) }
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     if let onComplete {
@@ -803,7 +809,7 @@ struct EditGoalSheet: View {
             }
             .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
         }
-        .onAppear { label = goal.label; deadline = goal.deadline }
+        .onAppear { label = goal.label; deadline = goal.deadline; isPrivate = goal.isPrivate }
     }
 }
 

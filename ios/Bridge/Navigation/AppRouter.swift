@@ -14,6 +14,7 @@ enum Route: Hashable, Codable {
     /// One member's week. `plan` is the alliance name, used in the nudge note.
     case student(allianceId: UUID, userId: UUID, name: String, plan: String)
     case gameNight(allianceId: UUID)
+    case whoseDay(allianceId: UUID)
     case rankings(goalCategory: String)
     case allianceRankings(UUID)
     case invitePreview(code: String)
@@ -101,6 +102,7 @@ private extension View {
             case .student(let id, let userId, let name, let plan): StudentScreen(allianceId: id.uuidString.lowercased(), userId: userId.uuidString.lowercased(), name: name, plan: plan)
             case .invitePreview(let code): InviteRedirect(code: code)
             case .gameNight(let id): GameNightScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
+            case .whoseDay(let id): WhoseDayScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .allianceRankings(let id): RankingsScreen(allianceId: id.uuidString.lowercased())
             case .hallOfFame: HallOfFameScreen()
             case .messages: DmInboxScreen()

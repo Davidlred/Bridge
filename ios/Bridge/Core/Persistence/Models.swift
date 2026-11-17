@@ -17,6 +17,8 @@ import SwiftData
     var realityNote: String?       // "Why I started"
     var feasibilityJSON: Data?     // {verdict, reason, suggestedDeadline}
     var category: String?          // from the plan; groups Community by kind of goal
+    /// Hidden from other people in games: "a private goal", and its tasks show as "Private task".
+    var isPrivate: Bool = false
     @Relationship(deleteRule: .cascade, inverse: \TaskEntity.goal) var tasks: [TaskEntity] = []
 
     init(id: UUID, label: String, statement: String, startDate: String, deadline: String, colorIndex: Int) {
@@ -45,6 +47,8 @@ import SwiftData
     var resourcesJSON: Data?
     /// What a check-in asks for after ticking: reps | kg | min | km | pages. Nil: how it felt and a note only.
     var measure: String?
+    /// In games other people see "Private task" and how long it took, never the name.
+    var isPrivate: Bool = false
 
     var isReadOnlyShared: Bool { origin == "shared" }
     var links: [LinkDTO] { resourcesJSON.flatMap { try? JSONDecoder().decode([LinkDTO].self, from: $0) } ?? [] }

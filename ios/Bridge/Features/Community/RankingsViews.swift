@@ -10,26 +10,45 @@ enum Tier {
 struct GameCard: View {
     let status: GameStatusDTO?
     let goalLabel: String
-    var onPlay: () -> Void
+    var onPlay: (String) -> Void
     var onNudge: () -> Void
+    @State private var picked = "drifting"
+
+    /// A game already running in the alliance is the one to join.
+    private var running: String? { status?.whoseDay != nil ? "whose_day" : status?.game != nil ? "drifting" : nil }
 
     var body: some View {
         let open = status?.unlocked == true
+        let kind = running ?? picked
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: open ? "gamecontroller.fill" : "clock").font(.system(size: 22)).foregroundStyle(Theme.acc).frame(width: 44, height: 44)
                     .background(Theme.accTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Game night · Who's Drifting?").font(BFont.display(16)).foregroundStyle(Theme.ink)
+                    Text("Game night").font(BFont.display(16)).foregroundStyle(Theme.ink)
                     statusText.font(BFont.body(12)).foregroundStyle(Theme.mut)
                 }
             }
             .accessibilityElement(children: .combine)
+            if open {
+                HStack(spacing: 8) {
+                    ForEach([("drifting", String(localized: "Who's Drifting?")), ("whose_day", String(localized: "Whose Day?"))], id: \.0) { k, label in
+                        let on = kind == k
+                        Button { picked = k } label: {
+                            Text(label).font(BFont.body(13, .medium)).foregroundStyle(on ? Theme.ink : Theme.ink2).frame(maxWidth: .infinity, minHeight: 44)
+                                .background(on ? Theme.s2 : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(on ? Theme.ink2 : Theme.line, lineWidth: on ? 1.5 : 1))
+                        }
+                        .buttonStyle(.plain).disabled(running != nil).accessibilityAddTraits(on ? [.isSelected] : [])
+                    }
+                }
+            }
             HStack(spacing: 8) {
                 // Opens once everyone has finished; with fewer than 4 eligible (or after today's ranked game) it's a practice round.
-                Button(action: onPlay) {
+                Button { onPlay(kind) } label: {
                     Group {
                         if !open { Text("Unlocks when everyone finishes") }
+                        else if running != nil { Text("Join the game") }
                         else if status!.rankedToday || status!.needsPlayers { Text("Play a practice round") }
                         else { Text("Play now · 2 min") }
                     }

@@ -65,8 +65,8 @@ struct PushResult: Decodable, Sendable { let accepted: Set<UUID>; let rejected: 
     }
 }
 struct Changes: Decodable, Sendable {
-    struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility?; let category: String? }
-    struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double?; let onDate: String?; let resources: [LinkDTO]?; var measure: String? = nil }
+    struct Goal: Decodable, Sendable { let id: UUID; let label: String; let statement: String; let startDate: String; let deadline: String; let status: String; let sourceAllianceId: UUID?; let colorIndex: Int?; let updatedAt: Double?; let routine: String?; let realityNote: String?; let feasibility: Feasibility?; let category: String?; var `private`: Bool? = nil }
+    struct Task: Decodable, Sendable { let id: UUID; let goalId: UUID; let title: String; let priority: String; let timeOfDay: String?; let minutes: Int?; let rationale: String?; let notes: String?; let origin: String; let sharedTaskId: UUID?; let position: Int; let deletedAt: Double?; let updatedAt: Double?; let onDate: String?; let resources: [LinkDTO]?; var measure: String? = nil; var `private`: Bool? = nil }
     struct Completion: Decodable, Sendable { let taskId: UUID; let localDate: String; let completedAt: Double? }
     struct Removed: Decodable, Sendable { let goals: [UUID]; let completions: [Completion]; var checkins: [Completion]? = nil }
     struct Checkin: Decodable, Sendable { let taskId: UUID; let localDate: String; let feel: Int?; let amount: Double?; let note: String?; let updatedAt: Double? }
@@ -78,7 +78,7 @@ struct Changes: Decodable, Sendable {
     struct Chat: Decodable, Sendable { let id: UUID; let conversation: UUID; let goalId: UUID?; let role: String; let text: String; let suggestion: Suggestion?; let alliance: AllianceSuggestion?; var action: CoachAction? = nil; let status: String; let suggestionState: String?; let createdAt: Double }
     let chat: [Chat]?; let removedChat: [UUID]?
     /// Synced settings the app shows locally (unknown keys are ignored).
-    struct Settings: Decodable, Sendable { let coachReadsJournal: Bool?; let share: String? }
+    struct Settings: Decodable, Sendable { let coachReadsJournal: Bool?; let share: String?; var whoseDayShareList: Bool? = nil }
     let settings: Settings?
 }
 
@@ -166,6 +166,44 @@ struct GameDTO: Codable, Equatable, Sendable {
 }
 struct GameStatusDTO: Codable, Equatable, Sendable {
     var unlocked = false; var rankedToday = false; var eligible = 0; var finished = 0; var needsPlayers = false; var waiting: [String] = []; var meLeft: Int?
+    /// Open Who's Drifting? and Whose Day? games, if any (only one runs at a time).
+    var game: GameDTO? = nil
+    var whoseDay: WhoseDayDTO? = nil
+}
+
+// MARK: Whose Day? (Game Night #2). Fields appear only once their clue stage is reached; the owner only at the reveal.
+struct WdTaskDTO: Codable, Equatable, Sendable {
+    var name: String?; var isPrivate = false; var durationMin: Int?; var priority: String?; var doneAt: String?; var streak: Int?
+    enum CodingKeys: String, CodingKey { case name, isPrivate = "private", durationMin, priority, doneAt, streak }
+}
+struct WdGuessDTO: Codable, Equatable, Sendable { let userId: String; var guessId: String?; var correct = false; var points = 0; var stage: Int? }
+struct WdRevealDTO: Codable, Equatable, Sendable {
+    let ownerId: String; var ownerName = ""; var goalTitle: String?; var deadline: String?; var goalPrivate = false; var ownerPoints = 0; var arcLine = ""; var guesses: [WdGuessDTO] = []
+}
+struct WdRoundDTO: Codable, Equatable, Sendable {
+    var index = 0; var total = 0; var stage = 1; var startsAt: Double = 0; var stageEndsAt: Double = 0; var closesAt: Double = 0; var revealAt: Double = 0
+    var tasks: [WdTaskDTO] = []; var count = 0; var minutes: Int?; var finishedBy: String?; var goalHint: String?; var how = false; var goalStreak: Int?
+    var guessed = 0; var guessers = 0; var reveal: WdRevealDTO?
+}
+struct WdPlayerDTO: Codable, Equatable, Sendable, Identifiable { let userId: String; let name: String; var absent = false; var score = 0; var id: String { userId } }
+struct WdScoreDTO: Codable, Equatable, Sendable { let userId: String; var score = 0; var right = 0; var early = 0 }
+struct WdSharpestDTO: Codable, Equatable, Sendable { let userId: String; var points = 0; var right = 0; var of = 0; var early = 0 }
+struct WdDarkHorseDTO: Codable, Equatable, Sendable { let userId: String; var points = 0; var fooled = 0; var lists = 0 }
+struct WdFavouriteDTO: Codable, Equatable, Sendable { let task: String; let userId: String; var streak = 0 }
+struct WdResultsDTO: Codable, Equatable, Sendable { var scores: [WdScoreDTO] = []; var sharpest: WdSharpestDTO?; var darkHorse: WdDarkHorseDTO?; var favourite: WdFavouriteDTO? }
+struct WdDoneDTO: Codable, Equatable, Sendable { var finished = 0; var eligible = 0 }
+struct WhoseDayDTO: Codable, Equatable, Sendable {
+    let id: String; var kind = "whose_day"; let allianceId: String; var allianceName = ""; var ranked = false; let phase: String; var endsAt: Double = 0; var now: Double = 0
+    var done = WdDoneDTO(); var rounds = 0; var current = 0; var players: [WdPlayerDTO] = []; var round: WdRoundDTO?; var results: WdResultsDTO?
+}
+struct WdPreviewDTO: Codable, Equatable, Sendable {
+    var name: String?; var isPrivate = false; var durationMin: Int?
+    enum CodingKeys: String, CodingKey { case name, isPrivate = "private", durationMin }
+}
+struct WdOwnGuessDTO: Codable, Equatable, Sendable { let guessId: String; var stage = 1 }
+/// Told only to this player: whether this round is their list, their locked guess, and in the lobby what others would see of their list.
+struct WdYouDTO: Codable, Equatable, Sendable {
+    let gameId: String; var round = 0; var pool = true; var owner = false; var guess: WdOwnGuessDTO?; var eligible: Bool?; var preview: [WdPreviewDTO] = []
 }
 struct RatingDTO: Codable, Equatable, Sendable {
     let overall: Int; let tier: String; let rank: Int; let of: Int; var band = ""; let productivity: Int; let efficiency: Int; let funScore: Int
@@ -393,6 +431,11 @@ actor APIClient {
     func openGame(_ allianceId: String) async throws -> GameDTO {
         struct R: Decodable { let game: GameDTO }
         return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/game", nil, authed: true)).game
+    }
+    /// Opens (or returns) the Whose Day? lobby. A 409 `other_game_open` means Who's Drifting? is running.
+    func openWhoseDay(_ allianceId: String) async throws -> WhoseDayDTO {
+        struct R: Decodable { let game: WhoseDayDTO }
+        return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/game", ["kind": "whose_day"], authed: true)).game
     }
     func nudge(_ allianceId: String) async throws -> Int {
         struct R: Decodable { let sent: Int }
