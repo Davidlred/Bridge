@@ -78,6 +78,22 @@ Free Render services get 750 hours a month, which is enough to run one service a
 1. Sign up at uptimerobot.com (free).
 2. Add an **HTTP(s)** monitor on `https://<your-service>.onrender.com/healthz`, every 5 minutes.
 
+## 7. Email: Brevo (password resets and "confirm your email")
+Without this, the app says a reset link was sent but nothing arrives.
+1. Sign up at brevo.com (free: 300 emails a day).
+2. Top-right menu, then **Senders, domains & dedicated IPs**, then **Senders**, then **Add a sender**.
+   - From name: `The Bridge`. From email: the address emails should come from (your Gmail is fine).
+   - Brevo emails that address a code or link. Confirm it.
+3. Top-right menu, then **SMTP & API**, then the **API keys** tab, then **Generate a new API key**. Name it `bridge`.
+   Copy the key (it starts with `xkeysib-`). It's shown once.
+4. In Render, open **bridge-api**, then **Environment**, then **Add environment variable**, and add two:
+   - **BREVO_API_KEY**: the key from step 3.
+   - **MAIL_FROM**: `The Bridge <the address from step 2>`, for example `The Bridge <you@gmail.com>`.
+5. Click **Save**. Render restarts the server.
+6. Test it: in the app, Log in, type your email, tap **Forgot password?**. The email can take a minute.
+   Mail sent from a Gmail address through Brevo often lands in **Spam**. Tell testers to look there and tap
+   **Not spam**. A domain of your own (about $10 a year) fixes this; ask before switching.
+
 ## What's already limited for testers
 - **AI_DAILY_BUDGET = 300** AI calls a day across everyone: coach, plans and images. Chat moderation is never capped.
   When the budget runs out, the coach says it's unavailable until midnight UTC. Change the number in **Environment**.
@@ -87,5 +103,4 @@ Free Render services get 750 hours a month, which is enough to run one service a
 ## Not set up yet (the app still works without them)
 - **Push notifications:** these need Firebase (Android) and an Apple Developer account (iOS). Without them, events
   still show in the app.
-- **Email** (Resend): sign-in by email works; emails like password resets are skipped.
 - **Payments** (RevenueCat): Plus can't be bought yet.

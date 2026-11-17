@@ -49,6 +49,8 @@ const Env = z.object({
   ANDROID_CERT_SHA256: list,
   APP_STORE_ID: z.string().regex(/^\d+$/).optional(),
   RESEND_API_KEY: z.string().optional(),
+  // Or Brevo, which only needs a single sender address verified in its dashboard (no domain), e.g. "The Bridge <you@gmail.com>".
+  BREVO_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().optional(),
   // RevenueCat webhook: the Authorization header value set in the RevenueCat dashboard.
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
