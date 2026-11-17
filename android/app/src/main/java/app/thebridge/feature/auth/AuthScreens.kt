@@ -273,6 +273,8 @@ fun SignUpScreen(
 fun LogInScreen(
     state: AuthUiState, onEmail: (String) -> Unit, onPassword: (String) -> Unit,
     onSubmit: () -> Unit, onForgot: () -> Unit, onBack: (() -> Unit)?, onSignUp: (() -> Unit)?, modifier: Modifier = Modifier,
+    /** Session expired: someone else on this phone can sign out [savedName] and log in or create an account. */
+    savedName: String? = null, onOtherAccount: (() -> Unit)? = null,
 ) {
     val c = LocalBridgeColors.current
     val focus = LocalFocusManager.current
@@ -293,6 +295,7 @@ fun LogInScreen(
         Spacer(Modifier.height(8.dp))
         PrimaryButton(stringResource(R.string.log_in), onSubmit, loading = state.busy)
         if (onSignUp != null) LinkRow(stringResource(R.string.new_here), stringResource(R.string.create_an_account), onSignUp)
+        if (onOtherAccount != null) LinkRow(if (savedName.isNullOrBlank()) stringResource(R.string.login_not_you) else stringResource(R.string.login_not_name, savedName), stringResource(R.string.login_other_account), onOtherAccount)
     }
 }
 

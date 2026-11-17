@@ -23,7 +23,10 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -70,6 +73,18 @@ class AuthViewModel @Inject constructor(
     fun onEmail(v: String) { saved["email"] = v; _state.update { it.copy(email = v.take(254), emailError = null, formError = null) } }
     fun onPassword(v: String) = _state.update { it.copy(password = v.take(128), passwordError = null, formError = null) }
     fun onBirthDate(d: java.time.LocalDate) = _state.update { it.copy(birthDate = d, birthError = null, formError = null) }
+    /** The account this phone remembers (shown as "Not Bola?" when its session has expired). */
+    val savedName = session.user.map { it?.displayName }.stateIn(viewModelScope, SharingStarted.Eagerly, session.user.value?.displayName)
+
+    /** Session expired and it's someone else: forget the saved account and go to Welcome to log in or sign up. */
+    fun useAnotherAccount() {
+        viewModelScope.launch {
+            session.logOut()
+            saved["email"] = ""
+            _state.value = AuthUiState()
+        }
+    }
+
     fun clearErrors() = _state.update { it.copy(nameError = null, emailError = null, passwordError = null, formError = null, password = "") }
 
     fun signUp() {

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import app.thebridge.BuildConfig
 import app.thebridge.data.local.BridgeDb
 import app.thebridge.data.remote.ApiClient
 import app.thebridge.data.remote.AuthResponse
@@ -50,6 +51,8 @@ class SessionManager @Inject constructor(
     suspend fun bootstrap() {
         if (_phase.value != SessionPhase.Launching) return
         if (app.thebridge.data.local.DatabaseKey.takeResync(ctx)) store.edit { it.remove(CURSOR) }
+        // An account saved against another server (the laptop, or a restored backup) doesn't exist on this one.
+        if (HOSTED && store.data.first().let { it[USER] != null && it[SERVER] != BuildConfig.API_BASE }) clearLocal()
         val prefs = store.data.first()
         val saved = prefs[USER]?.let { runCatching { api.json.decodeFromString<UserDto>(it) }.getOrNull() }
         val tokens = withContext(Dispatchers.IO) { vault.read() }
@@ -69,7 +72,7 @@ class SessionManager @Inject constructor(
         // Unsynced work belongs to whoever made it: only a different account starts from an empty database.
         if (_user.value?.id != r.user.id) { withContext(Dispatchers.IO) { db.clearAllTables() }; store.edit { it.remove(CURSOR) } }
         withContext(Dispatchers.IO) { vault.write(Tokens(r.accessToken, r.refreshToken)) }
-        store.edit { it[USER] = api.json.encodeToString(UserDto.serializer(), r.user); if (r.isNew) it[ONBOARDING] = true }
+        store.edit { it[USER] = api.json.encodeToString(UserDto.serializer(), r.user); it[SERVER] = BuildConfig.API_BASE; if (r.isNew) it[ONBOARDING] = true }
         _user.value = r.user
         _phase.value = if (r.isNew || store.data.first()[ONBOARDING] == true) SessionPhase.Onboarding else SessionPhase.Ready
         SyncWorker.kick(ctx)
@@ -116,6 +119,9 @@ class SessionManager @Inject constructor(
     private companion object {
         val USER = stringPreferencesKey("user"); val DEVICE = stringPreferencesKey("device_id")
         val CURSOR = longPreferencesKey("sync_cursor")
+        val SERVER = stringPreferencesKey("server")
+        /** Builds for a hosted server (https). Laptop builds keep their account when the Wi-Fi address changes. */
+        val HOSTED = BuildConfig.API_BASE.startsWith("https://")
         val ONBOARDING = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding")
     }
 }

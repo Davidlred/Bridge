@@ -224,7 +224,14 @@ private fun ReauthSheet(auth: AuthViewModel, queued: Int) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.session_expired_title), style = BType.body(14, FontWeight.SemiBold), color = c.warn)
             Text(stringResource(R.string.session_expired_body) + if (queued > 0) " " + pluralStringResource(R.plurals.session_expired_unsynced, queued, queued) else "", style = BType.body(13), color = c.mut)
-            LogInScreen(state, auth::onEmail, auth::onPassword, onSubmit = auth::logIn, onForgot = auth::forgot, onBack = null, onSignUp = null, modifier = Modifier.padding(top = 4.dp))
+            var confirmOther by rememberSaveable { mutableStateOf(false) }
+            val savedName by auth.savedName.collectAsStateWithLifecycle()
+            LogInScreen(state, auth::onEmail, auth::onPassword, onSubmit = auth::logIn, onForgot = auth::forgot, onBack = null, onSignUp = null, modifier = Modifier.padding(top = 4.dp),
+                savedName = savedName, onOtherAccount = { if (queued > 0) confirmOther = true else auth.useAnotherAccount() })
+            if (confirmOther) {
+                Text(pluralStringResource(R.plurals.other_account_unsynced, queued, queued), style = BType.body(13), color = c.warn)
+                app.thebridge.ui.components.SecondaryButton(stringResource(R.string.other_account_confirm), onClick = auth::useAnotherAccount, modifier = Modifier.fillMaxWidth())
+            }
         }
     }
 }

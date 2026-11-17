@@ -87,6 +87,14 @@
         <item quantity="one">%d change is waiting to sync.</item>
         <item quantity="other">%d changes are waiting to sync.</item>
     </plurals>
+    <string name="login_not_name">Not %1$s?</string>
+    <string name="login_not_you">Not you?</string>
+    <string name="login_other_account">Use another account</string>
+    <plurals name="other_account_unsynced">
+        <item quantity="one">%d change on this phone hasn\'t synced. Using another account removes it.</item>
+        <item quantity="other">%d changes on this phone haven\'t synced. Using another account removes them.</item>
+    </plurals>
+    <string name="other_account_confirm">Remove and use another account</string>
 
     <!-- Forced upgrade -->
     <string name="upgrade_title">Update The Bridge</string>
