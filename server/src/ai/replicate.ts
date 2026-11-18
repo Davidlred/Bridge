@@ -136,3 +136,21 @@ export async function* streamText(model: string, input: Record<string, unknown>,
     if (signal?.aborted) fetch(p.urls.cancel, { method: 'POST', headers: headers() }).catch(() => {});
   }
 }
+
+/**
+ * For /healthz/ai: whether Replicate accepts the token (a free account lookup) and how much of today's AI budget is
+ * used. Says nothing about the token itself. Cached for a minute so the public route can't be used to hammer Replicate.
+ */
+let aiHealth: { at: number; value: Record<string, unknown> } | null = null;
+export async function aiStatus(): Promise<Record<string, unknown>> {
+  if (aiHealth && Date.now() - aiHealth.at < 60_000) return aiHealth.value;
+  let replicate: string;
+  try {
+    const r = await fetch(`${BASE}/account`, { headers: headers(), signal: AbortSignal.timeout(10_000) });
+    replicate = r.ok ? 'ok' : r.status === 401 || r.status === 403 ? 'token_rejected' : `http_${r.status}`;
+  } catch { replicate = 'unreachable'; }
+  const [b] = await sql`select calls from ai_budget where day = current_date`;
+  const value = { replicate, tokenShape: /^r8_\w{30,}$/.test(env.REPLICATE_API_TOKEN) ? 'ok' : 'unexpected', budget: { used: b?.calls ?? 0, limit: env.AI_DAILY_BUDGET || null } };
+  aiHealth = { at: Date.now(), value };
+  return value;
+}

@@ -64,6 +64,7 @@ export async function buildApp() {
 
   // "service" lets development builds of the apps find this server on the Wi-Fi when the PC's address changes.
   app.get('/healthz', async () => { await sql`select 1`; return { ok: true, service: 'the-bridge' }; });
+  app.get('/healthz/ai', async () => (await import('./ai/replicate.js')).aiStatus());
 
   await app.register(authRoutes);
   await app.register(syncRoutes);
