@@ -138,7 +138,7 @@ func gameSymbol(_ icon: String) -> String {
     switch icon {
     case "visibility_off": "eye.slash.fill"
     case "person_search": "person.crop.circle.badge.questionmark"
-    case "abc": "textformat.abc"
+    case "abc": "textformat"
     case "shuffle": "shuffle"
     case "local_drink": "cup.and.saucer.fill"
     case "radio_button_checked": "smallcircle.filled.circle"
