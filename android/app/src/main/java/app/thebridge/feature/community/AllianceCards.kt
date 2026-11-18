@@ -56,10 +56,9 @@ fun tierLabel(t: String) = stringResource(when (t) { "gold" -> R.string.tier_gol
 fun GameCard(a: AllianceDto, s: GameStatusDto?, goalLabel: String, onPlay: (kind: String) -> Unit, onNudge: () -> Unit) {
     val c = LocalBridgeColors.current
     val open = s?.unlocked == true
-    // Pick the game; a game already running in the alliance is the one to join.
+    // A game already running is the one to join; otherwise the alliance votes on tonight's game ("pick").
     val running = when { s?.whoseDay != null -> "whose_day"; s?.game != null -> "drifting"; else -> null }
-    var picked by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("drifting") }
-    val kind = running ?: picked
+    val kind = running ?: "pick"
     val status = when {
         s == null -> stringResource(R.string.game_card_locked)
         open && s.rankedToday -> stringResource(R.string.game_card_played)
@@ -78,21 +77,11 @@ fun GameCard(a: AllianceDto, s: GameStatusDto?, goalLabel: String, onPlay: (kind
                 Text(status, style = BType.body(12, lineHeight = 1.4f), color = c.mut)
             }
         }
-        if (open) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("drifting" to R.string.game_pick_drifting, "whose_day" to R.string.game_pick_whose_day).forEach { (k, label) ->
-                val on = kind == k
-                Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).background(if (on) c.s2 else Color.Transparent)
-                    .border(if (on) 1.5.dp else 1.dp, if (on) c.ink2 else c.line, RoundedCornerShape(12.dp))
-                    .clickable(enabled = running == null, role = Role.RadioButton) { picked = k }.semantics { selected = on }, contentAlignment = Alignment.Center) {
-                    Text(stringResource(label), style = BType.body(13, FontWeight.Medium), color = if (on) c.ink else c.ink2, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp))
-                }
-            }
-        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val label = when {
                 running != null -> R.string.game_card_join
-                open && !s!!.rankedToday && !s.needsPlayers -> R.string.game_card_play
-                else -> R.string.game_card_practice
+                s?.night != null -> R.string.game_card_join_vote
+                else -> R.string.game_card_pick
             }
             // Opens once everyone has finished; with fewer than 4 eligible (or after today's ranked game) it's a practice round.
             Box(Modifier.weight(1f).heightIn(min = 46.dp).clip(RoundedCornerShape(12.dp)).background(if (open) c.acc else c.track).clickable(enabled = open, role = Role.Button) { onPlay(kind) }, contentAlignment = Alignment.Center) {

@@ -669,6 +669,53 @@
     <string name="game_pick_drifting">Who\'s Drifting?</string>
     <string name="game_pick_whose_day">Whose Day?</string>
     <string name="game_card_join">Join the game</string>
+    <string name="game_card_pick">Pick tonight\'s game</string>
+    <string name="game_card_join_vote">Join the vote</string>
+
+    <!-- Game Night vote: Pick tonight's game -->
+    <string name="pick_top">GAME NIGHT</string>
+    <string name="pick_title">Pick tonight\'s game</string>
+    <string name="pick_sub">Everyone votes. Most votes when the timer ends wins.</string>
+    <string name="pick_filter_all">All %1$d</string>
+    <string name="pick_filter_everyone">Everyone</string>
+    <string name="pick_filter_duel">1v1</string>
+    <string name="pick_mode_everyone">EVERYONE</string>
+    <string name="pick_mode_duel">1V1</string>
+    <string name="pick_mode_duel_turns">1V1 · TURNS</string>
+    <string name="pick_soon">Soon</string>
+    <string name="pick_needs">Needs %1$d</string>
+    <string name="pick_off">Not available</string>
+    <plurals name="pick_votes">
+        <item quantity="one">%d vote</item>
+        <item quantity="other">%d votes</item>
+    </plurals>
+    <string name="pick_your_vote">your vote</string>
+    <string name="pick_vote">Vote</string>
+    <string name="pick_unvote">Remove vote</string>
+    <string name="pick_voted">%1$d of %2$d voted</string>
+    <plurals name="pick_leads">
+        <item quantity="one">%1$s leads with %2$d vote</item>
+        <item quantity="other">%1$s leads with %2$d votes</item>
+    </plurals>
+    <string name="pick_tied">Tied at %1$d. Arc breaks ties.</string>
+    <string name="pick_no_votes">No votes yet. If nobody votes, Arc picks.</string>
+    <string name="pick_chosen">%1$s it is.</string>
+    <string name="pick_none">No game could start. Try again in a minute.</string>
+    <string name="pick_need_players">Game night needs at least %1$d members in the alliance. Invite someone to play.</string>
+    <string name="pick_not_votable">That game can\'t be played tonight.</string>
+    <string name="game_name_drift">Who\'s Drifting?</string>
+    <string name="game_name_whose">Whose Day?</string>
+    <string name="game_name_word">Word Dash</string>
+    <string name="game_name_scramble">Scramble</string>
+    <string name="game_name_cup">Cup Pong</string>
+    <string name="game_name_pool">8-Ball</string>
+    <string name="game_name_hoops">Hoops</string>
+    <string name="game_name_darts">Darts</string>
+    <string name="game_name_golf">Mini Golf</string>
+    <string name="game_name_four">Four in a Row</string>
+    <string name="game_name_fleet">Fleet Battle</string>
+    <string name="game_name_push">Push Out</string>
+    <string name="game_name_unknown">A new game</string>
     <string name="game_other_open">Who\'s Drifting? is already running. Join that one from the card.</string>
     <!-- Whose Day? -->
     <string name="wd_top">GAME NIGHT · WHOSE DAY?</string>

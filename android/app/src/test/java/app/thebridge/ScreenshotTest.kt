@@ -411,6 +411,29 @@ class ScreenshotTest {
     @Test fun gamePicker() = snap("alliance-game-open") {
         CommunityScreen(open.copy(tab = CommunityTab.Alliance, alliances = listOf(dawn), games = mapOf("a2" to GameStatusDto(unlocked = true, eligible = 5, finished = 5))), CommunityActions(), day, now)
     }
+    // Game Night vote: the line-up as the server sends it (two games built, the rest coming).
+    private val lineup = listOf(
+        "drift" to "visibility_off", "whose" to "person_search", "word" to "abc", "scramble" to "shuffle", "cup" to "local_drink", "pool" to "radio_button_checked",
+        "hoops" to "sports_basketball", "darts" to "adjust", "golf" to "golf_course", "four" to "view_column", "fleet" to "sailing", "push" to "trip_origin",
+    ).mapIndexed { i, (id, icon) ->
+        val everyone = id in setOf("drift", "whose", "hoops", "golf", "push")
+        val built = id == "drift" || id == "whose"
+        app.thebridge.data.remote.NightGameDto(id, icon = icon, mode = if (everyone) "everyone" else "duel_turns", liveToo = id == "cup", tile = i % 5,
+            minPlayers = if (id in setOf("drift", "whose", "push")) 3 else 2, built = built, available = built, votable = built)
+    }
+    private fun night(counts: Map<String, Int>, voted: Int, leader: Pair<String, Int>? = null, tied: Int? = null, chosen: String? = null) = app.thebridge.data.remote.NightDto(
+        "n1", "a2", if (chosen != null) "decided" else "voting", endsAt = now + 24_000, now = now, total = 7, voted = voted, counts = counts,
+        leader = leader?.let { app.thebridge.data.remote.NightLeaderDto(it.first, it.second) }, tied = tied?.let { app.thebridge.data.remote.NightTieDto(listOf("drift", "whose"), it) },
+        chosen = chosen, games = lineup)
+    @Test fun pickVoting() = snap("pick-voting") {
+        app.thebridge.feature.game.GamePickerScreen(app.thebridge.feature.game.PickUi(night(mapOf("whose" to 3, "drift" to 1), 4, leader = "whose" to 3), mine = "whose", loading = false, now = now), {}, {}, {}, {})
+    }
+    @Test fun pickTied() = snap("pick-tied") {
+        app.thebridge.feature.game.GamePickerScreen(app.thebridge.feature.game.PickUi(night(mapOf("whose" to 2, "drift" to 2), 4, tied = 2), mine = "drift", filter = app.thebridge.feature.game.GameFilter.Everyone, loading = false, now = now), {}, {}, {}, {})
+    }
+    @Test fun pickNeedPlayers() = snap("pick-need-players") {
+        app.thebridge.feature.game.GamePickerScreen(app.thebridge.feature.game.PickUi(loading = false, notice = UiText.Res(R.string.pick_need_players, listOf(3)), now = now), {}, {}, {}, {})
+    }
     @Test fun wdLobby() = snap("whose-day-lobby") {
         app.thebridge.feature.game.WhoseDayScreen(wdUi(wd("lobby") { copy(round = null) }, app.thebridge.data.remote.WdYouDto("w1", 0, pool = true, eligible = true,
             preview = listOf(app.thebridge.data.remote.WdPreviewDto("Easy run", false, 30), app.thebridge.data.remote.WdPreviewDto(null, true, 50)))), app.thebridge.feature.game.WdActions())

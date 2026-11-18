@@ -130,7 +130,25 @@ class StreamInterrupted : Exception()
     val drifterId: String? = null, val ejectedId: String? = null, val buildersWon: Boolean? = null, val tally: Map<String, Int> = emptyMap(), val mvpId: String? = null,
 )
 @Serializable data class GameStatusDto(val unlocked: Boolean = false, val rankedToday: Boolean = false, val eligible: Int = 0, val finished: Int = 0, val needsPlayers: Boolean = false,
-    val waiting: List<String> = emptyList(), val meLeft: Int? = null, val game: GameDto? = null, val whoseDay: WhoseDayDto? = null)
+    val waiting: List<String> = emptyList(), val meLeft: Int? = null, val game: GameDto? = null, val whoseDay: WhoseDayDto? = null,
+    /** "Pick tonight's game" is open in this alliance. */
+    val night: NightRefDto? = null)
+
+// --- Game Night vote: "Pick tonight's game" ---
+@Serializable data class NightRefDto(val id: String, val endsAt: Long = 0)
+@Serializable data class NightGameDto(
+    val id: String, val name: String = "", val icon: String = "", val mode: String = "everyone", val liveToo: Boolean = false,
+    val minPlayers: Int = 2, val maxPlayers: Int = 15, val avgMinutes: Int = 2, val tile: Int = 0,
+    val built: Boolean = false, val available: Boolean = false, val votable: Boolean = false, val needs: Int? = null,
+)
+@Serializable data class NightLeaderDto(val game: String, val votes: Int)
+@Serializable data class NightTieDto(val games: List<String>, val votes: Int)
+@Serializable data class NightDto(
+    val id: String, val allianceId: String, val phase: String, val endsAt: Long = 0, val now: Long = 0, val total: Int = 0, val voted: Int = 0,
+    val counts: Map<String, Int> = emptyMap(), val leader: NightLeaderDto? = null, val tied: NightTieDto? = null, val chosen: String? = null,
+    val games: List<NightGameDto> = emptyList(),
+)
+@Serializable private data class NightResponse(val night: NightDto)
 
 // --- Whose Day? (Game Night #2). Fields appear only once their clue stage is reached; the owner only at the reveal. ---
 @Serializable data class WdTaskDto(val name: String? = null, @kotlinx.serialization.SerialName("private") val isPrivate: Boolean = false, val durationMin: Int? = null, val priority: String? = null, val doneAt: String? = null, val streak: Int? = null)
@@ -340,6 +358,8 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun nudge(allianceId: String): Int = json.decodeFromString<NudgeResponse>(call("POST", "/v1/alliances/$allianceId/game/nudge", null, authed = true)).sent
     /** Opens (or returns) the Whose Day? lobby. A 409 `other_game_open` means Who's Drifting? is running. */
     suspend fun openWhoseDay(allianceId: String): WhoseDayDto = json.decodeFromString<WhoseDayResponse>(call("POST", "/v1/alliances/$allianceId/game", buildJsonObject { put("kind", "whose_day") }, authed = true)).game
+    /** Opens (or joins) the vote. 409 `other_game_open` (body: kind) means a game is running; `need_players` (body: needs). */
+    suspend fun openNight(allianceId: String): NightDto = json.decodeFromString<NightResponse>(call("POST", "/v1/alliances/$allianceId/night", null, authed = true)).night
     suspend fun shareGame(allianceId: String, gameId: String) { call("POST", "/v1/alliances/$allianceId/games/$gameId/share", null, authed = true) }
     suspend fun rating(allianceId: String): RatingDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rating", null, authed = true))
     suspend fun rankings(allianceId: String): BoardDto = json.decodeFromString(call("GET", "/v1/alliances/$allianceId/rankings", null, authed = true))

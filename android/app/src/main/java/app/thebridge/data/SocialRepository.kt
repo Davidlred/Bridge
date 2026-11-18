@@ -207,6 +207,7 @@ class SocialRepository @Inject constructor(
     suspend fun nudge(allianceId: String) = api.nudge(allianceId)
     suspend fun shareGame(allianceId: String, gameId: String) = api.shareGame(allianceId, gameId)
     suspend fun openWhoseDay(allianceId: String) = api.openWhoseDay(allianceId)
+    suspend fun openNight(allianceId: String) = api.openNight(allianceId)
     suspend fun rating(allianceId: String) = api.rating(allianceId)
     suspend fun rankings(allianceId: String) = api.rankings(allianceId)
     suspend fun badges() = api.badges()
@@ -244,7 +245,7 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
     private var attempt = 0
     private var reconnect: Job? = null
     private val _events = kotlinx.coroutines.flow.MutableSharedFlow<JsonObject>(extraBufferCapacity = 64)
-    /** Game frames (`game:*` for Who's Drifting?, `wd:*` for Whose Day?) for the Game Night screens. */
+    /** Game frames (`game:*` for Who's Drifting?, `wd:*` for Whose Day?, `vote:*` for the picker) for the Game Night screens. */
     val events: kotlinx.coroutines.flow.SharedFlow<JsonObject> = _events
     private val _connected = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** True once the server has accepted the auth frame; a reconnect flips it back, so screens can re-join. */
@@ -300,7 +301,7 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
             "hidden" -> e["id"]?.jsonPrimitive?.content?.let { db.social().removeByServerId(it) }   // removed by moderation
             "ready" -> _connected.value = true
             "dm" -> _dmPings.emit(Unit)
-            else -> e["type"]?.jsonPrimitive?.content?.let { t -> if (t.startsWith("game:") || t.startsWith("wd:")) _events.emit(e) }
+            else -> e["type"]?.jsonPrimitive?.content?.let { t -> if (t.startsWith("game:") || t.startsWith("wd:") || t.startsWith("vote:")) _events.emit(e) }
         }
     }
 }

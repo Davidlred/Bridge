@@ -112,6 +112,7 @@ import java.time.ZoneId
 @Serializable data class Student(val allianceId: String, val userId: String, val name: String, val plan: String)
 @Serializable data class GameNight(val allianceId: String)
 @Serializable data class WhoseDay(val allianceId: String)
+@Serializable data class GamePicker(val allianceId: String)
 @Serializable data class Rankings(val allianceId: String)
 @Serializable data class InvitePreview(val code: String)
 /** Full-screen focus timer with the coach strip. */
@@ -253,7 +254,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     // Hide the bar on full-screen flows
     // Installed from an invite page: open that invite once the app is signed in.
     LaunchedEffect(Unit) { shell.installInvite()?.let { nav.navigate(InvitePreview(it)) } }
-    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<WhoseDay>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true || dest?.hasRoute<DmThread>() == true
+    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<WhoseDay>() == true || dest?.hasRoute<GamePicker>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true || dest?.hasRoute<DmThread>() == true
     val name = user?.displayName.orEmpty()
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
     val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
@@ -283,7 +284,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
                 composable<Community> {
-                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id, kind -> if (kind == "whose_day") nav.navigate(WhoseDay(id)) else nav.navigate(GameNight(id)) }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) },
+                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id, kind -> when (kind) { "pick" -> nav.navigate(GamePicker(id)); "whose_day" -> nav.navigate(WhoseDay(id)); else -> nav.navigate(GameNight(id)) } }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) },
                         onStudents = { a -> nav.navigate(Students(a.id, a.inviteCode)) })
                 }
                 composable<Messages> { app.thebridge.feature.dm.InboxRoute(onBack = { nav.popBackStack() }, onOpen = { id -> nav.navigate(DmThread(id)) }) }
@@ -295,6 +296,13 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 composable<Student> { app.thebridge.feature.community.StudentRoute(onBack = { nav.popBackStack() }) }
                 composable<GameNight> { app.thebridge.feature.game.GameRoute(onExit = { nav.popBackStack() }) }
                 composable<WhoseDay> { app.thebridge.feature.game.WhoseDayRoute(onExit = { nav.popBackStack() }) }
+                composable<GamePicker> {
+                    val id = it.toRoute<GamePicker>().allianceId
+                    // The vote picked a game (or one was already running): go to it, and Back returns to Community, not the vote.
+                    app.thebridge.feature.game.GamePickerRoute(onExit = { nav.popBackStack() }, onGame = { kind ->
+                        nav.navigate(if (kind == "whose_day") WhoseDay(id) else GameNight(id)) { popUpTo<GamePicker> { inclusive = true } }
+                    })
+                }
                 composable<InvitePreview>(deepLinks = listOf(navDeepLink<InvitePreview>(basePath = "https://thebridge.app/join"))) {
                     val code = it.toRoute<InvitePreview>().code.uppercase()
                     // The link carries only the code: open the join sheet inside Community for the first goal.
