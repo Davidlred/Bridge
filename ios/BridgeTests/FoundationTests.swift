@@ -155,6 +155,27 @@ final class FoundationSnapshotTests: XCTestCase {
         let m = wd("lobby", you: WdYouDTO(gameId: "w1", round: 0, eligible: true, preview: [WdPreviewDTO(name: "Easy run", durationMin: 30), WdPreviewDTO(name: nil, isPrivate: true, durationMin: 50)])) { $0.round = nil }
         verify(WhoseDayContent(model: m, now: now), named: "whose-day-lobby")
     }
+    // Game Night vote: the line-up as the server sends it (two games built, the rest coming).
+    private func picker(_ counts: [String: Int], voted: Int, leader: NightLeaderDTO? = nil, tied: NightTieDTO? = nil, mine: String?, filter: GamePickerModel.Filter = .all) -> GamePickerModel {
+        let ms = now.timeIntervalSince1970 * 1000
+        let ids = [("drift", "visibility_off"), ("whose", "person_search"), ("word", "abc"), ("scramble", "shuffle"), ("cup", "local_drink"), ("pool", "radio_button_checked"),
+                   ("hoops", "sports_basketball"), ("darts", "adjust"), ("golf", "golf_course"), ("four", "view_column"), ("fleet", "sailing"), ("push", "trip_origin")]
+        let games = ids.enumerated().map { i, g in
+            let built = g.0 == "drift" || g.0 == "whose"
+            return NightGameDTO(id: g.0, name: "", icon: g.1, mode: ["drift", "whose", "hoops", "golf", "push"].contains(g.0) ? "everyone" : "duel_turns", liveToo: g.0 == "cup",
+                                minPlayers: ["drift", "whose", "push"].contains(g.0) ? 3 : 2, maxPlayers: 15, avgMinutes: 2, tile: i % 5, built: built, available: built, votable: built)
+        }
+        let m = GamePickerModel()
+        m.night = NightDTO(id: "n1", allianceId: "a1", phase: "voting", endsAt: ms + 24_000, now: ms, total: 7, voted: voted, counts: counts, leader: leader, tied: tied, chosen: nil, games: games)
+        m.mine = mine; m.filter = filter
+        return m
+    }
+    func testPickVoting() {
+        verify(GamePickerContent(model: picker(["whose": 3, "drift": 1], voted: 4, leader: NightLeaderDTO(game: "whose", votes: 3), mine: "whose"), now: now), named: "pick-voting")
+    }
+    func testPickTied() {
+        verify(GamePickerContent(model: picker(["whose": 2, "drift": 2], voted: 4, tied: NightTieDTO(games: ["drift", "whose"], votes: 2), mine: "drift", filter: .everyone), now: now), named: "pick-tied")
+    }
     func testWhoseDayRound() { verify(WhoseDayContent(model: wd("round", stage: 3, choice: "u2"), now: now), named: "whose-day-round") }
     func testWhoseDayRoundEarly() { verify(WhoseDayContent(model: wd("round", stage: 1), now: now), named: "whose-day-round-1") }
     func testWhoseDayOwner() { verify(WhoseDayContent(model: wd("round", you: WdYouDTO(gameId: "w1", round: 1, owner: true)), now: now), named: "whose-day-round-owner") }

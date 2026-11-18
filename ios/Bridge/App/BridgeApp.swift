@@ -58,11 +58,17 @@ final class SessionStore {
 
     private static let userKey = "sessionUser"
     private static let onboardingKey = "sessionOnboarding"
+    private static let serverKey = "sessionServer"
+    /// The API this build talks to. A build for a hosted server (https) forgets an account saved against another one.
+    static let server = Bundle.main.object(forInfoDictionaryKey: "APIBaseURL") as? String ?? ""
+    private static var hosted: Bool { server.hasPrefix("https://") }
 
     /// Reads local state only; never blocks on the network. Expired refresh → `.expired` (local data kept).
     func bootstrap() async {
         guard phase == .launching else { return }
         await SyncEngine.shared.configure(container: Persistence.container)
+        // An account saved against another server (a laptop build, say) doesn't exist on this one: start signed out.
+        if Self.hosted, UserDefaults.standard.data(forKey: Self.userKey) != nil, UserDefaults.standard.string(forKey: Self.serverKey) != Self.server { clearLocal() }
         user = UserDefaults.standard.data(forKey: Self.userKey).flatMap { try? JSONDecoder().decode(UserDTO.self, from: $0) }
         phase = user == nil ? .signedOut : TokenStore.read() == nil ? .expired : UserDefaults.standard.bool(forKey: Self.onboardingKey) ? .onboarding : .ready
         if phase == .ready || phase == .onboarding { await SyncEngine.shared.drain(reason: .foreground) }
@@ -73,6 +79,7 @@ final class SessionStore {
         if user?.id != r.user.id { try? Persistence.wipe() }
         TokenStore.write(Tokens(access: r.accessToken, refresh: r.refreshToken))
         UserDefaults.standard.set(try? JSONEncoder().encode(r.user), forKey: Self.userKey)
+        UserDefaults.standard.set(Self.server, forKey: Self.serverKey)
         user = r.user
         if r.isNew { UserDefaults.standard.set(true, forKey: Self.onboardingKey) }
         phase = UserDefaults.standard.bool(forKey: Self.onboardingKey) ? .onboarding : .ready

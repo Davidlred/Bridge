@@ -280,7 +280,13 @@ struct LogInForm: View {
 }
 
 /// Session expired: the app underneath keeps working on local data; nothing unsynced is dropped.
+/// Someone else on this phone can sign the saved account out and log in or create their own ("Not Bola?").
 struct ReauthSheet: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(AuthModel.self) private var auth
+    @State private var confirmOther = false
+    @State private var unsynced = 0
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
@@ -289,8 +295,26 @@ struct ReauthSheet: View {
             }
             .padding(.horizontal, 24).padding(.top, 28).frame(maxWidth: .infinity, alignment: .leading)
             LogInForm(onSignUp: nil)
+            VStack(spacing: 10) {
+                let name = session.user?.displayName.split(separator: " ").first.map(String.init) ?? ""
+                LinkRow(lead: name.isEmpty ? "Not you?" : "Not \(name)?", link: "Use another account") {
+                    unsynced = Persistence.outboxCount()
+                    if unsynced > 0 { confirmOther = true } else { useAnotherAccount() }
+                }
+                if confirmOther {
+                    Text("\(unsynced) changes on this phone haven't synced. Using another account removes them.").font(BFont.body(13)).foregroundStyle(Theme.warn)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Remove and use another account", action: useAnotherAccount).buttonStyle(SecondaryButtonStyle())
+                }
+            }
+            .padding(.horizontal, 24).padding(.bottom, 24)
         }
         .background(Theme.bg)
         .presentationDetents([.large]).presentationDragIndicator(.hidden)
+    }
+
+    private func useAnotherAccount() {
+        auth.email = ""; auth.password = ""
+        Task { await session.logOut() }
     }
 }

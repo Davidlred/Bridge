@@ -9,6 +9,7 @@ import { push } from '../push.js';
 import { blockedWith, firstName, localToday } from './progress.js';
 import { openLobby as openWhoseDayLobby, openWhoseDay, whoseDayView } from './whoseday.js';
 import type { GameMeta, LiveModule } from '../games/module.js';
+import { openNight } from '../games/night.js';
 
 /**
  * Game Night, "Who's Drifting?". Server-authoritative: the server picks the Drifter, owns the planks, validates every
@@ -330,6 +331,8 @@ export async function gameRoutes(app: FastifyInstance) {
       meLeft: s.members.find(m => m.userId === req.userId)?.left ?? null,
       game: g && !['result', 'cancelled'].includes(g.phase) ? view(g) : null,
       whoseDay: (() => { const w = openWhoseDay(req.params.id); return w ? whoseDayView(w) : null; })(),
+      // "Pick tonight's game" is open: the card says "Join the vote".
+      night: (() => { const n = openNight(req.params.id); return n ? { id: n.id, endsAt: n.endsAt } : null; })(),
     };
   });
 

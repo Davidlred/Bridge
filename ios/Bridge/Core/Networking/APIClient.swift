@@ -169,7 +169,25 @@ struct GameStatusDTO: Codable, Equatable, Sendable {
     /// Open Who's Drifting? and Whose Day? games, if any (only one runs at a time).
     var game: GameDTO? = nil
     var whoseDay: WhoseDayDTO? = nil
+    /// "Pick tonight's game" is open in this alliance.
+    var night: NightRefDTO? = nil
 }
+
+// Game Night vote: "Pick tonight's game".
+struct NightRefDTO: Codable, Equatable, Sendable { let id: String; let endsAt: Double }
+struct NightGameDTO: Codable, Equatable, Sendable, Identifiable {
+    let id: String; let name: String; let icon: String; let mode: String; var liveToo: Bool?
+    let minPlayers: Int; let maxPlayers: Int; let avgMinutes: Int; let tile: Int
+    let built: Bool; let available: Bool; let votable: Bool; var needs: Int?
+}
+struct NightLeaderDTO: Codable, Equatable, Sendable { let game: String; let votes: Int }
+struct NightTieDTO: Codable, Equatable, Sendable { let games: [String]; let votes: Int }
+struct NightDTO: Codable, Equatable, Sendable {
+    let id: String; let allianceId: String; let phase: String; let endsAt: Double; let now: Double; let total: Int; let voted: Int
+    let counts: [String: Int]; var leader: NightLeaderDTO?; var tied: NightTieDTO?; var chosen: String?; let games: [NightGameDTO]
+}
+/// Opening the vote: the vote itself, a game that's already running (its route kind), or too few members.
+enum NightOpen: Sendable { case night(NightDTO), running(String), needPlayers(Int) }
 
 // MARK: Whose Day? (Game Night #2). Fields appear only once their clue stage is reached; the owner only at the reveal.
 struct WdTaskDTO: Codable, Equatable, Sendable {
@@ -433,6 +451,14 @@ actor APIClient {
         return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/game", nil, authed: true)).game
     }
     /// Opens (or returns) the Whose Day? lobby. A 409 `other_game_open` means Who's Drifting? is running.
+    func openNight(_ allianceId: String) async throws -> NightOpen {
+        struct R: Decodable { let night: NightDTO }
+        do { return .night(try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/night", nil, authed: true)).night) }
+        catch APIError.server(_, "other_game_open", _, _) {
+            let s = try await gameStatus(allianceId)
+            return .running(s.whoseDay != nil ? "whose_day" : "drifting")
+        } catch APIError.server(_, "need_players", _, _) { return .needPlayers(3) }
+    }
     func openWhoseDay(_ allianceId: String) async throws -> WhoseDayDTO {
         struct R: Decodable { let game: WhoseDayDTO }
         return try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/game", ["kind": "whose_day"], authed: true)).game

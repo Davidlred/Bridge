@@ -22,9 +22,17 @@ export const LINEUP: GameMeta[] = [
 ].map((m, i) => ({ ...m, tile: i % 5 }) as GameMeta);
 
 /** Games that are built. The others are listed (so the picker can show what's coming) but can't be picked yet. */
-const MODULES = new Map<GameId, GameModule>([[driftModule.meta.id, driftModule], [whoseModule.meta.id, whoseModule]]);
+// Built on first use: the game files import this one (through Game Night voting), so the map can't be filled at load.
+let built: Map<GameId, GameModule> | undefined;
+const MODULES = () => (built ??= new Map<GameId, GameModule>([[driftModule.meta.id, driftModule], [whoseModule.meta.id, whoseModule]]));
 
-export const moduleFor = (id: string): GameModule | undefined => MODULES.get(id as GameId);
+export const moduleFor = (id: string): GameModule | undefined => MODULES().get(id as GameId);
+
+/** The live game running in this alliance right now, if any (one at a time). */
+export function liveGameOpen(allianceId: string): GameId | null {
+  for (const m of MODULES().values()) if (m.kind === 'live' && m.openGame(allianceId)) return m.meta.id;
+  return null;
+}
 
 /**
  * Whether a game can be played, from server config. Every built game is free for now; GAMES_OFF (comma-separated
@@ -32,10 +40,10 @@ export const moduleFor = (id: string): GameModule | undefined => MODULES.get(id 
  */
 export function available(id: GameId): boolean {
   const off = new Set(env.GAMES_OFF.split(',').map(s => s.trim()).filter(Boolean));
-  return MODULES.has(id) && !off.has(id);
+  return MODULES().has(id) && !off.has(id);
 }
 
-export const catalog = () => LINEUP.map(m => ({ ...m, built: MODULES.has(m.id), available: available(m.id) }));
+export const catalog = () => LINEUP.map(m => ({ ...m, built: MODULES().has(m.id), available: available(m.id) }));
 
 export async function arcadeRoutes(app: FastifyInstance) {
   /** The line-up for the picker: every game, whether it's built and whether it can be played right now. */

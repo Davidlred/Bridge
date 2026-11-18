@@ -248,6 +248,7 @@ final class SocialStore {
     func gameStatus(_ allianceId: String) async throws -> GameStatusDTO { try await api.gameStatus(allianceId) }
     func openGame(_ allianceId: String) async throws -> GameDTO { try await api.openGame(allianceId) }
     func openWhoseDay(_ allianceId: String) async throws -> WhoseDayDTO { try await api.openWhoseDay(allianceId) }
+    func openNight(_ allianceId: String) async throws -> NightOpen { try await api.openNight(allianceId) }
     func nudge(_ allianceId: String) async throws -> Int { try await api.nudge(allianceId) }
     func shareGame(_ allianceId: String, gameId: String) async throws { try await api.shareGame(allianceId, gameId: gameId) }
     func rating(_ allianceId: String) async throws -> RatingDTO { try await api.rating(allianceId) }
@@ -273,7 +274,7 @@ final class RealtimeClient {
     private var users = 0
     private var attempt = 0
     private var reconnect: Task<Void, Never>?
-    /** Game frames (`game:*` for Who's Drifting?, `wd:*` for Whose Day?) for the Game Night screens. */
+    /** Game frames (`game:*` for Who's Drifting?, `wd:*` for Whose Day?, `vote:*` for the picker) for the Game Night screens. */
     var gameListener: (([String: Any]) -> Void)?
     /** Called each time the server accepts the auth frame (first connect and every reconnect), so screens can re-join. */
     var onReady: (() -> Void)?
@@ -326,7 +327,7 @@ final class RealtimeClient {
                 connected = true; onReady?()
             case "dm":
                 onDm?()
-            case let type? where type.hasPrefix("game:") || type.hasPrefix("wd:"):
+            case let type? where type.hasPrefix("game:") || type.hasPrefix("wd:") || type.hasPrefix("vote:"):
                 gameListener?(obj)
             default: break
             }

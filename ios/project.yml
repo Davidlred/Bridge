@@ -9,7 +9,8 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     DEVELOPMENT_TEAM: ""
-    API_BASE_URL: https://api.thebridge.app
+    # Testers: the free hosted server (server/DEPLOY-RENDER.md). Switch to the production domain before launch.
+    API_BASE_URL: https://bridge-api-hmdo.onrender.com
     # RevenueCat public SDK key (appl_…). Empty = the paywall shows, but purchases are switched off.
     REVENUECAT_KEY: ""
     # PostHog project key (phc_…). Empty = no analytics.

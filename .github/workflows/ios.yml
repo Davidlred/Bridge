@@ -59,13 +59,29 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:BridgeTests/FoundationSnapshotTests \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee -a "$RUNNER_TEMP/snap.log" | grep -E "Test Case|Executed [0-9]+ tests|\*\* [A-Z ]+ \*\*" || true
           if [ "$MODE" = verify ]; then grep -q "TEST EXECUTE SUCCEEDED\|TEST SUCCEEDED" "$RUNNER_TEMP/snap.log"; fi
+      # Testers without TestFlight: an unsigned Release build for real iPhones. AltStore signs it with the tester's own
+      # Apple ID when they install it (free accounts: 7 days, then refresh). Runs even if a snapshot needs recording.
+      - name: Tester .ipa (unsigned, for AltStore)
+        if: always()
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild build -project Bridge.xcodeproj -scheme Bridge -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd" -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee "$RUNNER_TEMP/ipa.log" | grep -E " error: |\*\* [A-Z ]+ \*\*" | cut -c1-600 || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1)
+          [ -n "$APP" ]
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" && cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$RUNNER_TEMP/Bridge-tester.ipa" Payload)
+          ls -la "$RUNNER_TEMP/Bridge-tester.ipa"
       # The build log is published to the ci-logs branch so compiler errors can be read without a GitHub login.
       - name: Publish log
         if: always()
         working-directory: ${{ runner.temp }}
         run: |
           mkdir out && cd out
-          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== crypto =="; grep -E "^(error|warning: unused)|Finished|xcframework|-->" ../crypto.log 2>/dev/null | tail -30; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" ../test.log 2>/dev/null | cut -c1-400 | head -200; echo; echo "== snapshots =="; grep -E "mode:|Test Case.*(passed|failed)|Executed [0-9]+ tests|\.swift:[0-9]+: error" ../snap.log 2>/dev/null | cut -c1-300 | head -80; } > ios.txt
+          { echo "commit: $GITHUB_SHA"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; echo "== crypto =="; grep -E "^(error|warning: unused)|Finished|xcframework|-->" ../crypto.log 2>/dev/null | tail -30; echo; echo "== build errors =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../build.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -300; echo; echo "== tests =="; grep -E "Test Case|Executed [0-9]+ tests|\.swift:[0-9]+: error|\*\* [A-Z ]+ \*\*" ../test.log 2>/dev/null | cut -c1-400 | head -200; echo; echo "== snapshots =="; grep -E "mode:|Test Case.*(passed|failed)|Executed [0-9]+ tests|\.swift:[0-9]+: error" ../snap.log 2>/dev/null | cut -c1-300 | head -80; echo; echo "== tester ipa =="; grep -E " error: |\*\* [A-Z ]+ \*\*" ../ipa.log 2>/dev/null | sed "s#/Users/runner/work/Bridge/Bridge/##" | cut -c1-600 | sort -u | head -60; ls -la ../Bridge-tester.ipa 2>/dev/null; } > ios.txt
+          [ -f ../Bridge-tester.ipa ] && cp ../Bridge-tester.ipa . || true
           [ -d "$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__" ] && cp -R "$GITHUB_WORKSPACE/ios/BridgeTests/__Snapshots__" snapshots || true
           [ -d "$RUNNER_TEMP/snapshot-failures" ] && mkdir -p failures && find "$RUNNER_TEMP/snapshot-failures" -name "*.png" -exec cp {} failures/ \; || true
           tail -400 ../build.log > build-tail.txt 2>/dev/null || true
