@@ -3,6 +3,7 @@ import { auth } from '../auth/tokens.js';
 import { env } from '../env.js';
 import { driftModule } from '../social/game.js';
 import { whoseModule } from '../social/whoseday.js';
+import { fourModule } from './four.js';
 import type { GameId, GameMeta, GameModule } from './module.js';
 
 /** The Arcade line-up, in order. Tile colours cycle through the avatar fills in this order. */
@@ -24,7 +25,7 @@ export const LINEUP: GameMeta[] = [
 /** Games that are built. The others are listed (so the picker can show what's coming) but can't be picked yet. */
 // Built on first use: the game files import this one (through Game Night voting), so the map can't be filled at load.
 let built: Map<GameId, GameModule> | undefined;
-const MODULES = () => (built ??= new Map<GameId, GameModule>([[driftModule.meta.id, driftModule], [whoseModule.meta.id, whoseModule]]));
+const MODULES = () => (built ??= new Map<GameId, GameModule>([driftModule, whoseModule, fourModule].map(m => [m.meta.id, m as GameModule])));
 
 export const moduleFor = (id: string): GameModule | undefined => MODULES().get(id as GameId);
 

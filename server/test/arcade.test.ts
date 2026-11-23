@@ -9,13 +9,18 @@ describe('Arcade registry', () => {
     expect(new Set(LINEUP.map(g => g.id)).size).toBe(12);
     for (const g of LINEUP) expect(g.minPlayers).toBeLessThanOrEqual(g.maxPlayers);
   });
-  it("wraps Who's Drifting? and Whose Day? as the first live modules; the rest are listed but not playable yet", () => {
+  it("wraps Who's Drifting? and Whose Day? as live modules and the 1v1 games as duel modules, each matching its line-up entry", () => {
     expect(moduleFor('drift')).toMatchObject({ kind: 'live', meta: { name: "Who's Drifting?", mode: 'everyone' } });
     expect(moduleFor('whose')).toMatchObject({ kind: 'live', meta: { name: 'Whose Day?' } });
-    expect(moduleFor('four')).toBeUndefined();
-    const c = catalog();
-    expect(c.filter(g => g.available).map(g => g.id)).toEqual(['drift', 'whose']);
-    expect(c.find(g => g.id === 'cup')).toMatchObject({ built: false, available: false, liveToo: true });
+    expect(moduleFor('four')).toMatchObject({ kind: 'duel', meta: { name: 'Four in a Row' } });
+    for (const g of catalog()) {
+      expect(g.available).toBe(g.built);
+      const m = moduleFor(g.id);
+      if (!m) continue;
+      expect(m.kind).toBe(g.mode === 'everyone' ? 'live' : 'duel');
+      expect(m.meta).toMatchObject({ id: g.id, name: g.name, mode: g.mode, minPlayers: g.minPlayers });
+    }
+    expect(catalog().find(g => g.id === 'cup')).toMatchObject({ liveToo: true });
   });
   it('seeds randomness so both players get the same board', () => {
     const a = seeded('night-1'), b = seeded('night-1'), c = seeded('night-2');

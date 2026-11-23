@@ -10,6 +10,8 @@ import { blockedWith, firstName, localToday } from './progress.js';
 import { openLobby as openWhoseDayLobby, openWhoseDay, whoseDayView } from './whoseday.js';
 import type { GameMeta, LiveModule } from '../games/module.js';
 import { openNight } from '../games/night.js';
+import { bracketToday } from '../games/bracket.js';
+import { LINEUP } from '../games/registry.js';
 
 /**
  * Game Night, "Who's Drifting?". Server-authoritative: the server picks the Drifter, owns the planks, validates every
@@ -333,6 +335,8 @@ export async function gameRoutes(app: FastifyInstance) {
       whoseDay: (() => { const w = openWhoseDay(req.params.id); return w ? whoseDayView(w) : null; })(),
       // "Pick tonight's game" is open: the card says "Join the vote".
       night: (() => { const n = openNight(req.params.id); return n ? { id: n.id, endsAt: n.endsAt } : null; })(),
+      // Tonight's 1v1 bracket (open, or finished today): the card opens the pairings.
+      bracket: await bracketToday(req.params.id, req.userId),
     };
   });
 
@@ -365,7 +369,10 @@ export async function gameRoutes(app: FastifyInstance) {
                           where s.id = ${req.params.gameId} and s.alliance_id = ${req.params.id} and s.ended_at is not null`;
     if (!s) throw new HttpError(404, 'not_found');
     const name = firstName(s.display_name ?? '');
-    const body = s.kind === 'whose_day'
+    const arcade = LINEUP.find(g => g.id === s.kind);
+    const body = arcade
+      ? (s.winner ? `Game night: ${firstName(s.winner)} won ${arcade.name}.` : `Game night: ${arcade.name} is over.`)
+      : s.kind === 'whose_day'
       ? (s.winner ? `Game night: ${firstName(s.winner)} won Whose Day? with ${s.score} points.` : 'Game night: Whose Day? is over.')
       : s.builders_won ? `Game night: the Builders caught ${name}.` : `Game night: ${name} drifted away undetected.`;
     const [m] = await sql`insert into alliance_messages (id, alliance_id, user_id, kind, body, client_id, moderation) values (${uuidv7()}, ${req.params.id}, null, 'game', ${body}, ${req.params.gameId}, 'allow')

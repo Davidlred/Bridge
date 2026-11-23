@@ -365,6 +365,8 @@ export async function allianceRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>('/v1/alliances/:id/leave', { onRequest: auth }, async (req, reply) => {
     await sql.begin(tx => leave(tx, req.params.id, req.userId));
+    // Their open matches go to the opponent, and a bracket carries on without them.
+    await (await import('../games/arcade.js')).afterLeave(req.params.id, req.userId).catch(e => req.log.warn({ err: String(e) }, 'arcade_leave'));
     return reply.code(204).send();
   });
 

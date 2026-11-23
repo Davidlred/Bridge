@@ -21,20 +21,33 @@ export interface GameMeta {
   /** Also playable live when both players are around (Cup Pong). */
   liveToo?: boolean;
   minPlayers: number; maxPlayers: number; avgMinutes: number;
+  /** Points mean something to show ("6–4"); otherwise a result is just who won. */
+  scored?: boolean;
   /** Index into the avatar fills, cycled in line-up order. */
   tile: number;
 }
 
 export interface Outcome { done: boolean; winnerId?: string; scores: Record<string, number> }
 
+/** What the server knows when a match starts: words from the alliance's plan, and who has a 7-day streak. */
+export interface CreateCtx { planWords: string[]; perks: string[] }
+/** Server time for each move, so timed rounds (Word Dash, Scramble) are judged by the server's clock. */
+export interface MoveCtx { now: number }
+
 /** A 1v1 game as a pure state machine. Throws MoveError for an illegal move. */
 export interface DuelModule<S = unknown, Move = unknown> {
   kind: 'duel';
   meta: GameMeta;
-  createState(players: [string, string], seed: string): S;
-  applyMove(state: S, playerId: string, move: Move): S;
+  createState(players: [string, string], seed: string, ctx: CreateCtx): S;
+  applyMove(state: S, playerId: string, move: Move, ctx: MoveCtx): S;
   isOver(state: S): Outcome;
+  /** Whose move it is; null when both may move (Fleet Battle setup) or the game is over. */
+  turn(state: S): string | null;
+  /** Closes anything the clock has ended (a timed round nobody closed). Returns the same object when nothing changed. */
+  settle?(state: S, now: number): S;
   viewFor(state: S, playerId: string): unknown;
+  /** The score the next player has to beat, for "Sam scored 42. Beat it?" on the chat card. */
+  toBeat?(state: S): number | null;
 }
 
 /** A live game for the whole alliance, run by its own engine in the realtime room. */

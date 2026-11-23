@@ -10,6 +10,10 @@ const sweep = () => purgeDeletedAccounts().then(n => n && app.log.info({ purged:
 setInterval(sweep, 6 * 60 * 60 * 1000).unref();
 sweep();
 
+// Game Night Arcade: timed rounds, 24-hour nudges, members who left, bracket deadlines. Every minute.
+const arcade = () => import('./games/arcade.js').then(a => a.sweepArcade()).catch(e => app.log.error(e));
+setInterval(arcade, 60_000).unref();
+
 // Deploys and restarts send SIGTERM: stop taking requests, let the ones in flight finish (a plan can take a minute), then exit.
 // fly.toml gives us kill_timeout to do it.
 let stopping = false;

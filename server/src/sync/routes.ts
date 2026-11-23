@@ -348,7 +348,11 @@ export async function syncRoutes(app: FastifyInstance) {
       } else accepted.push(m.id);
     }
     // A finished day may open game night for an alliance; checked after the response, never blocking sync.
-    if (body.data.mutations.some(m => m.entity === 'completion' && accepted.includes(m.id))) void checkUnlocks(req.userId).catch(e => req.log.warn({ err: String(e) }, 'game_unlock_check'));
+    if (body.data.mutations.some(m => m.entity === 'completion' && accepted.includes(m.id))) {
+      void checkUnlocks(req.userId).catch(e => req.log.warn({ err: String(e) }, 'game_unlock_check'));
+      // "Your turn" pushes held until this player finished today.
+      void import('../games/duel.js').then(d => d.releaseHeld(req.userId)).catch(e => req.log.warn({ err: String(e) }, 'held_turns'));
+    }
     return { accepted, rejected };
   });
 

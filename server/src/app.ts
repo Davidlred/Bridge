@@ -16,6 +16,8 @@ import { deviceRoutes } from './push.js';
 import { gameRoutes } from './social/game.js';
 import { arcadeRoutes } from './games/registry.js';
 import { nightRoutes } from './games/night.js';
+import { duelRoutes } from './games/duel.js';
+import { bracketRoutes } from './games/bracket.js';
 import { rankingRoutes } from './social/rankings.js';
 import { badgeRoutes } from './social/badges.js';
 import { billingRoutes } from './billing.js';
@@ -79,6 +81,8 @@ export async function buildApp() {
   await app.register(gameRoutes);
   await app.register(arcadeRoutes);
   await app.register(nightRoutes);
+  await app.register(duelRoutes);
+  await app.register(bracketRoutes);
   await app.register(rankingRoutes);
   await app.register(badgeRoutes);
   await app.register(billingRoutes);

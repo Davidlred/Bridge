@@ -83,7 +83,7 @@ run('Game Night vote', () => {
     expect(night.total).toBe(3);
     expect(night.games).toHaveLength(12);
     expect(night.games.find((g: any) => g.id === 'drift').votable).toBe(true);
-    expect(night.games.find((g: any) => g.id === 'four').votable).toBe(false);         // not built yet
+    expect(night.games.find((g: any) => g.id === 'four').votable).toBe(true);          // 1v1 games make a bracket
     // A second member opening it gets the same vote; the game card shows it.
     expect((await call(ps[1]!, 'POST', `/v1/alliances/${a.id}/night`)).json().night.id).toBe(night.id);
     expect((await call(ps[2]!, 'GET', `/v1/alliances/${a.id}/game`)).json().night.id).toBe(night.id);
@@ -100,7 +100,7 @@ run('Game Night vote', () => {
     socks[0]!.send({ type: 'vote:cast', nightId: night.id, game: 'whose' });
     await until(() => socks[2]!.last()?.voted === 0);
     expect(socks[0]!.mine()).toBeNull();
-    socks[0]!.send({ type: 'vote:cast', nightId: night.id, game: 'four' });
+    socks[0]!.send({ type: 'vote:cast', nightId: night.id, game: 'chess' });
     await until(() => socks[0]!.frames.some(f => f.type === 'vote:error' && f.error === 'not_votable'));
 
     socks[0]!.send({ type: 'vote:cast', nightId: night.id, game: 'drift' });
@@ -127,12 +127,19 @@ run('Game Night vote', () => {
     const s = await connect(ps[0]!);
     s.send({ type: 'vote:join', nightId: night.id });
     await until(() => s.last()?.phase === 'decided', 3000);
-    expect(['drift', 'whose']).toContain(s.last()!.chosen);
+    const chosen = s.last()!.chosen;
+    expect(s.last()!.games.find((g: any) => g.id === chosen).votable).toBe(true);
+    if (s.last()!.mode !== 'everyone') expect(s.last()!.bracketId).toBeTruthy();
     s.ws.terminate();
 
+    // Two members: games for three are greyed out ("Needs 3"), 1v1 still works. One member can't play anything.
     const pair = await alliance(2);
-    const r = await call(pair.ps[0]!, 'POST', `/v1/alliances/${pair.a.id}/night`);
+    const two = (await call(pair.ps[0]!, 'POST', `/v1/alliances/${pair.a.id}/night`)).json().night;
+    expect(two.games.find((g: any) => g.id === 'drift')).toMatchObject({ votable: false, needs: 3 });
+    expect(two.games.find((g: any) => g.id === 'four').votable).toBe(true);
+    const solo = await alliance(1);
+    const r = await call(solo.ps[0]!, 'POST', `/v1/alliances/${solo.a.id}/night`);
     expect(r.statusCode).toBe(409);
-    expect(r.json()).toMatchObject({ error: 'need_players', needs: 3 });
+    expect(r.json()).toMatchObject({ error: 'need_players', needs: 2 });
   });
 });

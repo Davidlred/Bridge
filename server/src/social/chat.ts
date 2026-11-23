@@ -12,6 +12,7 @@ import { blockedWith, firstName } from './progress.js';
 import { gameFrame, socketClosed, type SocketCtx } from './game.js';
 import { whoseDayFrame, whoseDaySocketClosed } from './whoseday.js';
 import { voteFrame } from '../games/night.js';
+import { cardsFor, matchFrame, matchSocketClosed } from '../games/duel.js';
 
 const PAGE = 50;
 /** Obvious slurs never post; everything else posts at once and is checked by the moderation model right after. */
@@ -26,6 +27,7 @@ const isMember = async (allianceId: string, userId: string) =>
 const shape = (m: Record<string, unknown>, userId: string) => ({
   id: m.id, clientId: m.client_id, userId: m.user_id, name: m.display_name ? firstName(String(m.display_name)) : null, mine: m.user_id === userId,
   kind: m.kind, body: m.body, createdAt: (m.created_at as Date).getTime(),
+  ...(m.game ? { game: m.game } : {}),
 });
 
 async function moderate(log: FastifyInstance['log'], allianceId: string, id: string, body: string) {
@@ -45,12 +47,15 @@ export async function chatRoutes(app: FastifyInstance) {
     if (!(await isMember(req.params.id, req.userId))) throw new HttpError(404, 'not_found');
     const blocked = await blockedWith(sql, req.userId);
     const before = req.query.before ? new Date(Number(req.query.before)) : new Date(Date.now() + 1000);
-    const rows = await sql`select m.id, m.client_id, m.user_id, m.kind, m.body, m.created_at, u.display_name from alliance_messages m left join users u on u.id = m.user_id
+    const rows = await sql`select m.id, m.client_id, m.user_id, m.kind, m.body, m.created_at, m.match_id, gm.game, u.display_name from alliance_messages m left join users u on u.id = m.user_id
+                           left join game_matches gm on gm.id = m.match_id
                            where m.alliance_id = ${req.params.id} and m.moderation = 'allow' and m.created_at < ${before}
                              and (m.user_id is null or not (m.user_id = any(${blocked}::uuid[])))
                              and not exists (select 1 from reports r where r.reporter_id = ${req.userId} and r.target_kind = 'message' and r.target_id = m.id)
                            order by m.created_at desc limit ${PAGE}`;
-    return { messages: rows.reverse().map(m => shape(m, req.userId)), notEncrypted: true };
+    // Challenge cards carry their match's current state.
+    const cards = await cardsFor(rows.filter(m => m.kind === 'game_challenge' && m.match_id).map(m => m.match_id as string));
+    return { messages: rows.reverse().map(m => ({ ...shape(m, req.userId), ...(m.kind === 'game_challenge' && cards.get(m.match_id) ? { match: cards.get(m.match_id) } : {}) })), notEncrypted: true };
   });
 
   app.post<{ Params: { id: string } }>('/v1/alliances/:id/messages', { onRequest: auth, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
@@ -120,8 +125,9 @@ export async function chatRoutes(app: FastifyInstance) {
       else if (msg.type?.startsWith('game:') && userId) await gameFrame(userId, msg, game);
       else if (msg.type?.startsWith('wd:') && userId) await whoseDayFrame(userId, msg, game);
       else if (msg.type?.startsWith('vote:') && userId) await voteFrame(userId, msg, game);
+      else if (msg.type?.startsWith('match:') && userId) await matchFrame(userId, msg, game);
       else if (msg.type === 'ping') send({ type: 'pong' });
     });
-    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) { socketClosed(userId, game); whoseDaySocketClosed(userId, game); } });
+    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) { socketClosed(userId, game); whoseDaySocketClosed(userId, game); matchSocketClosed(userId, game); } });
   });
 }

@@ -4,7 +4,7 @@ import { auth } from '../auth/tokens.js';
 import { localToday, streakOf } from './progress.js';
 
 /** Hall of Fame. Badges are worked out from the user's own records and kept once earned. */
-export const BADGES = ['first', 's7', 's21', 'arch', 's30', 'week', 'ref', 'ally', 'goal'] as const;
+export const BADGES = ['first', 's7', 's21', 'arch', 's30', 'week', 'ref', 'ally', 'goal', 'champ'] as const;
 type Badge = (typeof BADGES)[number];
 const STREAK_GOALS: Partial<Record<Badge, number>> = { s7: 7, s21: 21, s30: 30 };
 
@@ -42,10 +42,11 @@ async function evaluate(userId: string) {
            exists(select 1 from tasks where user_id = ${userId} and origin = 'ai' and updated_at > to_timestamp(('x' || substr(replace(id::text, '-', ''), 1, 12))::bit(48)::bigint / 1000.0) + interval '1 minute') as arch,
            (select count(*)::int from journal_entries where user_id = ${userId} and conflict_of is null and (body_length > 0 or mood is not null)) as journal,
            exists(select 1 from alliances where owner_id = ${userId}) as ally,
-           exists(select 1 from goals where user_id = ${userId} and status = 'completed') as goal`;
+           exists(select 1 from goals where user_id = ${userId} and status = 'completed') as goal,
+           exists(select 1 from game_brackets where champion_id = ${userId}) as champ`;
   const earned: Record<Badge, boolean> = {
     first: f!.first, s7: bestStreak >= 7, s21: bestStreak >= 21, arch: f!.arch, s30: bestStreak >= 30, week: perfectRun >= 7,
-    ref: f!.journal >= 30, ally: f!.ally, goal: f!.goal,
+    ref: f!.journal >= 30, ally: f!.ally, goal: f!.goal, champ: f!.champ,
   };
   return { earned, current, journal: f!.journal as number };
 }

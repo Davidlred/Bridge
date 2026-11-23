@@ -9,6 +9,7 @@ import { localToday } from '../social/progress.js';
 import type { SocketCtx } from '../social/game.js';
 import { LINEUP, available, liveGameOpen, moduleFor } from './registry.js';
 import type { GameId, LiveModule } from './module.js';
+import { createBracket } from './bracket.js';
 
 /**
  * Game Night voting: "Pick tonight's game". Any member opens a 30-second vote; each member has one vote and can change
@@ -30,6 +31,8 @@ interface Night {
   players: number;
   lastGame: GameId | null;
   chosen?: GameId;
+  /** A 1v1 game won: the bracket Arc made for it. */
+  bracketId?: string;
   /** Set while the winner's lobby is opening, so two last votes can't decide twice. */
   deciding?: boolean;
 }
@@ -38,11 +41,12 @@ const nights = new Map<string, Night>();
 const nightByAlliance = new Map<string, string>();
 
 const KIND_TO_ID: Record<string, GameId> = { drifting: 'drift', whose_day: 'whose' };
+const idOfKind = (kind: string): GameId | null => KIND_TO_ID[kind] ?? (LINEUP.some(g => g.id === kind) ? (kind as GameId) : null);
 
-/** Built, switched on, and enough people in the alliance. Duel games join once brackets exist (Arcade step 3). */
+/** Built, switched on, and enough people in the alliance (a 1v1 game needs two). */
 export const votable = (id: GameId, players: number) => {
   const m = LINEUP.find(g => g.id === id)!;
-  return available(id) && moduleFor(id)?.kind === 'live' && players >= m.minPlayers;
+  return available(id) && !!moduleFor(id) && players >= m.minPlayers;
 };
 
 function counts(n: Night) {
@@ -76,7 +80,8 @@ export function nightView(n: Night) {
     total: n.total, voted: n.votes.size, counts: c,
     leader: top.length === 1 ? { game: top[0], votes: c[top[0]!] } : null,
     tied: top.length > 1 ? { games: top, votes: c[top[0]!] } : null,
-    chosen: n.chosen ?? null,
+    chosen: n.chosen ?? null, bracketId: n.bracketId ?? null,
+    mode: n.chosen ? LINEUP.find(g => g.id === n.chosen)!.mode : null,
     games: LINEUP.map(m => ({
       ...m, built: !!moduleFor(m.id), available: available(m.id),
       votable: votable(m.id, n.players), needs: n.players < m.minPlayers ? m.minPlayers : null,
@@ -92,7 +97,10 @@ const memberCount = async (allianceId: string) =>
 async function lastGameOf(allianceId: string, userId: string): Promise<GameId | null> {
   const today = await localToday(sql, userId);
   const [row] = await sql`select kind from game_sessions where alliance_id = ${allianceId} and local_date < ${today} order by local_date desc, started_at desc limit 1`;
-  return row ? KIND_TO_ID[row.kind as string] ?? null : null;
+  const [b] = await sql`select game, local_date::text as d from game_brackets where alliance_id = ${allianceId} and local_date < ${today} order by created_at desc limit 1`;
+  const [s] = await sql`select local_date::text as d from game_sessions where alliance_id = ${allianceId} and local_date < ${today} order by local_date desc, started_at desc limit 1`;
+  if (b && (!s || b.d >= s.d)) return idOfKind(b.game);
+  return row ? idOfKind(row.kind as string) : null;
 }
 
 export const openNight = (allianceId: string) => {
@@ -106,7 +114,7 @@ export async function startNight(allianceId: string, userId: string): Promise<Ni
   if (open) return open;
   const players = await memberCount(allianceId);
   if (!LINEUP.some(m => votable(m.id, players))) {
-    const needs = Math.min(...LINEUP.filter(m => available(m.id) && moduleFor(m.id)?.kind === 'live').map(m => m.minPlayers));
+    const needs = Math.min(...LINEUP.filter(m => available(m.id) && moduleFor(m.id)).map(m => m.minPlayers));
     throw new HttpError(409, 'need_players', { needs: Number.isFinite(needs) ? needs : 3 });
   }
   const n: Night = { id: uuidv7(), allianceId, phase: 'voting', endsAt: Date.now() + nightTiming.voteMs, votes: new Map(), total: players, players, lastGame: await lastGameOf(allianceId, userId) };
@@ -125,7 +133,9 @@ async function decide(n: Night) {
     const running = liveGameOpen(n.allianceId);
     const pool = LINEUP.filter(m => votable(m.id, n.players)).map(m => m.id);
     n.chosen = running ?? pick(counts(n), pool, n.lastGame) ?? undefined;
-    if (n.chosen && !running) await (moduleFor(n.chosen) as LiveModule).openLobby(n.allianceId);
+    const m = n.chosen && !running ? moduleFor(n.chosen) : undefined;
+    if (m?.kind === 'live') await (m as LiveModule).openLobby(n.allianceId);
+    else if (m) n.bracketId = await createBracket(n.allianceId, n.chosen!, counts(n)[n.chosen!] ?? 0, n.votes.size);
   } finally {
     n.phase = 'decided'; n.deciding = false; n.endsAt = Date.now();
     publish(n);
