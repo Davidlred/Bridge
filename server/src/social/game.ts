@@ -11,6 +11,7 @@ import { openLobby as openWhoseDayLobby, openWhoseDay, whoseDayView } from './wh
 import type { GameMeta, LiveModule } from '../games/module.js';
 import { openNight } from '../games/night.js';
 import { bracketToday } from '../games/bracket.js';
+import { openLiveGame } from '../games/live.js';
 import { LINEUP } from '../games/registry.js';
 
 /**
@@ -337,6 +338,8 @@ export async function gameRoutes(app: FastifyInstance) {
       night: (() => { const n = openNight(req.params.id); return n ? { id: n.id, endsAt: n.endsAt } : null; })(),
       // Tonight's 1v1 bracket (open, or finished today): the card opens the pairings.
       bracket: await bracketToday(req.params.id, req.userId),
+      // An Everyone arcade game (Hoops, Mini Golf, Push Out) waiting in its lobby or being played.
+      live: (() => { const g = openLiveGame(req.params.id); return g ? { id: g.id, game: g.game, phase: g.phase } : null; })(),
     };
   });
 

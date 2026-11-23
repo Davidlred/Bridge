@@ -9,7 +9,7 @@ import { blockedWith, firstName, localToday } from '../social/progress.js';
 import { unlockStatus } from '../social/game.js';
 import { LINEUP } from './registry.js';
 import { seeded, type GameId } from './module.js';
-import { createMatch, endMatch, recordSession, setBracketHook } from './duel.js';
+import { createMatch, endMatch, recordSession } from './duel.js';
 
 /**
  * 1v1 Game Night: Arc pairs the members into a knockout bracket. Rounds are made one at a time. An odd round gives one
@@ -117,7 +117,6 @@ async function advance(bracketId: string) {
   bus.publish(`alliance:${b.alliance_id}`, { type: 'bracket:champion', bracketId, championId: champ });
 }
 
-setBracketHook(async r => advance(r.bracket_id));
 
 /** The deadline rule for one match: more moves wins, otherwise random (from the match's seed, so it can be replayed). */
 async function settleAtDeadline(matchId: string) {

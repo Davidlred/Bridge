@@ -13,6 +13,7 @@ import { gameFrame, socketClosed, type SocketCtx } from './game.js';
 import { whoseDayFrame, whoseDaySocketClosed } from './whoseday.js';
 import { voteFrame } from '../games/night.js';
 import { cardsFor, matchFrame, matchSocketClosed } from '../games/duel.js';
+import { liveFrame, liveSocketClosed } from '../games/live.js';
 
 const PAGE = 50;
 /** Obvious slurs never post; everything else posts at once and is checked by the moderation model right after. */
@@ -126,8 +127,9 @@ export async function chatRoutes(app: FastifyInstance) {
       else if (msg.type?.startsWith('wd:') && userId) await whoseDayFrame(userId, msg, game);
       else if (msg.type?.startsWith('vote:') && userId) await voteFrame(userId, msg, game);
       else if (msg.type?.startsWith('match:') && userId) await matchFrame(userId, msg, game);
+      else if (msg.type?.startsWith('arc:') && userId) await liveFrame(userId, msg, game);
       else if (msg.type === 'ping') send({ type: 'pong' });
     });
-    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) { socketClosed(userId, game); whoseDaySocketClosed(userId, game); matchSocketClosed(userId, game); } });
+    socket.on('close', () => { clearTimeout(timer); offs.forEach(f => f()); watched.forEach(f => f()); if (userId) { socketClosed(userId, game); whoseDaySocketClosed(userId, game); matchSocketClosed(userId, game); liveSocketClosed(userId, game); } });
   });
 }

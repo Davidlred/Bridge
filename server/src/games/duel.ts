@@ -161,8 +161,6 @@ export async function recordSession(id: string, allianceId: string, game: string
   for (const p of players) await sql`insert into game_players (game_id, user_id, role, score) values (${id}, ${p}, 'player', ${scores[p] ?? 0}) on conflict do nothing`;
 }
 
-let onBracketMatchDone: (r: Row) => Promise<void> = async () => {};
-export const setBracketHook = (fn: typeof onBracketMatchDone) => { onBracketMatchDone = fn; };
 
 /** After a match ends: the result line, the Fun ranking (chat challenges; a bracket counts once, at its champion), the bracket. */
 async function settled(r: Row) {
@@ -177,7 +175,8 @@ async function settled(r: Row) {
     : `${label}: ${nm.get(r.player_a)} and ${nm.get(r.player_b)} drew`;
   if (r.result !== 'left') await postResult(r, body).catch(() => {});
   if (!r.bracket_id) await recordSession(r.id, r.alliance_id, r.game, [r.player_a, r.player_b], w, scoresOf(r)).catch(() => {});
-  else await onBracketMatchDone(r);
+  // Loaded on use: the bracket file imports this one.
+  else await (await import('./bracket.js')).advanceNow(r.bracket_id);
 }
 
 /**

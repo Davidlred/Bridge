@@ -294,4 +294,37 @@ run('Matches, challenges and brackets', () => {
     expect(b.status).toBe('done');
     expect([mover.user.id, m1.b.id]).toContain(b.champion.id);
   });
+  it('runs an Everyone game (Hoops) from the vote: lobby, ready, shots, results and the session', async () => {
+    const { a, ps } = await alliance(2);
+    const night = (await call(ps[0]!, 'POST', `/v1/alliances/${a.id}/night`)).json().night;
+    expect(night.games.find((g: { id: string }) => g.id === 'hoops').votable).toBe(true);
+    const socks = await Promise.all(ps.map(async u => {
+      const ws = await app.injectWS('/v1/rt');
+      const frames: any[] = [];
+      ws.on('message', (b: Buffer) => frames.push(JSON.parse(b.toString())));
+      ws.send(JSON.stringify({ type: 'auth', token: u.accessToken }));
+      for (let i = 0; i < 100 && !frames.some(f => f.type === 'ready'); i++) await new Promise(r => setTimeout(r, 15));
+      return { ws, frames, send: (o: object) => ws.send(JSON.stringify(o)), last: () => [...frames].reverse().find(f => f.type === 'arc:state')?.game };
+    }));
+    for (const s of socks) { s.send({ type: 'vote:join', nightId: night.id }); s.send({ type: 'vote:cast', nightId: night.id, game: 'hoops' }); }
+    const wait = async (ok: () => boolean) => { for (let i = 0; i < 300 && !ok(); i++) await new Promise(r => setTimeout(r, 15)); expect(ok()).toBe(true); };
+    await wait(() => socks.every(s => s.frames.some(f => f.type === 'vote:state' && f.night.phase === 'decided')));
+    const card = (await call(ps[0]!, 'GET', `/v1/alliances/${a.id}/game`)).json();
+    expect(card.live).toMatchObject({ game: 'hoops', phase: 'lobby' });
+    for (const s of socks) s.send({ type: 'arc:join', gameId: card.live.id });
+    await wait(() => socks.every(s => s.last()?.players.length === 2));
+    for (const s of socks) s.send({ type: 'arc:ready', gameId: card.live.id });
+    await wait(() => socks.every(s => s.last()?.phase === 'playing'));
+    const world = socks[0]!.last().world;
+    await new Promise(r => setTimeout(r, Math.max(0, world.startsAt - Date.now() + 50)));
+    socks[0]!.send({ type: 'arc:move', gameId: card.live.id, move: { angle: 0, power: 0.5 } });
+    await wait(() => socks[0]!.frames.some(f => f.type === 'arc:you'));
+    const { finishNow } = await import('../src/games/live.js');
+    await finishNow(a.id);
+    await wait(() => socks.every(s => s.last()?.phase === 'results'));
+    expect(socks[1]!.last().results).toHaveLength(2);
+    const [row] = await sql`select kind from game_sessions where id = ${card.live.id}`;
+    expect(row!.kind).toBe('hoops');
+    socks.forEach(s => s.ws.terminate());
+  });
 });

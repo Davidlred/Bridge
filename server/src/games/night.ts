@@ -194,7 +194,7 @@ export async function nightRoutes(app: FastifyInstance) {
     const [m] = await sql`select 1 from alliance_members m join alliances a on a.id = m.alliance_id where m.alliance_id = ${req.params.id} and m.user_id = ${req.userId} and m.status <> 'left' and a.archived_at is null`;
     if (!m) throw new HttpError(404, 'not_found');
     const running = liveGameOpen(req.params.id);
-    if (running) return reply.code(409).send({ error: 'other_game_open', game: running, kind: running === 'whose' ? 'whose_day' : 'drifting' });
+    if (running) return reply.code(409).send({ error: 'other_game_open', game: running, kind: running === 'whose' ? 'whose_day' : running === 'drift' ? 'drifting' : running });
     return { night: nightView(await startNight(req.params.id, req.userId)) };
   });
 }
