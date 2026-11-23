@@ -110,7 +110,8 @@ export async function* streamText(model: string, input: Record<string, unknown>,
   const res = await create(model, { input: textInput(model, input), stream: true }, signal);
   if (!res.ok) throw new AIUnavailable(`replicate ${res.status}`, res.status >= 500 || res.status === 429);
   const p = (await res.json()) as Prediction;
-  if (!p.urls.stream) throw new AIUnavailable('model does not support streaming', false);
+  // Since about 2026-11-17 Replicate leaves out urls.stream for the Claude models; poll and pass on the text as it grows.
+  if (!p.urls.stream) { yield* pollText(p, signal); return; }
   const s = await fetch(p.urls.stream, { headers: { Accept: 'text/event-stream', 'Cache-Control': 'no-store' }, signal });
   if (!s.body) throw new AIUnavailable('no stream body');
   const reader = s.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -134,6 +135,32 @@ export async function* streamText(model: string, input: Record<string, unknown>,
   } finally {
     reader.releaseLock();
     if (signal?.aborted) fetch(p.urls.cancel, { method: 'POST', headers: headers() }).catch(() => {});
+  }
+}
+
+/** Polls a running prediction and yields the new part of its output each time, until it finishes. */
+export async function* pollText(first: Prediction, signal?: AbortSignal, intervalMs = 350, timeoutMs = 120_000): AsyncGenerator<string> {
+  const joiner = new StreamJoiner();
+  let p = first;
+  const deadline = Date.now() + timeoutMs;
+  let finished = false, seen = 0;
+  try {
+    for (;;) {
+      // The output is a list of chunks that only grows; new chunks go through the joiner like streamed ones.
+      const chunks = Array.isArray(p.output) ? p.output.map(String) : typeof p.output === 'string' ? [p.output] : [];
+      for (const c of chunks.slice(seen)) { const text = joiner.push(c); if (text) yield text; }
+      seen = Math.max(seen, chunks.length);
+      if (p.status === 'succeeded') { finished = true; return; }
+      if (p.status === 'failed' || p.status === 'canceled') { finished = true; throw new AIUnavailable(p.error ?? p.status); }
+      if (Date.now() > deadline) throw new AIUnavailable('timeout');
+      await sleep(intervalMs);
+      if (signal?.aborted) return;
+      const r = await fetch(p.urls.get, { headers: headers(), signal });
+      if (!r.ok) throw new AIUnavailable(`replicate ${r.status}`);
+      p = (await r.json()) as Prediction;
+    }
+  } finally {
+    if (!finished) fetch(p.urls.cancel, { method: 'POST', headers: headers() }).catch(() => {});
   }
 }
 
