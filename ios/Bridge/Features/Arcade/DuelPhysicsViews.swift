@@ -10,66 +10,100 @@ private let boardGreen = Color(light: 0x00843D, dark: 0x00843D)
 
 struct DartsGame: View {
     let match: MatchDTO; let v: DartsView; let busy: Bool; let send: ([String: Any]) -> Void
+
+    private var me: Int { v.players.firstIndex(of: match.you) ?? 0 }
+    private var canThrow: Bool { match.myTurn && !busy }
+    private var shown: [DartDTO] { v.darts.isEmpty ? (v.lastTurn?.darts ?? []) : v.darts }
+    private var middle: String { match.myTurn ? String(localized: "Your dart · \(v.darts.count + 1) of 3") : turnText(match) }
+    private var turnSummary: String {
+        if !v.darts.isEmpty { return v.darts.map(\.label).joined(separator: "  ") }
+        guard let t = v.lastTurn else { return "–" }
+        let darts = t.darts.map(\.label).joined(separator: "  ")
+        return t.bust ? String(localized: "Bust") + " · " + darts : darts
+    }
+    private var boardLabel: String { shown.isEmpty ? String(localized: "Dartboard") : shown.map(\.label).joined(separator: ", ") }
+
     var body: some View {
-        let me = v.players.firstIndex(of: match.you) ?? 0
-        let canThrow = match.myTurn && !busy
-        let shown = v.darts.isEmpty ? (v.lastTurn?.darts ?? []) : v.darts
         VStack(spacing: 14) {
-            HeaderStrip(me: myName(match), mine: "\(v.remaining[safe: me] ?? 301)", middle: match.myTurn ? String(localized: "Your dart · \(v.darts.count + 1) of 3") : turnText(match),
+            HeaderStrip(me: myName(match), mine: "\(v.remaining[safe: me] ?? 301)", middle: middle,
                         them: match.opponent?.name ?? "", theirs: "\(v.remaining[safe: 1 - me] ?? 301)", myTurn: match.myTurn)
-            GeometryReader { geo in
-                let size = min(geo.size.width, geo.size.height)
-                let r = size / 2 / 1.18
-                Canvas { ctx, sz in
-                    let o = CGPoint(x: sz.width / 2, y: sz.height / 2)
-                    ctx.fill(Path(ellipseIn: CGRect(x: o.x - r * 1.18, y: o.y - r * 1.18, width: r * 2.36, height: r * 2.36)), with: .color(boardDark))
-                    func ring(_ r0: CGFloat, _ r1: CGFloat, _ a: Color, _ b: Color) {
-                        for i in 0..<20 {
-                            var p = Path()
-                            p.move(to: o)
-                            p.addArc(center: o, radius: r1, startAngle: .degrees(-99 + Double(i) * 18), endAngle: .degrees(-81 + Double(i) * 18), clockwise: false)
-                            p.closeSubpath()
-                            ctx.fill(p, with: .color(i % 2 == 0 ? a : b))
-                        }
-                        ctx.fill(Path(ellipseIn: CGRect(x: o.x - r0, y: o.y - r0, width: r0 * 2, height: r0 * 2)), with: .color(boardDark))
-                    }
-                    ring(162 / 170 * r, r, boardRed, boardGreen)
-                    ring(107 / 170 * r, 162 / 170 * r, boardDark, boardLight)
-                    ring(99 / 170 * r, 107 / 170 * r, boardRed, boardGreen)
-                    ring(15.9 / 170 * r, 99 / 170 * r, boardDark, boardLight)
-                    let ob = 15.9 / 170 * r, b = 6.35 / 170 * r
-                    ctx.fill(Path(ellipseIn: CGRect(x: o.x - ob, y: o.y - ob, width: ob * 2, height: ob * 2)), with: .color(boardGreen))
-                    ctx.fill(Path(ellipseIn: CGRect(x: o.x - b, y: o.y - b, width: b * 2, height: b * 2)), with: .color(boardRed))
-                    for (i, n) in sectors.enumerated() {
-                        let a = (-90 + Double(i) * 18) * .pi / 180
-                        ctx.draw(Text("\(n)").font(BFont.label(11)).foregroundStyle(.white), at: CGPoint(x: o.x + cos(a) * r * 1.09, y: o.y + sin(a) * r * 1.09))
-                    }
-                    for d in shown {
-                        let p = CGPoint(x: o.x + d.x * r, y: o.y - d.y * r)
-                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)), with: .color(.white))
-                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)), with: .color(arcadeInk))
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { p in
-                    guard canThrow else { return }
-                    // Board units: the double ring's outside is 1.
-                    send(["t": "throw", "x": Double((p.x - geo.size.width / 2) / r), "y": Double(-(p.y - geo.size.height / 2) / r)])
-                }
+            DartBoard(shown: shown) { x, y in
+                guard canThrow else { return }
+                send(["t": "throw", "x": x, "y": y])
             }
             .aspectRatio(1, contentMode: .fit).padding(.horizontal, 24)
-            .accessibilityElement().accessibilityLabel(Text(shown.isEmpty ? String(localized: "Dartboard") : shown.map(\.label).joined(separator: ", ")))
-            HStack(spacing: 10) {
-                let turn = !v.darts.isEmpty ? v.darts.map(\.label).joined(separator: "  ") : v.lastTurn.map { t in (t.bust ? String(localized: "Bust") + " · " : "") + t.darts.map(\.label).joined(separator: "  ") } ?? "–"
-                InfoTile(label: v.darts.isEmpty ? String(localized: "Last turn") : String(localized: "This turn"), value: turn)
-                if v.perks.contains(match.you) {
-                    let perk = !v.perkUsed.contains(match.you)
-                    InfoTile(label: String(localized: "Streak bonus"), value: perk ? String(localized: "Re-throw your last dart") : String(localized: "Used"), accent: perk,
-                             action: perk && canThrow && !v.darts.isEmpty ? { send(["t": "rethrow"]) } : nil)
-                }
-            }
-            .padding(.horizontal, 16)
+            .accessibilityElement().accessibilityLabel(Text(boardLabel))
+            tiles.padding(.horizontal, 16)
             Text("Tap where you aim. Each dart wobbles a little. Finish on a double.").font(BFont.body(12)).foregroundStyle(Theme.mut).multilineTextAlignment(.center).padding(.horizontal, 16)
+        }
+    }
+
+    private var tiles: some View {
+        HStack(spacing: 10) {
+            InfoTile(label: v.darts.isEmpty ? String(localized: "Last turn") : String(localized: "This turn"), value: turnSummary)
+            if v.perks.contains(match.you) {
+                let perk = !v.perkUsed.contains(match.you)
+                let action: (() -> Void)? = perk && canThrow && !v.darts.isEmpty ? { send(["t": "rethrow"]) } : nil
+                InfoTile(label: String(localized: "Streak bonus"), value: perk ? String(localized: "Re-throw your last dart") : String(localized: "Used"), accent: perk, action: action)
+            }
+        }
+    }
+}
+
+/// The board, drawn to scale. A tap sends where it landed in board units (the outside of the double ring is 1).
+private struct DartBoard: View {
+    let shown: [DartDTO]
+    let tap: (Double, Double) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let r: CGFloat = min(geo.size.width, geo.size.height) / 2 / 1.18
+            Canvas { ctx, size in DartBoard.draw(&ctx, size: size, r: r, shown: shown) }
+                .contentShape(Rectangle())
+                .onTapGesture { p in
+                    let x = Double((p.x - geo.size.width / 2) / r)
+                    let y = Double(-(p.y - geo.size.height / 2) / r)
+                    tap(x, y)
+                }
+        }
+    }
+
+    private static func disc(_ o: CGPoint, _ radius: CGFloat) -> Path {
+        Path(ellipseIn: CGRect(x: o.x - radius, y: o.y - radius, width: radius * 2, height: radius * 2))
+    }
+
+    private static func ring(_ ctx: inout GraphicsContext, _ o: CGPoint, _ r0: CGFloat, _ r1: CGFloat, _ a: Color, _ b: Color) {
+        for i in 0..<20 {
+            let start = Angle.degrees(-99 + Double(i) * 18)
+            let end = Angle.degrees(-81 + Double(i) * 18)
+            var p = Path()
+            p.move(to: o)
+            p.addArc(center: o, radius: r1, startAngle: start, endAngle: end, clockwise: false)
+            p.closeSubpath()
+            ctx.fill(p, with: .color(i % 2 == 0 ? a : b))
+        }
+        ctx.fill(disc(o, r0), with: .color(boardDark))
+    }
+
+    static func draw(_ ctx: inout GraphicsContext, size: CGSize, r: CGFloat, shown: [DartDTO]) {
+        let o = CGPoint(x: size.width / 2, y: size.height / 2)
+        ctx.fill(disc(o, r * 1.18), with: .color(boardDark))
+        let scale: CGFloat = r / 170
+        ring(&ctx, o, 162 * scale, r, boardRed, boardGreen)
+        ring(&ctx, o, 107 * scale, 162 * scale, boardDark, boardLight)
+        ring(&ctx, o, 99 * scale, 107 * scale, boardRed, boardGreen)
+        ring(&ctx, o, 15.9 * scale, 99 * scale, boardDark, boardLight)
+        ctx.fill(disc(o, 15.9 * scale), with: .color(boardGreen))
+        ctx.fill(disc(o, 6.35 * scale), with: .color(boardRed))
+        for (i, n) in sectors.enumerated() {
+            let a: Double = (-90 + Double(i) * 18) * .pi / 180
+            let at = CGPoint(x: o.x + CGFloat(cos(a)) * r * 1.09, y: o.y + CGFloat(sin(a)) * r * 1.09)
+            ctx.draw(Text("\(n)").font(BFont.label(11)).foregroundStyle(.white), at: at)
+        }
+        for d in shown {
+            let p = CGPoint(x: o.x + CGFloat(d.x) * r, y: o.y - CGFloat(d.y) * r)
+            ctx.fill(disc(p, 7), with: .color(.white))
+            ctx.fill(disc(p, 4), with: .color(arcadeInk))
         }
     }
 }
@@ -93,7 +127,7 @@ struct CupGame: View {
                 GeometryReader { geo in
                     let w = geo.size.width, h = geo.size.height
                     // Table units to points: x -0.5…0.5 across, y 0 (thrower, bottom) to 2 (top).
-                    let p = { (x: Double, y: Double) in CGPoint(x: (x + 0.5) * w, y: h - y / 2 * h) }
+                    let p: (Double, Double) -> CGPoint = { x, y in CGPoint(x: CGFloat(x + 0.5) * w, y: h - CGFloat(y / 2) * h) }
                     Canvas { ctx, _ in
                         ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)), with: .linearGradient(Gradient(colors: [Surfaces.tableTop, Surfaces.tableBottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
                         ctx.stroke(Path { $0.move(to: CGPoint(x: w / 2, y: 0)); $0.addLine(to: CGPoint(x: w / 2, y: h)) }, with: .color(.white.opacity(0.25)), lineWidth: 2)
@@ -105,12 +139,13 @@ struct CupGame: View {
                         }
                         if let a = aim {
                             let d = 0.9 + a.power * 1.2
-                            let land = p(sin(a.angle) * d, cos(a.angle) * d), from = p(0, 0.05)
+                            let land: CGPoint = p(sin(a.angle) * d, cos(a.angle) * d)
+                            let from: CGPoint = p(0, 0.05)
                             for k in 1...12 { let t = CGFloat(k) / 12; let q = CGPoint(x: from.x + (land.x - from.x) * t, y: from.y + (land.y - from.y) * t); ctx.fill(Path(ellipseIn: CGRect(x: q.x - 3.5, y: q.y - 3.5, width: 7, height: 7)), with: .color(.white.opacity(0.8))) }
                             ctx.stroke(Path(ellipseIn: CGRect(x: land.x - cr * 1.3, y: land.y - cr * 1.3, width: cr * 2.6, height: cr * 2.6)), with: .color(Color(light: 0x8FD17A, dark: 0x8FD17A)), lineWidth: 3)
                         }
                         let pt = mineLast?.path[safe: frame]
-                        let ball = pt.map { p($0[0], $0[1]) } ?? p(0, 0.05)
+                        let ball: CGPoint = pt.map { p($0[0], $0[1]) } ?? p(0, 0.05)
                         ctx.fill(Path(ellipseIn: CGRect(x: ball.x - w * 0.025, y: ball.y - w * 0.025, width: w * 0.05, height: w * 0.05)), with: .color(.white))
                     }
                     .gesture(DragGesture()
@@ -188,7 +223,7 @@ struct PoolGame: View {
     private func table(rec: RecordingDTO?, frame: Int, canShoot: Bool) -> some View {
         GeometryReader { geo in
             let pad = geo.size.height * 0.06, w = geo.size.width - pad * 2, h = geo.size.height - pad * 2
-            let p = { (x: Double, y: Double) in CGPoint(x: pad + x / 2 * w, y: pad + y * h) }
+            let p: (Double, Double) -> CGPoint = { x, y in CGPoint(x: pad + CGFloat(x / 2) * w, y: pad + CGFloat(y) * h) }
             let r = 0.03 / 2 * w
             Canvas { ctx, size in
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Surfaces.rail))
@@ -211,7 +246,8 @@ struct PoolGame: View {
                     } else { ctx.fill(Path(ellipseIn: rect), with: .color(ballColor(b.id))) }
                 }
                 if let a = aim, let cue = v.balls.first(where: { $0.id == 0 && !$0.in }) {
-                    let from = p(cue.x, cue.y), len = w * (0.15 + a.power * 0.5)
+                    let from: CGPoint = p(cue.x, cue.y)
+                    let len: CGFloat = w * CGFloat(0.15 + a.power * 0.5)
                     ctx.stroke(Path { $0.move(to: from); $0.addLine(to: CGPoint(x: from.x + CGFloat(cos(a.angle)) * len, y: from.y + CGFloat(sin(a.angle)) * len)) }, with: .color(.white.opacity(0.7)), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
                 }
             }

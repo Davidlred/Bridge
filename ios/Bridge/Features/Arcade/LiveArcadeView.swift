@@ -246,18 +246,20 @@ private struct HoopsPlay: View {
                 GeometryReader { geo in
                     let wd = geo.size.width, h = geo.size.height
                     // Court units: x -0.6…0.6 across, y 0 (bottom) to 1.4 (top).
-                    let p = { (x: Double, y: Double) in CGPoint(x: (x + 0.6) / 1.2 * wd, y: h - y / 1.4 * h) }
+                    let p: (Double, Double) -> CGPoint = { x, y in CGPoint(x: CGFloat((x + 0.6) / 1.2) * wd, y: h - CGFloat(y / 1.4) * h) }
                     Canvas { ctx, size in
                         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Surfaces.court))
                         let hoop = p(mine?.hoopX ?? 0, 1)
                         ctx.stroke(Path(CGRect(x: hoop.x - wd * 0.12, y: hoop.y - wd * 0.16, width: wd * 0.24, height: wd * 0.14)), with: .color(.white), lineWidth: 4)
                         ctx.stroke(Path(ellipseIn: CGRect(x: hoop.x - wd * 0.06, y: hoop.y - wd * 0.06, width: wd * 0.12, height: wd * 0.12)), with: .color(Color(light: 0xE2572B, dark: 0xE2572B)), lineWidth: 6)
                         if let a = aim {
-                            let d = 0.5 + a.power, land = p(sin(a.angle) * d, cos(a.angle) * d), from = p(0, 0.05)
+                            let d: Double = 0.5 + a.power
+                            let land: CGPoint = p(sin(a.angle) * d, cos(a.angle) * d)
+                            let from: CGPoint = p(0, 0.05)
                             for k in 1...10 { let t = CGFloat(k) / 10; let q = CGPoint(x: from.x + (land.x - from.x) * t, y: from.y + (land.y - from.y) * t); ctx.fill(Path(ellipseIn: CGRect(x: q.x - 4, y: q.y - 4, width: 8, height: 8)), with: .color(.white.opacity(0.85))) }
                         }
                         let pt = shot?.path[safe: frame]
-                        var ball = pt.map { p($0[0], $0[1]) } ?? p(0, 0.05)
+                        var ball: CGPoint = pt.map { p($0[0], $0[1]) } ?? p(0, 0.05)
                         ball.y -= CGFloat(pt?[safe: 2] ?? 0) * wd * 0.15
                         ctx.fill(Path(ellipseIn: CGRect(x: ball.x - wd * 0.045, y: ball.y - wd * 0.045, width: wd * 0.09, height: wd * 0.09)), with: .color(Color(light: 0xE2572B, dark: 0xE2572B)))
                     }
@@ -320,16 +322,16 @@ private struct GolfPlay: View {
     private func course(_ hole: GolfHole, ball: (Double, Double)?, hideBall: Bool, canPutt: Bool) -> some View {
         GeometryReader { geo in
             let wd = geo.size.width, h = geo.size.height
-            let p = { (x: Double, y: Double) in CGPoint(x: x * wd, y: h - y / 2 * h) }
+            let p: (Double, Double) -> CGPoint = { x, y in CGPoint(x: CGFloat(x) * wd, y: h - CGFloat(y / 2) * h) }
             Canvas { ctx, size in
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Surfaces.green))
                 for b in hole.blocks { let tl = p(b.x0, b.y1), br = p(b.x1, b.y0); ctx.fill(Path(CGRect(x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y)), with: .color(Surfaces.wall)) }
-                let cup = p(hole.cup[0], hole.cup[1]), cr = w.cupR * wd
+                let cup = p(hole.cup[0], hole.cup[1]), cr = CGFloat(w.cupR) * wd
                 ctx.fill(Path(ellipseIn: CGRect(x: cup.x - cr, y: cup.y - cr, width: cr * 2, height: cr * 2)), with: .color(Color(light: 0x101810, dark: 0x101810)))
                 if let ball, !hideBall {
-                    let o = p(ball.0, ball.1), br = w.ballR * wd
+                    let o = p(ball.0, ball.1), br = CGFloat(w.ballR) * wd
                     if let a = aim {
-                        let len = h * (0.08 + a.power * 0.4)
+                        let len: CGFloat = h * CGFloat(0.08 + a.power * 0.4)
                         ctx.stroke(Path { $0.move(to: o); $0.addLine(to: CGPoint(x: o.x + CGFloat(sin(a.angle)) * len, y: o.y - CGFloat(cos(a.angle)) * len)) }, with: .color(.white.opacity(0.8)), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
                     }
                     ctx.fill(Path(ellipseIn: CGRect(x: o.x - br, y: o.y - br, width: br * 2, height: br * 2)), with: .color(.white))
@@ -369,7 +371,7 @@ private struct PushPlay: View {
                 GeometryReader { geo in
                     let r = min(geo.size.width, geo.size.height) / 2 * 0.92
                     let o = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-                    let p = { (x: Double, y: Double) in CGPoint(x: o.x + x * r, y: o.y - y * r) }
+                    let p: (Double, Double) -> CGPoint = { x, y in CGPoint(x: o.x + CGFloat(x) * r, y: o.y - CGFloat(y) * r) }
                     Canvas { ctx, _ in
                         ctx.fill(Path(ellipseIn: CGRect(x: o.x - r, y: o.y - r, width: r * 2, height: r * 2)), with: .color(Surfaces.ice))
                         ctx.stroke(Path(ellipseIn: CGRect(x: o.x - r, y: o.y - r, width: r * 2, height: r * 2)), with: .color(Theme.ink.opacity(0.25)), lineWidth: 3)
@@ -381,14 +383,15 @@ private struct PushPlay: View {
                                 if let gone = rec.goneAt[String(i)] { out = frame >= gone } else { out = pk.out }
                             }
                             if out { continue }
-                            let c = p(x, y), pr = w.puckR * r
+                            let c = p(x, y), pr = CGFloat(w.puckR) * r
                             let rect = CGRect(x: c.x - pr, y: c.y - pr, width: pr * 2, height: pr * 2)
                             ctx.fill(Path(ellipseIn: rect), with: .color(arcadeFills[(order.firstIndex(of: pk.userId) ?? 0) % arcadeFills.count]))
                             ctx.stroke(Path(ellipseIn: rect), with: .color(arcadeInk), lineWidth: pk.userId == me ? 6 : 2)
                             if pk.aimed && w.phase == "aim" { ctx.fill(Path(ellipseIn: CGRect(x: c.x - pr * 0.25, y: c.y - pr * 0.25, width: pr * 0.5, height: pr * 0.5)), with: .color(arcadeInk)) }
                         }
                         if let a = aim, let m = mine {
-                            let from = p(m.x, m.y), len = r * (0.15 + a.power * 0.6)
+                            let from: CGPoint = p(m.x, m.y)
+                            let len: CGFloat = r * CGFloat(0.15 + a.power * 0.6)
                             ctx.stroke(Path { $0.move(to: from); $0.addLine(to: CGPoint(x: from.x + CGFloat(sin(a.angle)) * len, y: from.y - CGFloat(cos(a.angle)) * len)) }, with: .color(Theme.ink), style: StrokeStyle(lineWidth: 4, dash: [10, 8]))
                         }
                     }
