@@ -17,6 +17,10 @@ enum Route: Hashable, Codable {
     case whoseDay(allianceId: UUID)
     /// "Pick tonight's game": the alliance votes, then the winner opens in place of this screen.
     case gamePicker(allianceId: UUID)
+    /// Game Night Arcade: a 1v1 match, tonight's bracket, and the Everyone games (Hoops, Mini Golf, Push Out).
+    case match(String)
+    case pairings(String)
+    case liveArcade(allianceId: UUID)
     case rankings(goalCategory: String)
     case allianceRankings(UUID)
     case invitePreview(code: String)
@@ -106,6 +110,9 @@ private extension View {
             case .gameNight(let id): GameNightScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .whoseDay(let id): WhoseDayScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .gamePicker(let id): GamePickerScreen(allianceId: id).toolbar(.hidden, for: .tabBar)
+            case .match(let id): MatchScreen(matchId: id).toolbar(.hidden, for: .tabBar)
+            case .pairings(let id): PairingsScreen(bracketId: id).toolbar(.hidden, for: .tabBar)
+            case .liveArcade(let id): LiveArcadeScreen(allianceId: id.uuidString.lowercased()).toolbar(.hidden, for: .tabBar)
             case .allianceRankings(let id): RankingsScreen(allianceId: id.uuidString.lowercased())
             case .hallOfFame: HallOfFameScreen()
             case .messages: DmInboxScreen()

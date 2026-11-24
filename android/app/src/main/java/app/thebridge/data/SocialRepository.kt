@@ -231,7 +231,8 @@ class SocialRepository @Inject constructor(
 }
 
 internal fun AllianceMessageDto.toEntity(allianceId: String) =
-    AllianceMessageEntity(clientId ?: id, allianceId, serverId = id, userId = userId, name = name, body = body, mine = mine, createdAt = createdAt, status = "sent")
+    AllianceMessageEntity(clientId ?: id, allianceId, serverId = id, userId = userId, name = name, body = body, mine = mine, createdAt = createdAt, status = "sent",
+        kind = kind, game = game ?: match?.get("game")?.jsonPrimitive?.content, match = match?.toString())
 
 /**
  * One WebSocket while any social screen is open (reference counted). The first frame authenticates;
@@ -301,7 +302,13 @@ class RealtimeClient @Inject constructor(private val api: ApiClient, private val
             "hidden" -> e["id"]?.jsonPrimitive?.content?.let { db.social().removeByServerId(it) }   // removed by moderation
             "ready" -> _connected.value = true
             "dm" -> _dmPings.emit(Unit)
-            else -> e["type"]?.jsonPrimitive?.content?.let { t -> if (t.startsWith("game:") || t.startsWith("wd:") || t.startsWith("vote:")) _events.emit(e) }
+            // A challenge card changed (a move, the end): redraw it in the chat.
+            "match:card" -> {
+                val card = e["match"] as? JsonObject ?: return
+                card["matchId"]?.jsonPrimitive?.content?.let { db.social().updateMatchCard(it, card.toString()) }
+                _events.emit(e)
+            }
+            else -> e["type"]?.jsonPrimitive?.content?.let { t -> if (listOf("game:", "wd:", "vote:", "match:", "arc:", "bracket:").any(t::startsWith)) _events.emit(e) }
         }
     }
 }

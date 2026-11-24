@@ -111,7 +111,11 @@ struct InvitePreviewDTO: Codable, Equatable, Sendable {
     let id: String; let name: String; let planMode: String; let lead: String; let members: Int; let cap: Int; let spotsLeft: Int
     var goal: String?; var label: String?; var deadline: String?; var tasks: [PreviewTaskDTO] = []; var pace: PaceDTO?
 }
-struct AllianceMessageDTO: Codable, Equatable, Sendable { let id: String; var clientId: String?; var userId: String?; var name: String?; var mine = false; let body: String; var createdAt: Double = 0 }
+struct AllianceMessageDTO: Codable, Equatable, Sendable {
+    let id: String; var clientId: String?; var userId: String?; var name: String?; var mine = false; let body: String; var createdAt: Double = 0
+    /// "text", "game" (a result line with its game) or "game_challenge" (a card drawn from `match`). Older servers send none.
+    var kind: String?; var game: String?; var match: MatchCardDTO?
+}
 private struct AllianceEnvelope: Decodable { let alliance: AllianceDTO }
 
 // MARK: Students view: the lead of a shared plan follows each member who shares their progress.
@@ -171,6 +175,9 @@ struct GameStatusDTO: Codable, Equatable, Sendable {
     var whoseDay: WhoseDayDTO? = nil
     /// "Pick tonight's game" is open in this alliance.
     var night: NightRefDTO? = nil
+    /// Tonight's 1v1 bracket (open, or finished today), and an Everyone arcade game in its lobby or being played.
+    var bracket: BracketRefDTO? = nil
+    var live: LiveRefDTO? = nil
 }
 
 // Game Night vote: "Pick tonight's game".
@@ -185,6 +192,8 @@ struct NightTieDTO: Codable, Equatable, Sendable { let games: [String]; let vote
 struct NightDTO: Codable, Equatable, Sendable {
     let id: String; let allianceId: String; let phase: String; let endsAt: Double; let now: Double; let total: Int; let voted: Int
     let counts: [String: Int]; var leader: NightLeaderDTO?; var tied: NightTieDTO?; var chosen: String?; let games: [NightGameDTO]
+    /// The winner's mode and, for a 1v1 game, the bracket Arc made.
+    var mode: String?; var bracketId: String?
 }
 /// Opening the vote: the vote itself, a game that's already running (its route kind), or too few members.
 enum NightOpen: Sendable { case night(NightDTO), running(String), needPlayers(Int) }
@@ -456,8 +465,8 @@ actor APIClient {
         do { return .night(try JSONDecoder().decode(R.self, from: try await raw("POST", "/v1/alliances/\(allianceId)/night", nil, authed: true)).night) }
         catch APIError.server(_, "other_game_open", _, _) {
             let s = try await gameStatus(allianceId)
-            return .running(s.whoseDay != nil ? "whose_day" : "drifting")
-        } catch APIError.server(_, "need_players", _, _) { return .needPlayers(3) }
+            return .running(s.whoseDay != nil ? "whose_day" : s.live != nil ? "live" : "drifting")
+        } catch APIError.server(_, "need_players", _, _) { return .needPlayers(2) }
     }
     func openWhoseDay(_ allianceId: String) async throws -> WhoseDayDTO {
         struct R: Decodable { let game: WhoseDayDTO }
@@ -505,6 +514,9 @@ actor APIClient {
     }
 
     // MARK: Plumbing
+    /// Signed-in call returning the body, for types decoded elsewhere (the Arcade).
+    func authedData(_ method: String, _ path: String, _ body: [String: Any]? = nil) async throws -> Data { try await raw(method, path, body, authed: true) }
+
     private func send<T: Decodable>(_ method: String, _ path: String, _ body: [String: Any]) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await raw(method, path, body, authed: false))
     }

@@ -176,6 +176,58 @@ final class FoundationSnapshotTests: XCTestCase {
     func testPickTied() {
         verify(GamePickerContent(model: picker(["whose": 2, "drift": 2], voted: 4, tied: NightTieDTO(games: ["drift", "whose"], votes: 2), mine: "drift", filter: .everyone), now: now), named: "pick-tied")
     }
+    // MARK: Game Night Arcade
+    private func json<T: Decodable>(_ s: String) -> T { try! JSONDecoder().decode(T.self, from: Data(s.utf8)) }
+    private func bracket(done: Bool) -> BracketDTO {
+        let deadline = String(Int(now.timeIntervalSince1970 * 1000) + 3_600_000)
+        let semi = #"{"id":"m1","slot":0,"a":{"id":"u1","name":"Ada"},"b":{"id":"u2","name":"Kemi"},"status":"# + (done ? #""done","winnerId":"u1""# : #""waiting""#) + #","mode":"duel_live","scores":[0,0],"mine":true}"#
+        let final = #"{"round":2,"label":"final","matches":[{"id":"m2","slot":0,"a":{"id":"u3","name":"Dami"},"b":{"id":"u1","name":"Ada"},"status":"done","winnerId":"u1","mode":"duel_live","scores":[0,0],"mine":true}]}"#
+        let rounds = #"[{"round":1,"label":"semis","matches":["# + semi + #"],"bye":{"user":{"id":"u3","name":"Dami"},"vs":[{"id":"u1","name":"Ada"},{"id":"u2","name":"Kemi"}]}}"# + (done ? "," + final : "") + "]"
+        return json(#"{"id":"b1","allianceId":"a1","game":"four","status":""# + (done ? "done" : "active") + #"","round":"# + (done ? "2" : "1") + #","roundCount":2,"deadline":"# + deadline
+            + #","votes":3,"voters":7,"champion":"# + (done ? #"{"id":"u1","name":"Ada"}"# : "null") + #","players":[],"stages":["semis","final"],"rounds":"# + rounds + #","myMatchId":"m1","playing":true}"#)
+    }
+    func testArcPairings() { verify(PairingsContent(bracket: bracket(done: false), me: "u1"), named: "arc-pairings") }
+    func testArcChampion() { verify(PairingsContent(bracket: bracket(done: true), me: "u1"), named: "arc-champion") }
+    private func match(_ game: String, view: String, turn: String? = "u1", status: String = "active", winner: String? = nil, scores: String = #"{"u1":0,"u2":0}"#) -> MatchModel {
+        let ms = String(Int(now.timeIntervalSince1970 * 1000))
+        let m = MatchModel()
+        m.set(json(#"{"id":"m1","game":""# + game + #"","allianceId":"a1","source":"chat_challenge","players":[{"id":"u1","name":"Ada"},{"id":"u2","name":"Sam"}],"turn":"# + (turn.map { "\"" + $0 + "\"" } ?? "null")
+            + #","status":""# + status + #"","winnerId":"# + (winner.map { "\"" + $0 + "\"" } ?? "null") + #","result":"played","scores":"# + scores + #","scored":"# + (game == "word" ? "true" : "false")
+            + #","held":false,"mode":"duel_turns","version":1,"you":"u1","known":true,"now":"# + ms + #","lastMoveAt":"# + ms + #","canClaim":false,"view":"# + view + "}"))
+        m.offset = 0                                                      // the snapshot's clock is the server's
+        return m
+    }
+    func testArcFour() {
+        var board = Array(repeating: 0, count: 42)
+        for (i, v) in [(38, 1), (39, 2), (31, 1), (32, 2), (40, 1), (24, 2)] { board[i] = v }
+        let view = #"{"players":["u1","u2"],"board":["# + board.map(String.init).joined(separator: ",") + #"],"next":0,"moves":6,"last":24,"winner":null,"draw":false,"line":[]}"#
+        verify(MatchContent(model: match("four", view: view), now: now), named: "arc-four")
+    }
+    func testArcWordDash() {
+        let ends = String(Int(now.timeIntervalSince1970 * 1000) + 51_000)
+        let view = #"{"game":"word","letters":["s","t","a","r","o","n","e","w","l","i","g","h","t","e","d","s"],"seconds":80,"players":["u2","u1"],"rounds":{"u2":{"started":true,"endsAt":null,"ended":true,"score":42,"count":9,"found":[],"last":null},"u1":{"started":true,"endsAt":"# + ends
+            + #","ended":false,"score":34,"count":3,"found":[{"w":"star","pts":2,"bonus":false},{"w":"stone","pts":4,"bonus":false},{"w":"light","pts":6,"bonus":true}],"last":{"w":"light","ok":true,"reason":"ok","pts":6,"bonus":true}}}}"#
+        verify(MatchContent(model: match("word", view: view, scores: #"{"u1":34,"u2":42}"#), now: now), named: "arc-word-dash")
+    }
+    func testArcFleet() {
+        let view = #"{"players":["u1","u2"],"next":1,"winner":null,"size":10,"placed":{"u1":true,"u2":true},"mine":{"ships":[{"cells":[0,1,2,3,4]},{"cells":[20,30,40,50]},{"cells":[77,78,79]},{"cells":[62,72,82]},{"cells":[95,96]}],"shots":[0,1,55,66]},"theirs":{"shots":[{"cell":11,"hit":true},{"cell":12,"hit":true},{"cell":44,"hit":false}],"ships":[{"cells":[11,12]}],"left":4},"last":{"by":"u1","cell":12,"hit":true,"sunk":[11,12]}}"#
+        verify(MatchContent(model: match("fleet", view: view, turn: "u2"), now: now), named: "arc-fleet")
+    }
+    func testArcResult() {
+        let view = #"{"game":"word","letters":[],"seconds":80,"players":["u2","u1"],"rounds":{"u2":{"ended":true,"score":42,"found":[{"w":"stone","pts":4,"bonus":false}]},"u1":{"ended":true,"score":52,"found":[{"w":"lights","pts":6,"bonus":false}]}}}"#
+        verify(MatchContent(model: match("word", view: view, turn: nil, status: "done", winner: "u1", scores: #"{"u1":52,"u2":42}"#), now: now), named: "arc-result")
+    }
+    func testArcChallengeCards() {
+        let a: MatchCardDTO = json(#"{"matchId":"m1","game":"word","source":"chat_challenge","players":[{"id":"u2","name":"Sam"},{"id":"u1","name":"Ada"}],"turn":"u1","status":"active","scores":{},"scored":true,"toBeat":42,"held":false}"#)
+        let b: MatchCardDTO = json(#"{"matchId":"m2","game":"cup","source":"chat_challenge","players":[{"id":"u1","name":"Ada"},{"id":"u2","name":"Kemi"}],"turn":null,"status":"done","winnerId":"u1","result":"played","scores":{"u1":6,"u2":4},"scored":true,"held":false}"#)
+        verify(VStack(alignment: .leading, spacing: 12) { ChallengeCard(card: a, me: "u1"); ChallengeCard(card: b, me: "u3") }.padding(16), named: "arc-challenge-cards")
+    }
+    func testArcLiveResults() {
+        let m = LiveModel()
+        m.game = json(#"{"id":"g1","game":"hoops","allianceId":"a1","phase":"results","endsAt":0,"now":0,"max":15,"min":2,"players":[{"userId":"u1","name":"Ada","ready":true,"absent":false,"watching":false}],"world":null,"results":[{"userId":"u1","name":"Ada","score":9,"place":1},{"userId":"u2","name":"Kemi","score":7,"place":2},{"userId":"u3","name":"Dami","score":7,"place":2}],"lowerWins":false}"#)
+        verify(LiveArcadeContent(model: m, me: "u1", now: now), named: "arc-live-results")
+    }
+
     func testWhoseDayRound() { verify(WhoseDayContent(model: wd("round", stage: 3, choice: "u2"), now: now), named: "whose-day-round") }
     func testWhoseDayRoundEarly() { verify(WhoseDayContent(model: wd("round", stage: 1), now: now), named: "whose-day-round-1") }
     func testWhoseDayOwner() { verify(WhoseDayContent(model: wd("round", you: WdYouDTO(gameId: "w1", round: 1, owner: true)), now: now), named: "whose-day-round-owner") }

@@ -97,8 +97,13 @@ data class PickUi(
     val secondsLeft: Int get() = night?.let { ((it.endsAt - serverNow + 999) / 1000).toInt().coerceIn(0, 99) } ?: 0
 }
 
-/** The route kind each game opens with (the Game Night screens predate the Arcade ids). */
-private fun kindOf(game: String) = if (game == "whose") "whose_day" else "drifting"
+/** Where each game opens: the first two have their own screens, the other Everyone games share one, 1v1 games open the bracket. */
+private fun kindOf(game: String, bracketId: String? = null) = when {
+    bracketId != null -> "bracket:$bracketId"
+    game == "whose" || game == "whose_day" -> "whose_day"
+    game in setOf("hoops", "golf", "push") -> "live"
+    else -> "drifting"
+}
 
 /** "Pick tonight's game": a 30-second vote run by the server. This screen sends votes and shows the tally. */
 @HiltViewModel
@@ -127,7 +132,7 @@ class GamePickerViewModel @Inject constructor(
             join()
         } catch (e: ApiException) {
             when (e.code) {
-                "other_game_open" -> _state.update { it.copy(goTo = e.body["kind"]?.jsonPrimitive?.contentOrNull ?: "drifting") }
+                "other_game_open" -> _state.update { it.copy(goTo = kindOf(e.body["kind"]?.jsonPrimitive?.contentOrNull ?: "drifting")) }
                 "need_players" -> _state.update { it.copy(loading = false, notice = UiText.Res(R.string.pick_need_players, listOf(runCatching { e.body["needs"]!!.jsonPrimitive.int }.getOrDefault(3)))) }
                 else -> _state.update { it.copy(loading = false, notice = UiText.Res(R.string.error_generic)) }
             }
@@ -143,7 +148,7 @@ class GamePickerViewModel @Inject constructor(
             "vote:state" -> {
                 val n = runCatching { social.json.decodeFromJsonElement(NightDto.serializer(), e["night"]!!) }.getOrNull() ?: return
                 if (n.id != _state.value.night?.id) return
-                _state.update { it.copy(night = n, offset = n.now - System.currentTimeMillis(), goTo = if (n.phase == "decided" && n.chosen != null) kindOf(n.chosen) else it.goTo) }
+                _state.update { it.copy(night = n, offset = n.now - System.currentTimeMillis(), goTo = if (n.phase == "decided" && n.chosen != null) kindOf(n.chosen, n.bracketId) else it.goTo) }
             }
             "vote:you" -> if (e["nightId"]?.jsonPrimitive?.content == _state.value.night?.id) _state.update { it.copy(mine = e["game"]?.jsonPrimitive?.contentOrNull) }
             "vote:error" -> when (e["error"]?.jsonPrimitive?.content) {

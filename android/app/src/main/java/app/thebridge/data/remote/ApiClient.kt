@@ -113,7 +113,9 @@ class StreamInterrupted : Exception()
     val streak: Int = 0, val lastActive: String? = null, val week: WeekCount = WeekCount(), val feel: Double? = null, val attention: String? = null,
     val nudgedToday: Boolean = false, val tasks: List<StudentTaskDto> = emptyList())
 
-@Serializable data class AllianceMessageDto(val id: String, val clientId: String? = null, val userId: String? = null, val name: String? = null, val mine: Boolean = false, val body: String, val createdAt: Long = 0)
+@Serializable data class AllianceMessageDto(val id: String, val clientId: String? = null, val userId: String? = null, val name: String? = null, val mine: Boolean = false, val body: String, val createdAt: Long = 0,
+    /** "text", "game" (a result line), "game_challenge" (a card drawn from [match]). */
+    val kind: String = "text", val game: String? = null, val match: kotlinx.serialization.json.JsonObject? = null)
 @Serializable private data class AllianceResponse(val alliance: AllianceDto)
 @Serializable private data class AlliancesResponse(val alliances: List<AllianceDto>)
 @Serializable private data class PreviewResponse(val preview: InvitePreviewDto)
@@ -132,7 +134,13 @@ class StreamInterrupted : Exception()
 @Serializable data class GameStatusDto(val unlocked: Boolean = false, val rankedToday: Boolean = false, val eligible: Int = 0, val finished: Int = 0, val needsPlayers: Boolean = false,
     val waiting: List<String> = emptyList(), val meLeft: Int? = null, val game: GameDto? = null, val whoseDay: WhoseDayDto? = null,
     /** "Pick tonight's game" is open in this alliance. */
-    val night: NightRefDto? = null)
+    val night: NightRefDto? = null,
+    /** Tonight's 1v1 bracket (open, or finished today). */
+    val bracket: BracketRefDto? = null,
+    /** An Everyone arcade game (Hoops, Mini Golf, Push Out) in its lobby or being played. */
+    val live: LiveRefDto? = null)
+@Serializable data class BracketRefDto(val id: String, val game: String, val status: String = "active", val championId: String? = null)
+@Serializable data class LiveRefDto(val id: String, val game: String, val phase: String = "lobby")
 
 // --- Game Night vote: "Pick tonight's game" ---
 @Serializable data class NightRefDto(val id: String, val endsAt: Long = 0)
@@ -147,6 +155,8 @@ class StreamInterrupted : Exception()
     val id: String, val allianceId: String, val phase: String, val endsAt: Long = 0, val now: Long = 0, val total: Int = 0, val voted: Int = 0,
     val counts: Map<String, Int> = emptyMap(), val leader: NightLeaderDto? = null, val tied: NightTieDto? = null, val chosen: String? = null,
     val games: List<NightGameDto> = emptyList(),
+    /** The winner's mode ("everyone", "duel_turns", "duel_live") and, for a 1v1 game, the bracket Arc made. */
+    val mode: String? = null, val bracketId: String? = null,
 )
 @Serializable private data class NightResponse(val night: NightDto)
 
@@ -414,6 +424,9 @@ class ApiClient @Inject constructor(private val http: OkHttpClient, private val 
     suspend fun pull(since: Long): PullResponse = json.decodeFromString(call("GET", "/v1/sync?since=$since", null, authed = true))
 
     private suspend inline fun <reified T> post(path: String, body: JsonObject): T = json.decodeFromString(call("POST", path, body, authed = false))
+
+    /** Signed-in call returning the body as text, for repositories that decode their own types (the Arcade). */
+    suspend fun authed(method: String, path: String, body: JsonObject? = null): String = call(method, path, body, authed = true)
 
     private suspend fun call(method: String, path: String, body: JsonObject?, authed: Boolean, raw: okhttp3.RequestBody? = null, extraHeaders: Map<String, String> = emptyMap(), slow: Boolean = false): String = withContext(Dispatchers.IO) {
         val payload = raw ?: body?.toString()?.toRequestBody(JSON)

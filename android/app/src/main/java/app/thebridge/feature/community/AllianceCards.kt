@@ -57,7 +57,7 @@ fun GameCard(a: AllianceDto, s: GameStatusDto?, goalLabel: String, onPlay: (kind
     val c = LocalBridgeColors.current
     val open = s?.unlocked == true
     // A game already running is the one to join; otherwise the alliance votes on tonight's game ("pick").
-    val running = when { s?.whoseDay != null -> "whose_day"; s?.game != null -> "drifting"; else -> null }
+    val running = when { s?.whoseDay != null -> "whose_day"; s?.game != null -> "drifting"; s?.live != null -> "live"; s?.bracket?.status == "active" -> "bracket:${s.bracket.id}"; else -> null }
     val kind = running ?: "pick"
     val status = when {
         s == null -> stringResource(R.string.game_card_locked)
@@ -79,6 +79,7 @@ fun GameCard(a: AllianceDto, s: GameStatusDto?, goalLabel: String, onPlay: (kind
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val label = when {
+                running?.startsWith("bracket:") == true -> R.string.arc_card_bracket
                 running != null -> R.string.game_card_join
                 s?.night != null -> R.string.game_card_join_vote
                 else -> R.string.game_card_pick

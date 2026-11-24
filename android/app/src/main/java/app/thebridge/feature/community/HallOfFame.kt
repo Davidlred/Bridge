@@ -100,7 +100,7 @@ private val DEFS = listOf(
     BadgeDef("s21", "21", R.string.badge_s21, R.string.badge_s21_hint), BadgeDef("arch", "A", R.string.badge_arch, R.string.badge_arch_hint),
     BadgeDef("s30", "30", R.string.badge_s30, R.string.badge_s30_hint), BadgeDef("week", "W", R.string.badge_week, R.string.badge_week_hint),
     BadgeDef("ref", "J", R.string.badge_ref, R.string.badge_ref_hint), BadgeDef("ally", "Δ", R.string.badge_ally, R.string.badge_ally_hint),
-    BadgeDef("goal", "∞", R.string.badge_goal, R.string.badge_goal_hint),
+    BadgeDef("goal", "∞", R.string.badge_goal, R.string.badge_goal_hint), BadgeDef("champ", "C", R.string.badge_champ, R.string.badge_champ_hint),
 )
 
 /** Hexagon, as in the prototype's clip-path. */

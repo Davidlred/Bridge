@@ -26,6 +26,10 @@ struct ChatLine: Identifiable, Equatable, Sendable {
     let id: String; let serverId: String?; let name: String?; let body: String; let mine: Bool; let createdAt: Date; let status: String
     /// No author and not ours: a system line, e.g. a shared game result.
     var system = false
+    /// An Arcade result line's game (for its icon), and a challenge card.
+    var game: String? = nil
+    var card: MatchCardDTO? = nil
+    var authorId: String? = nil
 }
 
 /**
@@ -178,7 +182,11 @@ final class SocialStore {
     // MARK: Alliance chat
     func lines(_ allianceId: String) -> [ChatLine] {
         let rows = (try? ctx.fetch(FetchDescriptor<AllianceMessageEntity>(predicate: #Predicate { $0.allianceId == allianceId }, sortBy: [SortDescriptor(\.createdAt)]))) ?? []
-        return rows.map { ChatLine(id: $0.id, serverId: $0.serverId, name: $0.name, body: $0.body, mine: $0.mine, createdAt: $0.createdAt, status: $0.status, system: !$0.mine && $0.userId == nil && $0.serverId != nil) }
+        return rows.map { r in
+            let card = r.kind == "game_challenge" ? r.match.flatMap { try? JSONDecoder().decode(MatchCardDTO.self, from: $0) } : nil
+            return ChatLine(id: r.id, serverId: r.serverId, name: r.name, body: r.body, mine: r.mine, createdAt: r.createdAt, status: r.status,
+                            system: !r.mine && r.userId == nil && r.serverId != nil, game: r.game, card: card, authorId: r.userId)
+        }
     }
 
     private func row(_ id: String) -> AllianceMessageEntity? { try? ctx.fetch(FetchDescriptor<AllianceMessageEntity>(predicate: #Predicate { $0.id == id })).first }
@@ -198,6 +206,13 @@ final class SocialStore {
         let r = row(id) ?? { let e = AllianceMessageEntity(id: id, allianceId: allianceId, body: m.body, mine: m.mine); ctx.insert(e); return e }()
         r.serverId = m.id; r.userId = m.userId; r.name = m.name; r.body = m.body; r.mine = m.mine; r.status = "sent"
         r.createdAt = Date(timeIntervalSince1970: m.createdAt / 1000)
+        r.kind = m.kind ?? "text"; r.game = m.game ?? m.match?.game
+        if let card = m.match { r.match = try? JSONEncoder().encode(card) }
+    }
+    /// A challenge card changed (a move, the end). Cards are stored under their match id.
+    func updateCard(_ card: MatchCardDTO) {
+        guard let r = row(card.matchId), r.kind == "game_challenge" else { return }
+        r.match = try? JSONEncoder().encode(card); try? ctx.save(); chatVersion += 1
     }
     func received(_ m: AllianceMessageDTO, _ allianceId: String) { save(m, allianceId); try? ctx.save(); chatVersion += 1 }
     func hidden(serverId: String) {
@@ -327,7 +342,10 @@ final class RealtimeClient {
                 connected = true; onReady?()
             case "dm":
                 onDm?()
-            case let type? where type.hasPrefix("game:") || type.hasPrefix("wd:") || type.hasPrefix("vote:"):
+            case "match:card":
+                if let card = decodeFrame(obj["match"], as: MatchCardDTO.self) { store?.updateCard(card) }
+                gameListener?(obj)
+            case let type? where ["game:", "wd:", "vote:", "match:", "arc:", "bracket:"].contains(where: type.hasPrefix):
                 gameListener?(obj)
             default: break
             }

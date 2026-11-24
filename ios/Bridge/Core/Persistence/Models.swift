@@ -158,6 +158,11 @@ import SwiftData
     var mine: Bool
     var createdAt: Date
     var status: String
+    /// "text", "game" (a result line with its game's icon) or "game_challenge" (a card).
+    var kind: String = "text"
+    var game: String?
+    /// The challenge card's match as JSON, kept current by "match:card" events.
+    var match: Data?
     init(id: String, allianceId: String, body: String, mine: Bool, status: String = "sent", createdAt: Date = .now) {
         self.id = id; self.allianceId = allianceId; self.body = body; self.mine = mine; self.status = status; self.createdAt = createdAt
     }

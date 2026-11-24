@@ -9,6 +9,9 @@ struct AllianceChatScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @State private var reporting: ChatLine?
+    @State private var challenging = false
+    @Environment(SessionStore.self) private var session
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
         let _ = social.chatVersion                                   // re-read rows when they change
@@ -17,8 +20,13 @@ struct AllianceChatScreen: View {
             send: send,
             retry: { line in Task { report(await social.retry(line.id)) } },
             discard: { social.discard($0.id) },
-            report: { reporting = $0 }
-        ))
+            report: { reporting = $0 },
+            openMatch: { router.today.append(Route.match($0)) },
+            startGame: { challenging = true }
+        ), me: session.user?.id.uuidString.lowercased() ?? "")
+        .sheet(isPresented: $challenging) {
+            ChallengeSheet(members: social.alliances.first { $0.id == allianceId }?.members ?? []) { game, who in challenge(game, who) }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .task { social.realtime.acquire(); try? await social.refreshMessages(allianceId) }
         .onDisappear { social.realtime.release() }
@@ -37,6 +45,19 @@ struct AllianceChatScreen: View {
         Task { report(await social.send(allianceId, text)) }
     }
 
+    /// The controller button: challenge a member to a turn-based game. The card appears in the chat.
+    private func challenge(_ game: String, _ who: String) {
+        Task {
+            do {
+                let m = try await APIClient.shared.challenge(allianceId, game: game, opponentId: who)
+                try? await social.refreshMessages(allianceId)
+                router.today.append(Route.match(m.id))
+            } catch APIError.server(_, "too_many_open", _, _) {
+                toaster.show(String(localized: "You already have three games going with them."), .warn)
+            } catch { toaster.show(String(localized: "Game Night needs a connection."), .warn) }
+        }
+    }
+
     private func report(_ r: SocialStore.SendResult) {
         if r == .blocked { toaster.show(String(localized: "Not sent. This message breaks the community rules."), .warn) }
     }
@@ -44,6 +65,7 @@ struct AllianceChatScreen: View {
 
 struct ChatActions {
     var back: () -> Void = {}, send: () -> Void = {}, retry: (ChatLine) -> Void = { _ in }, discard: (ChatLine) -> Void = { _ in }, report: (ChatLine) -> Void = { _ in }
+    var openMatch: (String) -> Void = { _ in }, startGame: () -> Void = {}
 }
 
 struct AllianceChatContent: View {
@@ -51,6 +73,7 @@ struct AllianceChatContent: View {
     let lines: [ChatLine]
     @Binding var input: String
     var actions = ChatActions()
+    var me = ""
     var now: Date = .now
     @FocusState private var focused: Bool
 
@@ -74,7 +97,7 @@ struct AllianceChatContent: View {
                             .font(BFont.body(12)).foregroundStyle(Theme.mut).padding(.horizontal, 12).padding(.vertical, 9)
                             .frame(maxWidth: .infinity, alignment: .leading).background(Theme.s0, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         if lines.isEmpty { Text("Say hello. Messages from members show up here.").font(BFont.body(13)).foregroundStyle(Theme.mut).padding(.top, 8) }
-                        ForEach(lines) { line in (line.mine ? AnyView(mine(line)) : line.system ? AnyView(systemLine(line)) : AnyView(theirs(line))).id(line.id) }
+                        ForEach(lines) { line in (line.card != nil ? AnyView(card(line)) : line.mine ? AnyView(mine(line)) : line.system ? AnyView(systemLine(line)) : AnyView(theirs(line))).id(line.id) }
                     }
                     .padding(16)
                 }
@@ -86,8 +109,15 @@ struct AllianceChatContent: View {
         .background(Theme.bg)
     }
 
+    /// A challenge card, on the sender's side of the chat.
+    private func card(_ m: ChatLine) -> some View {
+        ChallengeCard(card: m.card!, me: me) { actions.openMatch(m.card!.matchId) }
+            .frame(maxWidth: .infinity, alignment: m.authorId == me && !me.isEmpty ? .trailing : .leading)
+    }
+
     private func systemLine(_ m: ChatLine) -> some View {
-        Label(m.body, systemImage: "checkmark.circle.fill").font(BFont.body(12, .medium)).foregroundStyle(Theme.ok)
+        // Arcade results carry their game's icon.
+        Label(m.body, systemImage: m.game.map { gameSymbol(gameIconName($0)) } ?? "checkmark.circle.fill").font(BFont.body(12, .medium)).foregroundStyle(Theme.ok)
             .padding(.horizontal, 12).frame(minHeight: 28).background(Theme.okTint, in: Capsule()).frame(maxWidth: .infinity)
     }
 
@@ -125,6 +155,10 @@ struct AllianceChatContent: View {
     private var composer: some View {
         let canSend = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return HStack(spacing: 8) {
+            Button(action: actions.startGame) {
+                Image(systemName: "gamecontroller").font(.system(size: 19)).foregroundStyle(Theme.ink).frame(width: 48, height: 48).overlay(Circle().strokeBorder(Theme.line, lineWidth: 1))
+            }
+            .accessibilityLabel(Text("Start a game"))
             TextField("Message the alliance", text: $input, axis: .vertical).lineLimit(1...4)
                 .font(BFont.body(15)).foregroundStyle(Theme.ink).focused($focused).submitLabel(.send).onSubmit(actions.send)
                 .padding(.horizontal, 18).padding(.vertical, 12).frame(minHeight: 48)

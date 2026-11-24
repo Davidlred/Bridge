@@ -113,6 +113,9 @@ import java.time.ZoneId
 @Serializable data class GameNight(val allianceId: String)
 @Serializable data class WhoseDay(val allianceId: String)
 @Serializable data class GamePicker(val allianceId: String)
+@Serializable data class Match(val matchId: String)
+@Serializable data class Pairings(val bracketId: String)
+@Serializable data class LiveArcade(val allianceId: String)
 @Serializable data class Rankings(val allianceId: String)
 @Serializable data class InvitePreview(val code: String)
 /** Full-screen focus timer with the coach strip. */
@@ -254,7 +257,7 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
     // Hide the bar on full-screen flows
     // Installed from an invite page: open that invite once the app is signed in.
     LaunchedEffect(Unit) { shell.installInvite()?.let { nav.navigate(InvitePreview(it)) } }
-    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<WhoseDay>() == true || dest?.hasRoute<GamePicker>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true || dest?.hasRoute<DmThread>() == true
+    val fullScreen = dest?.hasRoute<StudyMode>() == true || dest?.hasRoute<GameNight>() == true || dest?.hasRoute<WhoseDay>() == true || dest?.hasRoute<GamePicker>() == true || dest?.hasRoute<Match>() == true || dest?.hasRoute<Pairings>() == true || dest?.hasRoute<LiveArcade>() == true || dest?.hasRoute<AddGoal>() == true || dest?.hasRoute<AllianceChat>() == true || dest?.hasRoute<Rankings>() == true || dest?.hasRoute<DmThread>() == true
     val name = user?.displayName.orEmpty()
     val reminders by shell.reminders.collectAsStateWithLifecycle(app.thebridge.data.reminders.ReminderSettings())
     val coachReadsJournal by shell.coachReadsJournal.collectAsStateWithLifecycle(false)
@@ -284,14 +287,23 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                 composable<AddGoal> { OnboardingFlow(adding = true, onExit = { nav.popBackStack() }, onFinished = { nav.popBackStack() }) }
                 composable<GoalDetail> { /* GoalDetailScreen(it.toRoute<GoalDetail>().goalId, …) */ }
                 composable<Community> {
-                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id, kind -> when (kind) { "pick" -> nav.navigate(GamePicker(id)); "whose_day" -> nav.navigate(WhoseDay(id)); else -> nav.navigate(GameNight(id)) } }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) },
+                    CommunityRoute(onBack = { nav.popBackStack() }, onOpenChat = { id -> nav.navigate(AllianceChat(id)) }, onPlay = { id, kind -> when {
+                        kind == "pick" -> nav.navigate(GamePicker(id)); kind == "whose_day" -> nav.navigate(WhoseDay(id)); kind == "live" -> nav.navigate(LiveArcade(id))
+                        kind.startsWith("bracket:") -> nav.navigate(Pairings(kind.removePrefix("bracket:"))); else -> nav.navigate(GameNight(id)) } }, onBoard = { id -> nav.navigate(Rankings(id)) }, onDms = { nav.navigate(Messages) },
                         onStudents = { a -> nav.navigate(Students(a.id, a.inviteCode)) })
                 }
                 composable<Messages> { app.thebridge.feature.dm.InboxRoute(onBack = { nav.popBackStack() }, onOpen = { id -> nav.navigate(DmThread(id)) }) }
                 composable<DmThread> { app.thebridge.feature.dm.ThreadRoute(onBack = { nav.popBackStack() }) }
                 composable<Rankings> { app.thebridge.feature.community.RankingsRoute(onBack = { nav.popBackStack() }) }
                 composable<AllianceRoute> { }
-                composable<AllianceChat> { AllianceChatRoute(onBack = { nav.popBackStack() }) }
+                composable<AllianceChat> { AllianceChatRoute(onBack = { nav.popBackStack() }, onMatch = { nav.navigate(Match(it)) }) }
+                composable<Match> {
+                    app.thebridge.feature.arcade.MatchRoute(onClose = { nav.popBackStack() },
+                        onMatch = { id -> nav.navigate(Match(id)) { popUpTo<Match> { inclusive = true } } },
+                        onBracket = { id -> if (!nav.popBackStack<Pairings>(inclusive = false)) nav.navigate(Pairings(id)) { popUpTo<Match> { inclusive = true } } })
+                }
+                composable<Pairings> { app.thebridge.feature.arcade.PairingsRoute(onClose = { nav.popBackStack() }, onMatch = { nav.navigate(Match(it)) }) }
+                composable<LiveArcade> { app.thebridge.feature.arcade.LiveArcadeRoute(onClose = { nav.popBackStack() }) }
                 composable<Students> { app.thebridge.feature.community.StudentsRoute(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
                 composable<Student> { app.thebridge.feature.community.StudentRoute(onBack = { nav.popBackStack() }) }
                 composable<GameNight> { app.thebridge.feature.game.GameRoute(onExit = { nav.popBackStack() }) }
@@ -300,7 +312,11 @@ private fun MainShell(shell: ShellViewModel, offlineBannerShown: Boolean) {
                     val id = it.toRoute<GamePicker>().allianceId
                     // The vote picked a game (or one was already running): go to it, and Back returns to Community, not the vote.
                     app.thebridge.feature.game.GamePickerRoute(onExit = { nav.popBackStack() }, onGame = { kind ->
-                        nav.navigate(if (kind == "whose_day") WhoseDay(id) else GameNight(id)) { popUpTo<GamePicker> { inclusive = true } }
+                        val to: Any = when {
+                            kind == "whose_day" -> WhoseDay(id); kind == "live" -> LiveArcade(id)
+                            kind.startsWith("bracket:") -> Pairings(kind.removePrefix("bracket:")); else -> GameNight(id)
+                        }
+                        nav.navigate(to) { popUpTo<GamePicker> { inclusive = true } }
                     })
                 }
                 composable<InvitePreview>(deepLinks = listOf(navDeepLink<InvitePreview>(basePath = "https://thebridge.app/join"))) {

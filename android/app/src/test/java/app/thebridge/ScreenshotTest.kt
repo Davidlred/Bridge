@@ -502,4 +502,53 @@ class ScreenshotTest {
     @Test fun profile() = snap("profile") { ProfileScreen("Sharon", "sharon@example.com", LocalDate.of(2026, 10, 1), {}, {}, onHall = {}) }
     @Test fun offlineBanner() = snap("offline") { OfflineBanner(3) }
     @Test fun upgrade() = snap("upgrade") { UpgradeScreen {} }
+    // --- Game Night Arcade ---
+    private val arcJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; explicitNulls = false }
+    private fun person(id: String, name: String) = app.thebridge.data.PersonDto(id, name)
+    private fun bracket(done: Boolean) = app.thebridge.data.BracketDto("b1", "a2", "four", if (done) "done" else "active", round = if (done) 2 else 1, roundCount = 2, deadline = now + 3_600_000,
+        votes = 3, voters = 7, champion = if (done) person("u1", "Ada") else null, players = listOf(person("u1", "Ada"), person("u2", "Kemi"), person("u3", "Dami")),
+        stages = listOf("semis", "final"), myMatchId = "m1", playing = true,
+        rounds = listOfNotNull(app.thebridge.data.BracketRoundDto(1, "semis", listOf(app.thebridge.data.BracketMatchDto("m1", 0, person("u1", "Ada"), person("u2", "Kemi"),
+            if (done) "done" else "waiting", winnerId = if (done) "u1" else null, mine = true)), app.thebridge.data.ByeDto(person("u3", "Dami"), listOf(person("u1", "Ada"), person("u2", "Kemi")))),
+            if (done) app.thebridge.data.BracketRoundDto(2, "final", listOf(app.thebridge.data.BracketMatchDto("m2", 0, person("u3", "Dami"), person("u1", "Ada"), "done", winnerId = "u1", mine = true))) else null))
+    @Test fun arcPairings() = snap("arc-pairings") { app.thebridge.feature.arcade.PairingsScreen(app.thebridge.feature.arcade.PairingsUi(bracket(false), "u1", loading = false), {}, {}, {}, {}, {}) }
+    @Test fun arcChampion() = snap("arc-champion") { app.thebridge.feature.arcade.PairingsScreen(app.thebridge.feature.arcade.PairingsUi(bracket(true), "u1", loading = false), {}, {}, {}, {}, {}) }
+    private fun match(game: String, view: String, turn: String? = "u1", status: String = "active", winner: String? = null, scores: Map<String, Int> = mapOf("u1" to 0, "u2" to 0)) =
+        app.thebridge.data.MatchDto("m1", "m1", game, "a2", players = listOf(person("u1", "Ada"), person("u2", "Sam")), turn = turn, status = status, winnerId = winner, scores = scores,
+            scored = game == "word", you = "u1", now = now, view = arcJson.parseToJsonElement(view))
+    @Test fun arcFour() = snap("arc-four") {
+        val board = IntArray(42).also { b -> listOf(38 to 1, 39 to 2, 31 to 1, 32 to 2, 40 to 1, 24 to 2).forEach { (i, v) -> b[i] = v } }.joinToString(",")
+        app.thebridge.feature.arcade.MatchScreen(app.thebridge.feature.arcade.MatchUi(match("four", """{"players":["u1","u2"],"board":[$board],"next":0,"moves":6,"last":24,"line":[]}"""), loading = false, now = now),
+            app.thebridge.feature.arcade.MatchActions())
+    }
+    @Test fun arcWordDash() = snap("arc-word-dash") {
+        val letters = "s,t,a,r,o,n,e,w,l,i,g,h,t,e,d,s".split(",").joinToString(",") { "\"$it\"" }
+        app.thebridge.feature.arcade.MatchScreen(app.thebridge.feature.arcade.MatchUi(match("word", """{"game":"word","letters":[$letters],"seconds":80,"players":["u2","u1"],
+            "rounds":{"u2":{"started":true,"ended":true,"score":42,"count":9,"found":[]},"u1":{"started":true,"endsAt":${now + 51_000},"ended":false,"score":34,"count":5,
+            "found":[{"w":"star","pts":2},{"w":"stone","pts":4},{"w":"light","pts":6,"bonus":true}],"last":{"w":"light","ok":true,"reason":"ok","pts":6,"bonus":true}}}}""", scores = mapOf("u1" to 34, "u2" to 42)),
+            loading = false, now = now), app.thebridge.feature.arcade.MatchActions())
+    }
+    @Test fun arcFleetDone() = snap("arc-fleet") {
+        app.thebridge.feature.arcade.MatchScreen(app.thebridge.feature.arcade.MatchUi(match("fleet", """{"players":["u1","u2"],"next":1,"size":10,"placed":{"u1":true,"u2":true},
+            "mine":{"ships":[{"cells":[0,1,2,3,4]},{"cells":[20,30,40,50]},{"cells":[77,78,79]},{"cells":[62,72,82]},{"cells":[95,96]}],"shots":[0,1,55,66]},
+            "theirs":{"shots":[{"cell":11,"hit":true},{"cell":12,"hit":true},{"cell":44,"hit":false}],"ships":[{"cells":[11,12]}],"left":4},"last":{"by":"u1","cell":12,"hit":true,"sunk":[11,12]}}""", turn = "u2"),
+            loading = false, now = now), app.thebridge.feature.arcade.MatchActions())
+    }
+    @Test fun arcResult() = snap("arc-result") {
+        app.thebridge.feature.arcade.MatchScreen(app.thebridge.feature.arcade.MatchUi(match("word", """{"game":"word","letters":[],"seconds":80,"players":["u2","u1"],"rounds":{"u2":{"ended":true,"score":42,"found":[{"w":"stone","pts":4}]},"u1":{"ended":true,"score":52,"found":[{"w":"lights","pts":6}]}}}""",
+            turn = null, status = "done", winner = "u1", scores = mapOf("u1" to 52, "u2" to 42)).copy(result = "played"), loading = false, now = now), app.thebridge.feature.arcade.MatchActions())
+    }
+    @Test fun arcChallengeCards() = snap("arc-challenge-cards") {
+        androidx.compose.foundation.layout.Column(Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+            app.thebridge.feature.arcade.ChallengeCard(app.thebridge.data.MatchCardDto("m1", "word", players = listOf(person("u2", "Sam"), person("u1", "Ada")), turn = "u1", status = "active", toBeat = 42), "u1") {}
+            app.thebridge.feature.arcade.ChallengeCard(app.thebridge.data.MatchCardDto("m2", "cup", players = listOf(person("u1", "Ada"), person("u2", "Kemi")), turn = null, status = "done", winnerId = "u1",
+                result = "played", scored = true, scores = mapOf("u1" to 6, "u2" to 4)), "u3") {}
+        }
+    }
+    @Test fun arcLiveResults() = snap("arc-live-results") {
+        app.thebridge.feature.arcade.LiveArcadeScreen(app.thebridge.feature.arcade.LiveUi(app.thebridge.data.LiveGameDto("g1", "hoops", "a2", "results",
+            players = listOf(app.thebridge.data.LivePlayerDto("u1", "Ada"), app.thebridge.data.LivePlayerDto("u2", "Kemi"), app.thebridge.data.LivePlayerDto("u3", "Dami")),
+            results = listOf(app.thebridge.data.LiveResultDto("u1", "Ada", 9, 1), app.thebridge.data.LiveResultDto("u2", "Kemi", 7, 2), app.thebridge.data.LiveResultDto("u3", "Dami", 7, 2))),
+            me = "u1", loading = false, now = now), {}, {}, {}, {})
+    }
 }

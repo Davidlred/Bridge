@@ -144,12 +144,19 @@ data class AllianceMessageEntity(
     val mine: Boolean,
     val createdAt: Long = System.currentTimeMillis(),
     val status: String = "sent",
+    /** "text", "game" (a result line with its game's icon) or "game_challenge" (a card). */
+    @androidx.room.ColumnInfo(defaultValue = "text") val kind: String = "text",
+    val game: String? = null,
+    /** The challenge card's match, as the server's JSON (kept current by "match:card" events). */
+    val match: String? = null,
 )
 
 @Dao
 interface SocialDao {
     @Query("SELECT * FROM social_cache WHERE cacheKey = :key") fun cached(key: String): Flow<SocialCacheEntity?>
     @Upsert suspend fun cache(e: SocialCacheEntity)
+    /** Challenge cards are stored under their match id (the server posts them with clientId = the match). */
+    @Query("UPDATE alliance_messages SET `match` = :card WHERE id = :matchId AND kind = 'game_challenge'") suspend fun updateMatchCard(matchId: String, card: String)
     @Query("SELECT * FROM alliance_messages WHERE allianceId = :allianceId ORDER BY createdAt") fun messages(allianceId: String): Flow<List<AllianceMessageEntity>>
     @Query("SELECT * FROM alliance_messages WHERE status = 'queued' ORDER BY createdAt") suspend fun queued(): List<AllianceMessageEntity>
     @Upsert suspend fun upsert(m: AllianceMessageEntity)
@@ -295,8 +302,8 @@ interface PullDao {
 @Database(
     entities = [GoalEntity::class, TaskEntity::class, CompletionEntity::class, JournalEntity::class, OutboxEntity::class, GoalImageEntity::class, ChatMessageEntity::class,
         SocialCacheEntity::class, AllianceMessageEntity::class, OlmAccountEntity::class, OlmSessionEntity::class, DmMessageEntity::class, DmPeerEntity::class, CheckinEntity::class],
-    version = 11, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11)],
+    version = 12, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12)],
 )
 abstract class BridgeDb : RoomDatabase() {
     abstract fun goals(): GoalDao

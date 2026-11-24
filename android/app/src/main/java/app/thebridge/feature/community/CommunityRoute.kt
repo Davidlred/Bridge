@@ -58,10 +58,15 @@ fun CommunityRoute(onBack: () -> Unit, onOpenChat: (String) -> Unit, onPlay: (al
 }
 
 @Composable
-fun AllianceChatRoute(onBack: () -> Unit, vm: AllianceChatViewModel = hiltViewModel()) {
+fun AllianceChatRoute(onBack: () -> Unit, onMatch: (String) -> Unit = {}, vm: AllianceChatViewModel = hiltViewModel()) {
     val ui by vm.state.collectAsStateWithLifecycle()
     var reporting by remember { mutableStateOf<AllianceMessageEntity?>(null) }
-    AllianceChatScreen(ui, ChatActions(back = onBack, onInput = vm::onInput, send = vm::send, retry = { vm.retry(it) }, discard = { vm.discard(it) }, report = { reporting = it }))
+    var challenging by remember { mutableStateOf(false) }
+    val sent by vm.openMatch.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(sent) { sent?.let { vm.openMatch.value = null; onMatch(it) } }
+    AllianceChatScreen(ui, ChatActions(back = onBack, onInput = vm::onInput, send = vm::send, retry = { vm.retry(it) }, discard = { vm.discard(it) }, report = { reporting = it },
+        openMatch = onMatch, startGame = { challenging = true }))
+    if (challenging) app.thebridge.feature.arcade.ChallengeSheet(ui.alliance?.members.orEmpty(), { challenging = false }) { game, who -> challenging = false; vm.challenge(game, who) }
     reporting?.let { m ->
         val c = LocalBridgeColors.current
         BridgeSheet({ reporting = null }) {

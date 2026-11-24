@@ -13,7 +13,13 @@ struct GameCard: View {
     var onPlay: (String) -> Void
     var onNudge: () -> Void
     /// A game already running in the alliance is the one to join; otherwise the alliance votes on tonight's game ("pick").
-    private var running: String? { status?.whoseDay != nil ? "whose_day" : status?.game != nil ? "drifting" : nil }
+    private var running: String? {
+        if status?.whoseDay != nil { return "whose_day" }
+        if status?.game != nil { return "drifting" }
+        if status?.live != nil { return "live" }
+        if let b = status?.bracket, b.status == "active" { return "bracket:" + b.id }
+        return nil
+    }
 
     var body: some View {
         let open = status?.unlocked == true
@@ -33,6 +39,7 @@ struct GameCard: View {
                 Button { onPlay(kind) } label: {
                     Group {
                         if !open { Text("Unlocks when everyone finishes") }
+                        else if running?.hasPrefix("bracket:") == true { Text("See tonight's bracket") }
                         else if running != nil { Text("Join the game") }
                         else if status?.night != nil { Text("Join the vote") }
                         else { Text("Pick tonight's game") }
@@ -198,6 +205,7 @@ struct HallOfFameContent: View {
         ("s21", "21", "21-Day Streak", "Keep a 21-day streak"), ("arch", "A", "Plan Architect", "Edit your plan"),
         ("s30", "30", "30-Day Streak", "Keep a 30-day streak"), ("week", "W", "Perfect Week", "Finish every task 7 days running"),
         ("ref", "J", "Reflector", "Write 30 journal entries"), ("ally", "Δ", "Alliance Founder", "Create an alliance"), ("goal", "∞", "Crossed", "Achieve your goal"),
+        ("champ", "C", "Alliance champ", "Win a Game Night bracket"),
     ]
 
     var body: some View {

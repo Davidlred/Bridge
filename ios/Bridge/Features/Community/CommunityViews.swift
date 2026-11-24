@@ -104,7 +104,7 @@ struct CommunityScreen: View {
             leave: { model.leaving = $0 }, applyNow: applyNow,
             openDms: { router.today.append(Route.messages) },
             alliancePlus: { paywall = true },
-            playGame: { a, kind in if let id = UUID(uuidString: a.id) { router.today.append(kind == "pick" ? Route.gamePicker(allianceId: id) : kind == "whose_day" ? Route.whoseDay(allianceId: id) : Route.gameNight(allianceId: id)) } },
+            playGame: { a, kind in if let id = UUID(uuidString: a.id) { router.today.append(gameRoute(kind, allianceId: id)) } },
             nudge: nudge,
             openBoard: { a in if let id = UUID(uuidString: a.id) { router.today.append(Route.allianceRankings(id)) } },
             setListed: { a, on in Task { do { try await social.setListed(a, on) } catch APIError.server(_, "minor_unlisted", _, _) { toaster.show(String(localized: "Alliances with members under 18 stay private."), .warn) } catch { toaster.show(offlineOr(error), .warn) } } },

@@ -74,7 +74,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class AllianceChatUi(val alliance: AllianceDto? = null, val messages: List<AllianceMessageEntity> = emptyList(), val input: String = "")
+data class AllianceChatUi(val alliance: AllianceDto? = null, val messages: List<AllianceMessageEntity> = emptyList(), val input: String = "", val me: String = "")
 
 @HiltViewModel
 class AllianceChatViewModel @Inject constructor(
@@ -83,12 +83,17 @@ class AllianceChatViewModel @Inject constructor(
     private val realtime: RealtimeClient,
     private val toaster: Toaster,
     network: NetworkMonitor,
+    private val arcade: app.thebridge.data.ArcadeRepository,
+    session: app.thebridge.data.session.SessionManager,
 ) : ViewModel() {
+    private val me = session.user.value?.id.orEmpty()
+    /** A challenge was sent: open its match. */
+    val openMatch = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     private val allianceId = saved.toRoute<AllianceChat>().allianceId
     private val input = MutableStateFlow("")
 
     val state: StateFlow<AllianceChatUi> = combine(social.alliances(), social.messages(allianceId), input) { all, msgs, text ->
-        AllianceChatUi(all.find { it.id == allianceId }, msgs, text)
+        AllianceChatUi(all.find { it.id == allianceId }, msgs, text, me)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AllianceChatUi())
 
     init {
@@ -116,6 +121,17 @@ class AllianceChatViewModel @Inject constructor(
         catch (e: Exception) { toaster.show(UiText.Res(R.string.error_offline), ToastKind.Warn) }
     }
 
+    /** The controller button: challenge a member to a turn-based game. The card appears in the chat. */
+    fun challenge(game: String, opponentId: String) = viewModelScope.launch {
+        try {
+            val m = arcade.challenge(allianceId, game, opponentId)
+            runCatching { social.refreshMessages(allianceId) }
+            openMatch.value = m.id
+        } catch (e: app.thebridge.data.remote.ApiException) {
+            toaster.show(UiText.Res(if (e.code == "too_many_open") R.string.arc_too_many_open else R.string.arc_move_failed), ToastKind.Warn)
+        } catch (e: Exception) { toaster.show(UiText.Res(R.string.arc_needs_connection), ToastKind.Warn) }
+    }
+
     private fun report(r: SocialRepository.SendResult) {
         if (r == SocialRepository.SendResult.Blocked) toaster.show(UiText.Res(R.string.chat_blocked), ToastKind.Warn)
     }
@@ -124,6 +140,7 @@ class AllianceChatViewModel @Inject constructor(
 data class ChatActions(
     val back: () -> Unit = {}, val onInput: (String) -> Unit = {}, val send: () -> Unit = {}, val retry: (AllianceMessageEntity) -> Unit = {},
     val discard: (AllianceMessageEntity) -> Unit = {}, val report: (AllianceMessageEntity) -> Unit = {},
+    val openMatch: (String) -> Unit = {}, val startGame: () -> Unit = {},
 )
 
 /** Alliance chat: not end-to-end encrypted (that note stays at the top), unlike direct messages. */
@@ -150,7 +167,14 @@ fun AllianceChatScreen(ui: AllianceChatUi, actions: ChatActions, now: Long = Sys
                 }
             }
             if (ui.messages.isEmpty()) item { Text(stringResource(R.string.chat_empty), style = BType.body(13), color = c.mut, modifier = Modifier.padding(top = 8.dp)) }
-            items(ui.messages, key = { it.id }) { m -> if (m.mine) Mine(m, actions) else if (m.userId == null) SystemLine(m) else Theirs(m, now, actions) }
+            items(ui.messages, key = { it.id }) { m ->
+                when {
+                    m.kind == "game_challenge" && m.match != null -> Card(m, ui.me, actions)
+                    m.mine -> Mine(m, actions)
+                    m.userId == null -> SystemLine(m)
+                    else -> Theirs(m, now, actions)
+                }
+            }
         }
         Composer(ui.input, actions)
     }
@@ -173,12 +197,25 @@ private fun Theirs(m: AllianceMessageEntity, now: Long, actions: ChatActions) {
     }
 }
 
+private val cardJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; explicitNulls = false }
+
+/** A challenge card, on the sender's side of the chat. */
+@Composable
+private fun Card(m: AllianceMessageEntity, me: String, actions: ChatActions) {
+    val card = androidx.compose.runtime.remember(m.match) { runCatching { cardJson.decodeFromString(app.thebridge.data.MatchCardDto.serializer(), m.match!!) }.getOrNull() } ?: return SystemLine(m)
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (m.userId == me) Alignment.CenterEnd else Alignment.CenterStart) {
+        app.thebridge.feature.arcade.ChallengeCard(card, me) { actions.openMatch(card.matchId) }
+    }
+}
+
 @Composable
 private fun SystemLine(m: AllianceMessageEntity) {
     val c = LocalBridgeColors.current
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(Modifier.heightIn(min = 28.dp).background(c.okTint, RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(painterResource(R.drawable.ic_check_circle), null, tint = c.ok, modifier = Modifier.size(15.dp))
+            // Arcade results carry their game's icon.
+            val icon = m.game?.let { app.thebridge.feature.arcade.iconFor(it) }?.takeIf { it.isNotEmpty() }
+            Icon(painterResource(icon?.let { app.thebridge.feature.game.gameIcon(it) } ?: R.drawable.ic_check_circle), null, tint = c.ok, modifier = Modifier.size(15.dp))
             Text(m.body, style = BType.body(12, FontWeight.Medium), color = c.ok)
         }
     }
@@ -208,6 +245,10 @@ private fun Composer(text: String, actions: ChatActions) {
     val focused by interaction.collectIsFocusedAsState()
     val placeholder = stringResource(R.string.chat_placeholder)
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        val startGame = stringResource(R.string.arc_start_a_game)
+        Box(Modifier.size(48.dp).clip(CircleShape).border(1.dp, c.line, CircleShape).clickable(role = Role.Button, onClickLabel = startGame, onClick = actions.startGame), contentAlignment = Alignment.Center) {
+            Icon(painterResource(R.drawable.ic_game_sports_esports), startGame, tint = c.ink, modifier = Modifier.size(22.dp))
+        }
         LiveTextField(text, actions.onInput, Modifier.weight(1f).semantics { contentDescription = placeholder }, textStyle = BType.body(15).copy(color = c.ink), cursorBrush = SolidColor(c.acc),
             interactionSource = interaction, maxLines = 4,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { actions.send() }),

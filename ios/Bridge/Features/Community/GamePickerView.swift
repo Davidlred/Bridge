@@ -24,8 +24,22 @@ final class GamePickerModel {
     }
 }
 
-/// The route kind each game opens with (the Game Night screens predate the Arcade ids).
-private func kindOf(_ game: String) -> String { game == "whose" ? "whose_day" : "drifting" }
+/// Where each game opens: the first two have their own screens, the other Everyone games share one, 1v1 games open the bracket.
+private func kindOf(_ game: String, bracketId: String? = nil) -> String {
+    if let bracketId { return "bracket:" + bracketId }
+    if game == "whose" || game == "whose_day" { return "whose_day" }
+    if ["hoops", "golf", "push", "live"].contains(game) { return "live" }
+    return "drifting"
+}
+
+/// The screen for a game card or picker result: "pick", "whose_day", "live", "bracket:<id>" or Who's Drifting?.
+func gameRoute(_ kind: String, allianceId: UUID) -> Route {
+    if kind == "pick" { return .gamePicker(allianceId: allianceId) }
+    if kind == "whose_day" { return .whoseDay(allianceId: allianceId) }
+    if kind == "live" { return .liveArcade(allianceId: allianceId) }
+    if kind.hasPrefix("bracket:") { return .pairings(String(kind.dropFirst(8))) }
+    return .gameNight(allianceId: allianceId)
+}
 
 struct GamePickerScreen: View {
     let allianceId: UUID
@@ -58,7 +72,7 @@ struct GamePickerScreen: View {
             case .night(let n):
                 model.night = n; model.offset = n.now - Date().timeIntervalSince1970 * 1000
                 join()
-            case .running(let kind): go(kind, wait: false)
+            case .running(let kind): go(kindOf(kind), wait: false)
             case .needPlayers(let needs): model.notice = String(localized: "Game night needs at least \(needs) members in the alliance. Invite someone to play.")
             }
         } catch {
@@ -87,7 +101,7 @@ struct GamePickerScreen: View {
         Task {
             if wait { try? await Task.sleep(for: .milliseconds(1200)) }      // leave the result up for a moment
             router.today.removeLast()
-            router.today.append(kind == "whose_day" ? Route.whoseDay(allianceId: allianceId) : Route.gameNight(allianceId: allianceId))
+            router.today.append(gameRoute(kind, allianceId: allianceId))
         }
     }
 
@@ -96,7 +110,7 @@ struct GamePickerScreen: View {
         case "vote:state":
             guard let raw = e["night"], let data = try? JSONSerialization.data(withJSONObject: raw), let n = try? JSONDecoder().decode(NightDTO.self, from: data), n.id == model.night?.id else { return }
             model.night = n; model.offset = n.now - Date().timeIntervalSince1970 * 1000
-            if n.phase == "decided", let chosen = n.chosen { go(kindOf(chosen), wait: true) }
+            if n.phase == "decided", let chosen = n.chosen { go(kindOf(chosen, bracketId: n.bracketId), wait: true) }
         case "vote:you":
             guard e["nightId"] as? String == model.night?.id else { return }
             model.mine = e["game"] as? String
